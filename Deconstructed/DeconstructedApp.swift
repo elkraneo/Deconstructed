@@ -27,6 +27,7 @@ struct DeconstructedApp: App {
 
 		Window("Welcome to Deconstructed", id: "welcome") {
 			WelcomeWindowContent()
+				.ignoresSafeArea(.all, edges: .top)
 		}
 		.windowStyle(.hiddenTitleBar)
 		.windowResizability(.contentSize)
@@ -91,7 +92,7 @@ final class NewProjectCreator {
 		}
 
 		let projectName = url.lastPathComponent
-		let packageURL = url  // This becomes the SPM package folder
+		let packageURL = url
 
 		do {
 			// 1. Create the SPM package folder
@@ -103,8 +104,8 @@ final class NewProjectCreator {
 			// 3. Create the .realitycomposerpro document inside
 			let documentURL = packageURL.appendingPathComponent("Package.realitycomposerpro")
 
-			// Create document bundle with correct paths for this project
-			let wrapper = createBundleWithPaths(projectName: projectName)
+			// Use consolidated logic from DeconstructedDocument
+			let wrapper = DeconstructedDocument.createInitialBundle(projectName: projectName)
 			try wrapper.write(to: documentURL, options: .atomic, originalContentsURL: nil)
 
 			// 4. Open the created document
@@ -116,51 +117,5 @@ final class NewProjectCreator {
 		} catch {
 			NSAlert(error: error).runModal()
 		}
-	}
-
-	private func createBundleWithPaths(projectName: String) -> FileWrapper {
-		let bundle = FileWrapper(directoryWithFileWrappers: [:])
-		let encoder = JSONEncoder()
-		encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-
-		let sceneUUID = UUID().uuidString
-		let scenePath = "/\(projectName)/Sources/\(projectName)/\(projectName).rkassets/Scene.usda"
-
-		// ProjectData/main.json
-		let projectDataFolder = FileWrapper(directoryWithFileWrappers: [:])
-		projectDataFolder.preferredFilename = "ProjectData"
-		let projectData = RCPProjectData.initial(scenePath: scenePath, sceneUUID: sceneUUID)
-		if let mainJson = try? encoder.encode(projectData) {
-			projectDataFolder.addRegularFile(withContents: mainJson, preferredFilename: "main.json")
-		}
-		bundle.addFileWrapper(projectDataFolder)
-
-		// WorkspaceData/
-		let workspaceDataFolder = FileWrapper(directoryWithFileWrappers: [:])
-		workspaceDataFolder.preferredFilename = "WorkspaceData"
-
-		// Settings.rcprojectdata
-		if let settingsJson = try? encoder.encode(RCPSettings.initial()) {
-			workspaceDataFolder.addRegularFile(withContents: settingsJson, preferredFilename: "Settings.rcprojectdata")
-		}
-
-		// SceneMetadataList.json
-		let sceneMetadataList = RCPSceneMetadataList.initial(sceneUUID: sceneUUID)
-		if let metadataJson = try? sceneMetadataList.encode() {
-			workspaceDataFolder.addRegularFile(withContents: metadataJson, preferredFilename: "SceneMetadataList.json")
-		}
-		bundle.addFileWrapper(workspaceDataFolder)
-
-		// Library/
-		let library = FileWrapper(directoryWithFileWrappers: [:])
-		library.preferredFilename = "Library"
-		bundle.addFileWrapper(library)
-
-		// PluginData/
-		let pluginData = FileWrapper(directoryWithFileWrappers: [:])
-		pluginData.preferredFilename = "PluginData"
-		bundle.addFileWrapper(pluginData)
-
-		return bundle
 	}
 }

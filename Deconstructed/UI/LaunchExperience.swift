@@ -21,7 +21,7 @@ struct LaunchExperience: View {
 
 					VStack(spacing: 4) {
 						Text("Deconstructed")
-							.font(.system(size: 32, weight: .bold, design: .rounded))
+							.font(.system(size: 32, weight: .bold))
 
 						Text("Version 1.0")
 							.font(.subheadline)

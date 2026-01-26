@@ -56,27 +56,40 @@ struct DeconstructedDocument: FileDocument {
 
 	// MARK: - Initial Bundle Creation
 
-	/// Creates just the .realitycomposerpro bundle contents
-	static func createInitialBundle() -> FileWrapper {
+	/// Creates the .realitycomposerpro bundle contents
+	static func createInitialBundle(projectName: String = "MyProject") -> FileWrapper {
 		let bundle = FileWrapper(directoryWithFileWrappers: [:])
 		let encoder = JSONEncoder()
 		encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
 
+		let sceneUUID = UUID().uuidString
+		// Standard RCP path structure within a Swift Package
+		let scenePath = "/\(projectName)/Sources/\(projectName)/\(projectName).rkassets/Scene.usda"
+
 		// ProjectData/main.json
-		let projectData = FileWrapper(directoryWithFileWrappers: [:])
-		projectData.preferredFilename = "ProjectData"
-		if let mainJson = try? encoder.encode(RCPProjectData.initial()) {
-			projectData.addRegularFile(withContents: mainJson, preferredFilename: "main.json")
+		let projectDataFolder = FileWrapper(directoryWithFileWrappers: [:])
+		projectDataFolder.preferredFilename = "ProjectData"
+		let projectData = RCPProjectData.initial(scenePath: scenePath, sceneUUID: sceneUUID)
+		if let mainJson = try? encoder.encode(projectData) {
+			projectDataFolder.addRegularFile(withContents: mainJson, preferredFilename: "main.json")
 		}
-		bundle.addFileWrapper(projectData)
+		bundle.addFileWrapper(projectDataFolder)
 
 		// WorkspaceData/
-		let workspaceData = FileWrapper(directoryWithFileWrappers: [:])
-		workspaceData.preferredFilename = "WorkspaceData"
+		let workspaceDataFolder = FileWrapper(directoryWithFileWrappers: [:])
+		workspaceDataFolder.preferredFilename = "WorkspaceData"
+
+		// Settings.rcprojectdata
 		if let settingsJson = try? encoder.encode(RCPSettings.initial()) {
-			workspaceData.addRegularFile(withContents: settingsJson, preferredFilename: "Settings.rcprojectdata")
+			workspaceDataFolder.addRegularFile(withContents: settingsJson, preferredFilename: "Settings.rcprojectdata")
 		}
-		bundle.addFileWrapper(workspaceData)
+
+		// SceneMetadataList.json
+		let sceneMetadataList = RCPSceneMetadataList.initial(sceneUUID: sceneUUID)
+		if let metadataJson = try? sceneMetadataList.encode() {
+			workspaceDataFolder.addRegularFile(withContents: metadataJson, preferredFilename: "SceneMetadataList.json")
+		}
+		bundle.addFileWrapper(workspaceDataFolder)
 
 		// Library/ (empty)
 		let library = FileWrapper(directoryWithFileWrappers: [:])
@@ -100,12 +113,12 @@ extension DeconstructedDocument {
 	static func generateSPMPackage(at packageURL: URL, projectName: String) throws {
 		let fileManager = FileManager.default
 
-		// 1. Use swift package init to create base structure
+		// 1. Use swift package init to create a clean SPM structure
 		let process = Process()
 		process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
 		process.arguments = [
 			"swift", "package", "init",
-			"--type", "library",
+			"--type", "empty", // Cleaner than 'library', no cleanup needed
 			"--name", projectName
 		]
 		process.currentDirectoryURL = packageURL
@@ -117,22 +130,25 @@ extension DeconstructedDocument {
 			throw CocoaError(.fileWriteInvalidFileName)
 		}
 
-		// 2. Replace Package.swift with macOS 26 + RealityKit platform
+		// 2. Write our custom Package.swift with macOS 26 / visionOS 26
 		let packageSwiftURL = packageURL.appendingPathComponent("Package.swift")
 		try PackageTemplate.content(projectName: projectName)
 			.write(to: packageSwiftURL, atomically: true, encoding: .utf8)
 
-		// 3. Replace the generated Swift file with our bundle accessor
+		// 3. Create Sources structure
 		let sourcesURL = packageURL.appendingPathComponent("Sources").appendingPathComponent(projectName)
+		try fileManager.createDirectory(at: sourcesURL, withIntermediateDirectories: true)
+
+		// 4. Create bundle accessor Swift file
 		let swiftFileURL = sourcesURL.appendingPathComponent("\(projectName).swift")
 		try BundleAccessorTemplate.content(projectName: projectName)
 			.write(to: swiftFileURL, atomically: true, encoding: .utf8)
 
-		// 4. Create .rkassets bundle (not supported by swift package init)
+		// 5. Create .rkassets bundle
 		let rkassetsURL = sourcesURL.appendingPathComponent("\(projectName).rkassets")
 		try fileManager.createDirectory(at: rkassetsURL, withIntermediateDirectories: true)
 
-		// 5. Create Scene.usda (RealityKit scene format)
+		// 6. Create Scene.usda (RealityKit scene format)
 		let sceneURL = rkassetsURL.appendingPathComponent("Scene.usda")
 		try SceneTemplate.emptyScene()
 			.write(to: sceneURL, atomically: true, encoding: .utf8)

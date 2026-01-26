@@ -6,20 +6,27 @@ nonisolated struct RCPProjectData: Codable, Sendable {
 	var projectID: Int64
 	var uuidToIntID: [String: Int64]
 
-	static func initial() -> RCPProjectData {
-		return RCPProjectData(
-			pathsToIds: [:],
-			projectID: Int64.random(in: Int64.min...Int64.max),
-			uuidToIntID: [:]
-		)
-	}
-
 	static func initial(scenePath: String, sceneUUID: String) -> RCPProjectData {
 		return RCPProjectData(
 			pathsToIds: [scenePath: sceneUUID],
 			projectID: Int64.random(in: Int64.min...Int64.max),
 			uuidToIntID: [sceneUUID: Int64.random(in: Int64.min...Int64.max)]
 		)
+	}
+
+	/// Normalized scene paths (without leading slash, deduplicated)
+	var normalizedScenePaths: [String: String] {
+		var result: [String: String] = [:]
+		for (path, uuid) in pathsToIds {
+			let normalized = path.hasPrefix("/") ? String(path.dropFirst()) : path
+			result[normalized] = uuid
+		}
+		return result
+	}
+
+	/// Number of unique scenes (accounting for path format differences)
+	var uniqueSceneCount: Int {
+		normalizedScenePaths.count
 	}
 }
 
@@ -95,16 +102,38 @@ nonisolated struct RCPSceneMetadataList: Sendable {
 nonisolated struct PackageTemplate: Sendable {
 	static func content(projectName: String) -> String {
 		return """
-		// swift-tools-version:6.2
-		import PackageDescription
-
-		let package = Package(
-			name: "\(projectName)",
-			platforms: [.macOS(.v26)],
-			products: [.library(name: "\(projectName)", targets: ["\(projectName)"])],
-			targets: [.target(name: "\(projectName)", dependencies: [])]
-		)
-		"""
+	 // swift-tools-version:6.2
+	 // The swift-tools-version declares the minimum version of Swift required to build this package.
+	
+	import PackageDescription
+	
+	let package = Package(
+		 name: "\(projectName)",
+		 platforms: [
+			 .visionOS(.v26),
+			 .macOS(.v26),
+			 .iOS(.v26),
+			 .tvOS(.v26)
+		 ],
+		 products: [
+			 // Products define the executables and libraries a package produces, and make them visible to other packages.
+			 .library(
+				 name: "\(projectName)",
+				 targets: ["\(projectName)"]),
+		 ],
+		 dependencies: [
+			 // Dependencies declare other packages that this package depends on.
+			 // .package(url: /* package url */, from: "1.0.0"),
+		 ],
+		 targets: [
+			 // Targets are the basic building blocks of a package. A target can define a module or a test suite.
+			 // Targets can depend on other targets in this package, and on products in packages this package depends on.
+			 .target(
+				 name: "\(projectName)",
+				 dependencies: []),
+		 ]
+	 )
+	"""
 	}
 }
 
