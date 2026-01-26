@@ -102,8 +102,8 @@ extension DeconstructedDocument {
 
         // Package.swift
         let packageSwiftURL = packageURL.appendingPathComponent("Package.swift")
-        let packageContent = PackageTemplate.content(projectName: projectName)
-        try packageContent.write(to: packageSwiftURL, atomically: true, encoding: .utf8)
+        try PackageTemplate.content(projectName: projectName)
+            .write(to: packageSwiftURL, atomically: true, encoding: .utf8)
 
         // Sources/<Name>/
         let sourcesURL = packageURL.appendingPathComponent("Sources").appendingPathComponent(projectName)
@@ -111,13 +111,8 @@ extension DeconstructedDocument {
 
         // Sources/<Name>/<Name>.swift
         let swiftFileURL = sourcesURL.appendingPathComponent("\(projectName).swift")
-        let swiftContent = """
-        import Foundation
-
-        /// Bundle for the \(projectName) project
-        public let \(projectName.lowercased())Bundle = Bundle.module
-        """
-        try swiftContent.write(to: swiftFileURL, atomically: true, encoding: .utf8)
+        try BundleAccessorTemplate.content(projectName: projectName)
+            .write(to: swiftFileURL, atomically: true, encoding: .utf8)
 
         // Sources/<Name>/<Name>.rkassets/
         let rkassetsURL = sourcesURL.appendingPathComponent("\(projectName).rkassets")
@@ -125,21 +120,7 @@ extension DeconstructedDocument {
 
         // Sources/<Name>/<Name>.rkassets/Scene.usda
         let sceneURL = rkassetsURL.appendingPathComponent("Scene.usda")
-        let sceneContent = """
-        #usda 1.0
-        (
-            customLayerData = {
-                string creator = "Deconstructed Version 1.0"
-            }
-            defaultPrim = "Root"
-            metersPerUnit = 1
-            upAxis = "Y"
-        )
-
-        def Xform "Root"
-        {
-        }
-        """
-        try sceneContent.write(to: sceneURL, atomically: true, encoding: .utf8)
+        try SceneTemplate.emptyScene()
+            .write(to: sceneURL, atomically: true, encoding: .utf8)
     }
 }
