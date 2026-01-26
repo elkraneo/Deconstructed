@@ -5,14 +5,18 @@
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>
+			<key>CFBundleTypeName</key>
+			<string>Reality Composer Pro Project</string>
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
 			<key>LSItemContentTypes</key>
 			<array>
-				<string>com.example.plain-text</string>
+				<string>com.apple.realitycomposerpro</string>
 			</array>
+			<key>LSTypeIsPackage</key>
+			<true/>
 			<key>NSUbiquitousDocumentUserActivityType</key>
-			<string>$(PRODUCT_BUNDLE_IDENTIFIER).exampledocument</string>
+			<string>$(PRODUCT_BUNDLE_IDENTIFIER).realitycomposerpro</string>
 		</dict>
 	</array>
 	<key>UTImportedTypeDeclarations</key>
@@ -20,17 +24,18 @@
 		<dict>
 			<key>UTTypeConformsTo</key>
 			<array>
-				<string>public.plain-text</string>
+				<string>com.apple.package</string>
+				<string>public.composite-content</string>
 			</array>
 			<key>UTTypeDescription</key>
-			<string>Example Text</string>
+			<string>Reality Composer Pro Project</string>
 			<key>UTTypeIdentifier</key>
-			<string>com.example.plain-text</string>
+			<string>com.apple.realitycomposerpro</string>
 			<key>UTTypeTagSpecification</key>
 			<dict>
 				<key>public.filename-extension</key>
 				<array>
-					<string>exampletext</string>
+					<string>realitycomposerpro</string>
 				</array>
 			</dict>
 		</dict>
