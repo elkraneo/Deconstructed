@@ -30,13 +30,13 @@ struct ContentView: View {
 				if let projectData = document.parsedProjectData {
 					GroupBox("Project Info") {
 						LabeledContent("Project ID", value: String(projectData.projectID))
-						LabeledContent("Scenes", value: "\(projectData.pathsToIds.count)")
+						LabeledContent("Scenes", value: "\(projectData.uniqueSceneCount)")
 					}
 
-					if !projectData.pathsToIds.isEmpty {
+					if !projectData.normalizedScenePaths.isEmpty {
 						GroupBox("Scene Paths") {
-							ForEach(Array(projectData.pathsToIds.keys.sorted()), id: \.self) { path in
-								LabeledContent(path, value: projectData.pathsToIds[path] ?? "")
+							ForEach(Array(projectData.normalizedScenePaths.keys.sorted()), id: \.self) { path in
+								LabeledContent(path, value: projectData.normalizedScenePaths[path] ?? "")
 									.font(.caption)
 							}
 						}

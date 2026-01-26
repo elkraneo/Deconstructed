@@ -14,12 +14,21 @@ nonisolated struct RCPProjectData: Codable, Sendable {
 		)
 	}
 
-	/// Normalized scene paths (without leading slash, deduplicated)
+	/// Normalized scene paths (deduplicated using URL path comparison)
 	var normalizedScenePaths: [String: String] {
 		var result: [String: String] = [:]
 		for (path, uuid) in pathsToIds {
-			let normalized = path.hasPrefix("/") ? String(path.dropFirst()) : path
-			result[normalized] = uuid
+			// Parse as URL and extract pathComponents for proper comparison
+			let url = URL(fileURLWithPath: path)
+			// Filter out empty/leading-slash components
+			let components = url.pathComponents.filter { $0 != "" && $0 != "/" }
+			// Reconstruct using URL by appending each component
+			var normalized = URL(fileURLWithPath: "")
+			for component in components {
+				normalized.appendPathComponent(component)
+			}
+			// Use the standardized path string as key
+			result[normalized.path] = uuid
 		}
 		return result
 	}
