@@ -206,7 +206,7 @@ public struct ProjectBrowserFeature {
 					do {
 						let sceneURL = try await fileOperations.createScene(destination, "Untitled Scene")
 						if let documentURL {
-							try updateProjectDataForNewScene(documentURL: documentURL, sceneURL: sceneURL)
+							try? updateProjectDataForNewScene(documentURL: documentURL, sceneURL: sceneURL)
 						}
 						await send(.fileOperationCompleted)
 					} catch {
