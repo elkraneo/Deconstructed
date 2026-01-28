@@ -385,6 +385,12 @@ private func resolveTargetDirectory(state: ProjectBrowserFeature.State) -> URL? 
 		return item.isDirectory ? item.url : item.url.deletingLastPathComponent()
 	}
 
+	if let currentId = state.currentDirectoryId,
+	   let current = findItem(in: state.assetItems, id: currentId),
+	   current.isDirectory {
+		return current.url
+	}
+
 	if let rkassetsRoot = state.assetItems.first(where: { $0.url.pathExtension == "rkassets" }) {
 		return rkassetsRoot.url
 	}
