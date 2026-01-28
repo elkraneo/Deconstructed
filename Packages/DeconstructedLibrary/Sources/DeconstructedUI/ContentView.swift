@@ -6,6 +6,7 @@
 //
 
 import ComposableArchitecture
+import DeconstructedModels
 import Foundation
 import ProjectBrowserFeature
 import ProjectBrowserUI
@@ -145,6 +146,10 @@ struct DebugFileStructureView: View {
 							}
 						}
 					}
+
+					if let documentURL = document.documentURL {
+						SceneConsistencyView(documentURL: documentURL, projectData: projectData)
+					}
 				} else {
 					ContentUnavailableView(
 						"No Project Data",
@@ -157,6 +162,121 @@ struct DebugFileStructureView: View {
 			.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 		}
 	}
+}
+
+private struct SceneConsistencyView: View {
+	let documentURL: URL
+	let projectData: RCPProjectData
+
+	var body: some View {
+		let report = SceneConsistencyReport(documentURL: documentURL, projectData: projectData)
+		GroupBox("Scene Consistency") {
+			VStack(alignment: .leading, spacing: 8) {
+				LabeledContent("Indexed Scenes", value: "\(report.indexedPaths.count)")
+				LabeledContent("Files On Disk", value: "\(report.diskPaths.count)")
+				LabeledContent("Missing On Disk", value: "\(report.missingOnDisk.count)")
+				LabeledContent("Unindexed On Disk", value: "\(report.unindexedOnDisk.count)")
+
+				if !report.missingOnDisk.isEmpty {
+					Divider()
+					Text("Missing On Disk")
+						.font(.caption)
+						.foregroundStyle(.secondary)
+					ForEach(report.missingOnDisk.sorted(), id: \.self) { path in
+						Text(path)
+							.font(.caption2)
+							.foregroundStyle(.secondary)
+					}
+				}
+
+				if !report.unindexedOnDisk.isEmpty {
+					Divider()
+					Text("Unindexed On Disk")
+						.font(.caption)
+						.foregroundStyle(.secondary)
+					ForEach(report.unindexedOnDisk.sorted(), id: \.self) { path in
+						Text(path)
+							.font(.caption2)
+							.foregroundStyle(.secondary)
+					}
+				}
+			}
+		}
+	}
+}
+
+private struct SceneConsistencyReport {
+	let indexedPaths: Set<String>
+	let diskPaths: Set<String>
+	let missingOnDisk: Set<String>
+	let unindexedOnDisk: Set<String>
+
+	init(documentURL: URL, projectData: RCPProjectData) {
+		let rootURL = documentURL.deletingLastPathComponent()
+		indexedPaths = Set(projectData.pathsToIds.keys.compactMap { normalizedScenePath($0) })
+		diskPaths = Set(sceneFilesOnDisk(documentURL: documentURL, projectData: projectData).compactMap {
+			relativePath(from: rootURL, to: $0)
+		})
+		missingOnDisk = indexedPaths.subtracting(diskPaths)
+		unindexedOnDisk = diskPaths.subtracting(indexedPaths)
+	}
+}
+
+private func sceneFilesOnDisk(documentURL: URL, projectData: RCPProjectData) -> [URL] {
+	let rootURL = documentURL.deletingLastPathComponent()
+	guard let projectName = projectName(from: projectData) else {
+		return []
+	}
+	let rkassetsURL = rootURL
+		.appendingPathComponent("Sources")
+		.appendingPathComponent(projectName)
+		.appendingPathComponent("\(projectName).rkassets")
+	let fileManager = FileManager.default
+	guard let enumerator = fileManager.enumerator(
+		at: rkassetsURL,
+		includingPropertiesForKeys: [.isDirectoryKey],
+		options: [.skipsHiddenFiles]
+	) else {
+		return []
+	}
+
+	var result: [URL] = []
+	for case let url as URL in enumerator {
+		if url.pathExtension.lowercased() == "usda" {
+			result.append(url)
+		}
+	}
+	return result
+}
+
+private func projectName(from projectData: RCPProjectData) -> String? {
+	guard let firstPath = projectData.pathsToIds.keys.sorted().first,
+	      let normalized = normalizedScenePath(firstPath) else {
+		return nil
+	}
+	let components = normalized.split(separator: "/").map { String($0) }
+	guard components.count >= 4 else {
+		return nil
+	}
+	return components[0]
+}
+
+private func normalizedScenePath(_ path: String) -> String? {
+	let components = path
+		.split(separator: "/")
+		.map { String($0) }
+		.map { $0.removingPercentEncoding ?? $0 }
+	guard !components.isEmpty else { return nil }
+	return components.joined(separator: "/")
+}
+
+private func relativePath(from rootURL: URL, to fileURL: URL) -> String? {
+	let rootComponents = rootURL.standardizedFileURL.pathComponents
+	let fileComponents = fileURL.standardizedFileURL.pathComponents
+	guard fileComponents.starts(with: rootComponents) else {
+		return nil
+	}
+	return Array(fileComponents.dropFirst(rootComponents.count)).joined(separator: "/")
 }
 
 struct FileWrapperRow: View {

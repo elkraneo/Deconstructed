@@ -56,7 +56,7 @@ public struct ProjectBrowserFeature {
 		case renameItemCommitted(AssetItem.ID, String)
 		case renameCancelled
         case duplicateSelectedTapped
-		case moveSelectedTapped
+        case moveSelectedTapped
         case moveItems([AssetItem.ID], to: AssetItem.ID?)
 
         // View Options
@@ -228,11 +228,11 @@ public struct ProjectBrowserFeature {
             case .duplicateSelectedTapped:
                 return .none
 
-			case .moveSelectedTapped:
-				guard let rootURL = resolveRootDirectory(state: state) else {
-					state.errorMessage = "Could not resolve project root."
-					return .none
-				}
+            case .moveSelectedTapped:
+                guard let rootURL = resolveRootDirectory(state: state) else {
+                    state.errorMessage = "Could not resolve project root."
+                    return .none
+                }
 				let itemURLs = state.selectedItems.compactMap { id in
 					findItem(in: state.assetItems, id: id)?.url
 				}
@@ -241,7 +241,7 @@ public struct ProjectBrowserFeature {
 				}
 				let documentURL = state.documentURL
 				let fileOperations = self.fileOperations
-				return .run { send in
+                return .run { send in
 					let destination = await MainActor.run { () -> URL? in
 						let panel = NSOpenPanel()
 						panel.canChooseFiles = false
@@ -271,10 +271,37 @@ public struct ProjectBrowserFeature {
 					} catch {
 						await send(.fileOperationFailed(error.localizedDescription))
 					}
-				}
+                }
 
-            case .moveItems:
-                return .none
+            case let .moveItems(itemIDs, destinationID):
+				guard let destinationID,
+				      let destinationItem = findItem(in: state.assetItems, id: destinationID),
+				      destinationItem.isDirectory else {
+					return .none
+				}
+				let itemURLs = itemIDs.compactMap { id in
+					findItem(in: state.assetItems, id: id)?.url
+				}
+				guard !itemURLs.isEmpty else {
+					return .none
+				}
+				let destinationURL = destinationItem.url
+				let documentURL = state.documentURL
+				let fileOperations = self.fileOperations
+				return .run { send in
+					do {
+						try await fileOperations.move(itemURLs, destinationURL)
+						if let documentURL {
+							for itemURL in itemURLs {
+								let newURL = destinationURL.appendingPathComponent(itemURL.lastPathComponent)
+								try updateProjectDataForMove(documentURL: documentURL, from: itemURL, to: newURL)
+							}
+						}
+						await send(.fileOperationCompleted)
+					} catch {
+						await send(.fileOperationFailed(error.localizedDescription))
+					}
+				}
 
             case let .setViewMode(mode):
                 state.viewMode = mode

@@ -8,7 +8,7 @@ struct AssetInspectorView: View {
 
 	private var selectedItem: AssetItem? {
 		guard let id = store.selectedItems.first else { return nil }
-		return store.assetItems.first { $0.id == id }
+		return findItem(in: store.assetItems, id: id)
 	}
 
 	var body: some View {
@@ -43,6 +43,19 @@ struct AssetInspectorView: View {
 		}
 		.frame(maxWidth: .infinity, maxHeight: .infinity)
 	}
+}
+
+private func findItem(in items: [AssetItem], id: AssetItem.ID) -> AssetItem? {
+	for item in items {
+		if item.id == id {
+			return item
+		}
+		if let children = item.children,
+		   let match = findItem(in: children, id: id) {
+			return match
+		}
+	}
+	return nil
 }
 
 struct PropertyRow: View {
