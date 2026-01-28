@@ -10,4 +10,9 @@ public extension DependencyValues {
 		get { self[FileOperationsClient.self] }
 		set { self[FileOperationsClient.self] = newValue }
 	}
+
+	var fileWatcherClient: FileWatcherClient {
+		get { self[FileWatcherClient.self] }
+		set { self[FileWatcherClient.self] = newValue }
+	}
 }

@@ -7,137 +7,156 @@ import ComposableArchitecture
 
 @Reducer
 public struct ProjectBrowserFeature {
-    @ObservableState
-    public struct State: Equatable {
-        // Content
-        public var assetItems: [AssetItem] = []
-        public var selectedItems: Set<AssetItem.ID> = []
-        public var expandedDirectories: Set<AssetItem.ID> = []
+	@ObservableState
+	public struct State: Equatable {
+		// Content
+		public var assetItems: [AssetItem] = []
+		public var selectedItems: Set<AssetItem.ID> = []
+		public var expandedDirectories: Set<AssetItem.ID> = []
 		public var documentURL: URL? = nil
 		public var currentDirectoryId: AssetItem.ID? = nil
 
-        // View Options
-        public var viewMode: ViewMode = .icons
-        public var iconSize: Double = 80
-        public var sortOrder: BrowserSortOrder = .name
-        public var sortAscending: Bool = true
-        public var filterText: String = ""
-        public var filterFileType: AssetFileType? = nil
+		// View Options
+		public var viewMode: ViewMode = .icons
+		public var iconSize: Double = 80
+		public var sortOrder: BrowserSortOrder = .name
+		public var sortAscending: Bool = true
+		public var filterText: String = ""
+		public var filterFileType: AssetFileType? = nil
 
-        // State
-        public var isLoading: Bool = false
-        public var errorMessage: String? = nil
+		// State
+		public var isLoading: Bool = false
+		public var errorMessage: String? = nil
 
 		// Drag
 		public var draggingItemIds: [AssetItem.ID] = []
 
-        // Editing
-        public var renamingItemId: AssetItem.ID? = nil
+		// Editing
+		public var renamingItemId: AssetItem.ID? = nil
 
-        public init() {}
-    }
+		public init() {}
+	}
 
-    public enum Action: Equatable, BindableAction {
-        case binding(BindingAction<State>)
+	public enum Action: Equatable, BindableAction {
+		case binding(BindingAction<State>)
 
-        // Lifecycle
-        case onAppear
-        case loadAssets(documentURL: URL)
-        case assetsLoaded([AssetItem])
-        case loadingFailed(String)
+		// Lifecycle
+		case onAppear
+		case onDisappear
+		case loadAssets(documentURL: URL)
+		case assetsLoaded([AssetItem])
+		case loadingFailed(String)
 
-        // Selection
-        case itemSelected(AssetItem.ID)
-        case itemDoubleClicked(AssetItem.ID)
-        case selectionCleared
+		// Selection
+		case itemSelected(AssetItem.ID)
+		case itemDoubleClicked(AssetItem.ID)
+		case selectionCleared
 		case setCurrentDirectory(AssetItem.ID?)
 
 		// Drag
 		case dragStarted([AssetItem.ID])
 		case dragEnded
 
-        // File Operations
+		// File Operations
 		case importContentTapped
-        case createFolderTapped
+		case createFolderTapped
 		case createSceneTapped
-        case deleteSelectedTapped
-        case renameSelectedTapped
+		case deleteSelectedTapped
+		case renameSelectedTapped
 		case renameItemCommitted(AssetItem.ID, String)
 		case renameCancelled
-        case duplicateSelectedTapped
-        case moveSelectedTapped
-        case moveItems([AssetItem.ID], to: AssetItem.ID?)
+		case duplicateSelectedTapped
+		case moveSelectedTapped
+		case moveItems([AssetItem.ID], to: AssetItem.ID?)
 
-        // View Options
-        case setViewMode(ViewMode)
-        case setSortOrder(BrowserSortOrder)
-        case toggleSortDirection
+		// View Options
+		case setViewMode(ViewMode)
+		case setSortOrder(BrowserSortOrder)
+		case toggleSortDirection
 
-        // Filter
-        case setFilterText(String)
-        case setFilterFileType(AssetFileType?)
+		// Filter
+		case setFilterText(String)
+		case setFilterFileType(AssetFileType?)
 
-        // Responses
-        case fileOperationCompleted
-        case fileOperationFailed(String)
-    }
+		// File watching
+		case fileSystemEvent(FileWatcherClient.Event)
 
-    @Dependency(\.assetDiscoveryClient) var assetDiscovery
-    @Dependency(\.fileOperationsClient) var fileOperations
+		// Responses
+		case fileOperationCompleted
+		case fileOperationFailed(String)
+	}
 
-    public init() {}
+	@Dependency(\.assetDiscoveryClient) var assetDiscovery
+	@Dependency(\.fileOperationsClient) var fileOperations
+	@Dependency(\.fileWatcherClient) var fileWatcher
 
-    public var body: some ReducerOf<Self> {
-        BindingReducer()
+	public init() {}
 
-        Reduce { state, action in
-            switch action {
-            case .binding:
-                return .none
+	public var body: some ReducerOf<Self> {
+		BindingReducer()
 
-            case .onAppear:
-                return .none
+		Reduce { state, action in
+			switch action {
+			case .binding:
+				return .none
 
-            case let .loadAssets(documentURL):
-                state.isLoading = true
-                state.errorMessage = nil
+		case .onAppear:
+			// Start file watching if document URL is available
+			guard let documentURL = state.documentURL else {
+				return .none
+			}
+			let parentURL = documentURL.deletingLastPathComponent()
+			let fileWatcher = self.fileWatcher
+			return .run { send in
+				for await event in fileWatcher.watch(parentURL) {
+					await send(.fileSystemEvent(event))
+				}
+			}
+			.cancellable(id: FileWatcherCancellationID.watcher)
+
+			case .onDisappear:
+				return .cancel(id: FileWatcherCancellationID.watcher)
+
+			case let .loadAssets(documentURL):
+				state.isLoading = true
+				state.errorMessage = nil
 				state.documentURL = documentURL
-                let assetDiscovery = self.assetDiscovery
-                return .run { send in
-                    do {
-                        let items = try await assetDiscovery.discover(documentURL)
-                        await send(.assetsLoaded(items))
-                    } catch {
-                        await send(.loadingFailed(error.localizedDescription))
-                    }
-                }
+				let assetDiscovery = self.assetDiscovery
+				return .run { send in
+					do {
+						let items = try await assetDiscovery.discover(documentURL)
+						await send(.assetsLoaded(items))
+					} catch {
+						await send(.loadingFailed(error.localizedDescription))
+					}
+				}
 
-            case let .assetsLoaded(items):
-                state.isLoading = false
-                state.assetItems = items
+			case let .assetsLoaded(items):
+				state.isLoading = false
+				state.assetItems = items
 				if state.currentDirectoryId == nil {
 					state.currentDirectoryId = items.first?.id
 				}
 				if let rootId = items.first?.id {
 					state.expandedDirectories.insert(rootId)
 				}
-                return .none
+				return .none
 
-            case let .loadingFailed(message):
-                state.isLoading = false
-                state.errorMessage = message
-                return .none
+			case let .loadingFailed(message):
+				state.isLoading = false
+				state.errorMessage = message
+				return .none
 
-            case let .itemSelected(id):
-                state.selectedItems = [id]
-                return .none
+			case let .itemSelected(id):
+				state.selectedItems = [id]
+				return .none
 
-            case .itemDoubleClicked:
-                return .none
+			case .itemDoubleClicked:
+				return .none
 
-            case .selectionCleared:
-                state.selectedItems.removeAll()
-                return .none
+			case .selectionCleared:
+				state.selectedItems.removeAll()
+				return .none
 
 			case let .setCurrentDirectory(id):
 				state.currentDirectoryId = id
@@ -180,7 +199,7 @@ public struct ProjectBrowserFeature {
 					}
 				}
 
-            case .createFolderTapped:
+			case .createFolderTapped:
 				guard let destination = resolveTargetDirectory(state: state) else {
 					state.errorMessage = "Could not determine destination folder."
 					return .none
@@ -214,10 +233,10 @@ public struct ProjectBrowserFeature {
 					}
 				}
 
-            case .deleteSelectedTapped:
-                return .none
+			case .deleteSelectedTapped:
+				return .none
 
-            case .renameSelectedTapped:
+			case .renameSelectedTapped:
 				guard state.selectedItems.count == 1,
 				      let id = state.selectedItems.first else {
 					return .none
@@ -252,14 +271,14 @@ public struct ProjectBrowserFeature {
 				state.renamingItemId = nil
 				return .none
 
-            case .duplicateSelectedTapped:
-                return .none
+			case .duplicateSelectedTapped:
+				return .none
 
-            case .moveSelectedTapped:
-                guard let rootURL = resolveRootDirectory(state: state) else {
-                    state.errorMessage = "Could not resolve project root."
-                    return .none
-                }
+			case .moveSelectedTapped:
+				guard let rootURL = resolveRootDirectory(state: state) else {
+					state.errorMessage = "Could not resolve project root."
+					return .none
+				}
 				let itemURLs = state.selectedItems.compactMap { id in
 					findItem(in: state.assetItems, id: id)?.url
 				}
@@ -268,7 +287,7 @@ public struct ProjectBrowserFeature {
 				}
 				let documentURL = state.documentURL
 				let fileOperations = self.fileOperations
-                return .run { send in
+				return .run { send in
 					let destination = await MainActor.run { () -> URL? in
 						let panel = NSOpenPanel()
 						panel.canChooseFiles = false
@@ -297,9 +316,9 @@ public struct ProjectBrowserFeature {
 					} catch {
 						await send(.fileOperationFailed(error.localizedDescription))
 					}
-                }
+				}
 
-            case let .moveItems(itemIDs, destinationID):
+			case let .moveItems(itemIDs, destinationID):
 				guard let destinationID,
 				      let destinationItem = findItem(in: state.assetItems, id: destinationID),
 				      destinationItem.isDirectory else {
@@ -331,26 +350,26 @@ public struct ProjectBrowserFeature {
 					}
 				}
 
-            case let .setViewMode(mode):
-                state.viewMode = mode
-                return .none
+			case let .setViewMode(mode):
+				state.viewMode = mode
+				return .none
 
-            case let .setSortOrder(order):
-                state.sortOrder = order
-                return .none
+			case let .setSortOrder(order):
+				state.sortOrder = order
+				return .none
 
-            case .toggleSortDirection:
-                state.sortAscending.toggle()
-                return .none
+			case .toggleSortDirection:
+				state.sortAscending.toggle()
+				return .none
 
-            case let .setFilterText(text):
-                state.filterText = text
-                return .none
+			case let .setFilterText(text):
+				state.filterText = text
+				return .none
 
-            case .setFilterFileType:
-                return .none
+			case .setFilterFileType:
+				return .none
 
-            case .fileOperationCompleted:
+			case .fileOperationCompleted:
 				guard let documentURL = state.documentURL else {
 					return .none
 				}
@@ -358,25 +377,28 @@ public struct ProjectBrowserFeature {
 					await send(.loadAssets(documentURL: documentURL))
 				}
 
-            case let .fileOperationFailed(message):
+			case let .fileOperationFailed(message):
 				state.errorMessage = message
-                return .none
-            }
-        }
-    }
-}
+				return .none
 
-private func findItem(in items: [AssetItem], id: AssetItem.ID) -> AssetItem? {
-	for item in items {
-		if item.id == id {
-			return item
-		}
-		if let children = item.children,
-		   let match = findItem(in: children, id: id) {
-			return match
+			case .fileSystemEvent:
+				// Auto-refresh assets when file system changes detected
+				guard let documentURL = state.documentURL else {
+					return .none
+				}
+				return .run { send in
+					await send(.loadAssets(documentURL: documentURL))
+				}
+			}
 		}
 	}
-	return nil
+}
+
+// MARK: - Effect Cancellation ID
+private enum FileWatcherCancellationID: Hashable { case watcher }
+
+private func findItem(in items: [AssetItem], id: AssetItem.ID) -> AssetItem? {
+	AssetItem.find(in: items, id: id)
 }
 
 private func resolveTargetDirectory(state: ProjectBrowserFeature.State) -> URL? {

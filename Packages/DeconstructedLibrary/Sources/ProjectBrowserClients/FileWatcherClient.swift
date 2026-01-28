@@ -21,7 +21,7 @@ extension FileWatcherClient: DependencyKey {
 }
 
 extension FileWatcherClient {
-	public enum Event: Sendable {
+	public enum Event: Sendable, Equatable {
 		case created(URL)
 		case modified(URL)
 		case deleted(URL)

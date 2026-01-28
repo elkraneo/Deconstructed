@@ -3,38 +3,38 @@ import CryptoKit
 
 /// Represents a file or directory in the .rkassets bundle
 public struct AssetItem: Identifiable, Sendable, Equatable, Hashable {
-    public let id: UUID
-    public let name: String
-    public let url: URL
-    public let isDirectory: Bool
-    public let fileType: AssetFileType
-    public var children: [AssetItem]?
+	public let id: UUID
+	public let name: String
+	public let url: URL
+	public let isDirectory: Bool
+	public let fileType: AssetFileType
+	public var children: [AssetItem]?
 
-    /// For USDA files, the UUID from main.json
-    public var sceneUUID: String?
+	/// For USDA files, the UUID from main.json
+	public var sceneUUID: String?
 
-    /// File modification date for sorting
-    public let modificationDate: Date
+	/// File modification date for sorting
+	public let modificationDate: Date
 
-    public init(
-        id: UUID = UUID(),
-        name: String,
-        url: URL,
-        isDirectory: Bool,
-        fileType: AssetFileType,
-        children: [AssetItem]? = nil,
-        sceneUUID: String? = nil,
-        modificationDate: Date = Date()
-    ) {
-        self.id = id
-        self.name = name
-        self.url = url
-        self.isDirectory = isDirectory
-        self.fileType = fileType
-        self.children = children
-        self.sceneUUID = sceneUUID
-        self.modificationDate = modificationDate
-    }
+	public init(
+		id: UUID = UUID(),
+		name: String,
+		url: URL,
+		isDirectory: Bool,
+		fileType: AssetFileType,
+		children: [AssetItem]? = nil,
+		sceneUUID: String? = nil,
+		modificationDate: Date = Date()
+	) {
+		self.id = id
+		self.name = name
+		self.url = url
+		self.isDirectory = isDirectory
+		self.fileType = fileType
+		self.children = children
+		self.sceneUUID = sceneUUID
+		self.modificationDate = modificationDate
+	}
 
 	public static func stableID(for url: URL) -> UUID {
 		let path = url.standardizedFileURL.path
@@ -48,17 +48,33 @@ public struct AssetItem: Identifiable, Sendable, Equatable, Hashable {
 		))
 	}
 
-    // MARK: - Equatable
+	// MARK: - Equatable
 
-    public static func == (lhs: AssetItem, rhs: AssetItem) -> Bool {
-        lhs.id == rhs.id
+	public static func == (lhs: AssetItem, rhs: AssetItem) -> Bool {
+		lhs.id == rhs.id
 		&& lhs.name == rhs.name
 		&& lhs.children == rhs.children
-    }
+	}
 
-    // MARK: - Hashable
+	// MARK: - Hashable
 
-    public func hash(into hasher: inout Hasher) {
-        hasher.combine(id)
-    }
+	public func hash(into hasher: inout Hasher) {
+		hasher.combine(id)
+	}
+
+	// MARK: - Tree Search
+
+	/// Recursively finds an item by ID in the asset tree
+	public static func find(in items: [AssetItem], id: AssetItem.ID) -> AssetItem? {
+		for item in items {
+			if item.id == id {
+				return item
+			}
+			if let children = item.children,
+			   let match = find(in: children, id: id) {
+				return match
+			}
+		}
+		return nil
+	}
 }

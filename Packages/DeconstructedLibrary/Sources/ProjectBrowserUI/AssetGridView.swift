@@ -144,14 +144,5 @@ private func sortItems(lhs: AssetItem, rhs: AssetItem, order: BrowserSortOrder, 
 }
 
 private func findItem(in items: [AssetItem], id: AssetItem.ID) -> AssetItem? {
-	for item in items {
-		if item.id == id {
-			return item
-		}
-		if let children = item.children,
-		   let match = findItem(in: children, id: id) {
-			return match
-		}
-	}
-	return nil
+	AssetItem.find(in: items, id: id)
 }

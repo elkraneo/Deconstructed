@@ -70,7 +70,7 @@ public nonisolated struct RCPSettings: Codable, Sendable {
 
 /// Represents `WorkspaceData/SceneMetadataList.json`
 /// Structure: { "uuid": { "objectMetadataList": [[uuid, name], {isExpanded, isLocked}] } }
-public nonisolated struct RCPSceneMetadataList: Sendable {
+public nonisolated struct RCPSceneMetadataList: Sendable, Codable {
 	public var scenes: [String: SceneMetadata]
 
 	public struct SceneMetadata: Sendable {
@@ -78,6 +78,22 @@ public nonisolated struct RCPSceneMetadataList: Sendable {
 		public var name: String
 		public var isExpanded: Bool
 		public var isLocked: Bool
+
+		public init(
+			uuid: String,
+			name: String,
+			isExpanded: Bool,
+			isLocked: Bool
+		) {
+			self.uuid = uuid
+			self.name = name
+			self.isExpanded = isExpanded
+			self.isLocked = isLocked
+		}
+	}
+
+	public init(scenes: [String: SceneMetadata]) {
+		self.scenes = scenes
 	}
 
 	public static func initial(sceneUUID: String, sceneName: String = "Root") -> RCPSceneMetadataList {
@@ -91,18 +107,93 @@ public nonisolated struct RCPSceneMetadataList: Sendable {
 		])
 	}
 
-	/// Custom JSON encoding to match RCP's format
-	public func encode() throws -> Data {
-		var root: [String: Any] = [:]
+	/// Coding keys for the root object
+	private struct CodingKeys: CodingKey {
+		var stringValue: String
+		var intValue: Int? { nil }
 
-		for (key, metadata) in scenes {
-			let objectMetadataList: [Any] = [
-				[metadata.uuid, metadata.name],
-				["isExpanded": metadata.isExpanded, "isLocked": metadata.isLocked]
-			]
-			root[key] = ["objectMetadataList": objectMetadataList]
+		init?(stringValue: String) {
+			self.stringValue = stringValue
 		}
 
-		return try JSONSerialization.data(withJSONObject: root, options: [.prettyPrinted, .sortedKeys])
+		init?(intValue: Int) {
+			nil
+		}
+	}
+
+	public init(from decoder: Decoder) throws {
+		let container = try decoder.container(keyedBy: CodingKeys.self)
+		var scenes: [String: SceneMetadata] = [:]
+
+		for key in container.allKeys {
+			let sceneContainer = try container.nestedContainer(
+				keyedBy: SceneCodingKeys.self,
+				forKey: key
+			)
+			var metadataList = try sceneContainer.nestedUnkeyedContainer(
+				forKey: .objectMetadataList
+			)
+
+			// First element: [uuid, name]
+			var firstArray = try metadataList.nestedUnkeyedContainer()
+			let uuid = try firstArray.decode(String.self)
+			let name = try firstArray.decode(String.self)
+
+			// Second element: {isExpanded, isLocked}
+			let flags = try metadataList.decode(SceneFlags.self)
+
+			scenes[key.stringValue] = SceneMetadata(
+				uuid: uuid,
+				name: name,
+				isExpanded: flags.isExpanded,
+				isLocked: flags.isLocked
+			)
+		}
+
+		self.scenes = scenes
+	}
+
+	public func encode(to encoder: Encoder) throws {
+		var container = encoder.container(keyedBy: CodingKeys.self)
+
+		for (key, metadata) in scenes {
+			let key = CodingKeys(stringValue: key)!
+			var sceneContainer = container.nestedContainer(
+				keyedBy: SceneCodingKeys.self,
+				forKey: key
+			)
+			var metadataList = sceneContainer.nestedUnkeyedContainer(
+				forKey: .objectMetadataList
+			)
+
+			// First element: [uuid, name]
+			var firstArray = metadataList.nestedUnkeyedContainer()
+			try firstArray.encode(metadata.uuid)
+			try firstArray.encode(metadata.name)
+
+			// Second element: {isExpanded, isLocked}
+			try metadataList.encode(
+				SceneFlags(
+					isExpanded: metadata.isExpanded,
+					isLocked: metadata.isLocked
+				)
+			)
+		}
+	}
+
+	private enum SceneCodingKeys: String, CodingKey {
+		case objectMetadataList
+	}
+
+	private struct SceneFlags: Codable, Sendable {
+		let isExpanded: Bool
+		let isLocked: Bool
+	}
+
+	/// Convenience method to encode with pretty printing and sorted keys
+	public func encode() throws -> Data {
+		let encoder = JSONEncoder()
+		encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+		return try encoder.encode(self)
 	}
 }
