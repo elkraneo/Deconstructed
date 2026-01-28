@@ -14,7 +14,7 @@ public struct ProjectBrowserView: View {
 		HSplitView {
 			// Sidebar - Collections
 			CollectionsSidebar(store: store)
-				.frame(minWidth: 140, idealWidth: 180)
+				.frame(minWidth: 140, idealWidth: 180, maxWidth: 300)
 
 			// Content Area
 			VStack(spacing: 0) {

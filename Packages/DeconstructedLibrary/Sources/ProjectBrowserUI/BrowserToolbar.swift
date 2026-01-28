@@ -9,23 +9,29 @@ struct BrowserToolbar: View {
 	var body: some View {
 		HStack(spacing: 12) {
 			// Primary actions (RCP-aligned)
-			Button {
-				store.send(.importContentTapped)
-			} label: {
-				Label("Import Content", systemImage: "tray.and.arrow.down")
+			ControlGroup {
+				Button {
+					store.send(.importContentTapped)
+				} label: {
+					Label("Import Content", systemImage: "square.and.arrow.down")
+				}
+				.help("Import content into the project")
+				
+				Button {
+					store.send(.createFolderTapped)
+				} label: {
+					Label("New Folder", systemImage: "folder.badge.plus")
+				}
+				.help("Create new folder in the project")
+				
+				Button {
+					store.send(.createSceneTapped)
+				} label: {
+					Label("New Scene", image: "custom.cube.transparent.badge.plus")
+				}
+				.help("Create new scene in the project")
 			}
-
-			Button {
-				store.send(.createFolderTapped)
-			} label: {
-				Label("New Folder", systemImage: "folder.badge.plus")
-			}
-
-			Button {
-				store.send(.createSceneTapped)
-			} label: {
-				Label("New Scene", systemImage: "square.and.pencil")
-			}
+			.labelsHidden()
 
 			Spacer()
 
@@ -54,6 +60,7 @@ struct BrowserToolbar: View {
 					Text("Filter")
 				}
 			}
+			.disabled(true)
 		}
 		.padding(.horizontal)
 		.padding(.vertical, 8)

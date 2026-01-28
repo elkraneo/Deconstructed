@@ -48,16 +48,19 @@ public struct ContentView: View {
 	public var body: some View {
 		VStack(spacing: 0) {
 			Spacer()
-				.frame(height: 200)
+			Divider()
+
 			// Editor Toolbar / Tab Bar
 			Picker("Editor Mode", selection: $selectedTab) {
-				ForEach(EditorTab.allCases) { tab in
+				ForEach([EditorTab.projectBrowser, .debug]) { tab in
 					Label(tab.rawValue, systemImage: tab.icon)
 						.tag(tab)
 				}
 			}
 			.pickerStyle(.segmented)
-			.padding()
+			.padding(8)
+			.labelsHidden()
+			.controlSize(.small)
 
 			Divider()
 
