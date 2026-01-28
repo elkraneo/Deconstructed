@@ -20,7 +20,24 @@ public struct ProjectBrowserView: View {
 			VStack(spacing: 0) {
 				BrowserToolbar(store: store)
 				Divider()
-				AssetGridView(store: store)
+				if store.isLoading {
+					ProgressView("Loading assets…")
+						.frame(maxWidth: .infinity, maxHeight: .infinity)
+				} else if let error = store.errorMessage {
+					ContentUnavailableView(
+						"Failed to Load",
+						systemImage: "exclamationmark.triangle",
+						description: Text(error)
+					)
+				} else if store.assetItems.isEmpty {
+					ContentUnavailableView(
+						"No Assets",
+						systemImage: "folder",
+						description: Text("Open a .realitycomposerpro project to browse assets.")
+					)
+				} else {
+					AssetGridView(store: store)
+				}
 			}
 
 			// Inspector (optional, shown when item selected)

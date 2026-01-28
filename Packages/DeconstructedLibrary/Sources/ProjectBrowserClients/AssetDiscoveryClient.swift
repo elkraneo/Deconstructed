@@ -25,56 +25,28 @@ public actor AssetDiscoveryService {
 	public init() {}
 
 	public func discoverAssets(for documentURL: URL) async throws -> [AssetItem] {
-		// Step 1: Navigate up to parent directory
 		let parentURL = documentURL.deletingLastPathComponent()
 
-		// Step 2: Try to find and read main.json from the document bundle
-		let mainJsonURL = documentURL.appendingPathComponent("ProjectData/main.json")
-		guard let data = try? Data(contentsOf: mainJsonURL),
-		      let projectData = try? JSONDecoder().decode(RCPProjectData.self, from: data) else {
-			throw AssetDiscoveryError.cannotReadProjectData
-		}
+		// Build UUID lookup from main.json (best-effort, not required)
+		let sceneUUIDLookup = loadSceneUUIDLookup(documentURL: documentURL)
 
-		let sceneUUIDLookup = buildSceneUUIDLookup(projectData: projectData)
-
-		// Step 3: Extract project name from first scene path
-		guard let firstPath = projectData.normalizedScenePaths.keys.first else {
-			throw AssetDiscoveryError.invalidProjectData
-		}
-
-		let components = firstPath
-			.split(separator: "/")
-			.map { String($0) }
-			.map { $0.removingPercentEncoding ?? $0 }
-		guard components.count >= 4 else {
-			throw AssetDiscoveryError.invalidProjectData
-		}
-
-		let projectName = components[0]
-
-		// Step 4: Build rkassets URL
-		let rkassetsRelativePath = "Sources/\(projectName)/\(projectName).rkassets"
-		let rkassetsURL = parentURL.appendingPathComponent(rkassetsRelativePath)
-
-		// Step 5: Verify .rkassets exists
-		var isDirectory: ObjCBool = false
-		guard fileManager.fileExists(atPath: rkassetsURL.path, isDirectory: &isDirectory),
-		      isDirectory.boolValue else {
+		// Find .rkassets directory by scanning Sources/ on disk
+		let sourcesURL = parentURL.appendingPathComponent("Sources")
+		guard let rkassetsURL = findRKAssets(in: sourcesURL) else {
 			throw AssetDiscoveryError.rkassetsNotFound
 		}
 
-		// Step 6: Recursively scan directory and return as a single root item
+		// Recursively scan the directory
 		let children = try await scanDirectory(
 			rkassetsURL,
-			relativeTo: rkassetsURL,
 			rootURL: parentURL,
 			sceneUUIDLookup: sceneUUIDLookup
 		)
 
-		// Return the .rkassets directory as the root item with all assets as children
-		let resourceValues = try rkassetsURL.resourceValues(forKeys: [.isDirectoryKey, .contentModificationDateKey])
+		let resourceValues = try rkassetsURL.resourceValues(forKeys: [.contentModificationDateKey])
 		return [
 			AssetItem(
+				id: AssetItem.stableID(for: rkassetsURL),
 				name: rkassetsURL.lastPathComponent,
 				url: rkassetsURL,
 				isDirectory: true,
@@ -86,13 +58,42 @@ public actor AssetDiscoveryService {
 		]
 	}
 
+	/// Finds the first .rkassets directory inside Sources/
+	private func findRKAssets(in sourcesURL: URL) -> URL? {
+		guard let contents = try? fileManager.contentsOfDirectory(
+			at: sourcesURL,
+			includingPropertiesForKeys: [.isDirectoryKey]
+		) else {
+			return nil
+		}
+		// Sources/<ProjectName>/<ProjectName>.rkassets
+		for projectDir in contents {
+			let isDir = (try? projectDir.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
+			guard isDir else { continue }
+			if let inner = try? fileManager.contentsOfDirectory(
+				at: projectDir,
+				includingPropertiesForKeys: [.isDirectoryKey]
+			) {
+				for item in inner {
+					if item.pathExtension == "rkassets" {
+						let isItemDir = (try? item.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
+						if isItemDir { return item }
+					}
+				}
+			}
+		}
+		return nil
+	}
+
 	private func scanDirectory(
 		_ directoryURL: URL,
-		relativeTo baseURL: URL,
 		rootURL: URL,
 		sceneUUIDLookup: [String: String]
 	) async throws -> [AssetItem] {
-		let urls = try fileManager.contentsOfDirectory(at: directoryURL, includingPropertiesForKeys: [.isDirectoryKey, .contentModificationDateKey])
+		let urls = try fileManager.contentsOfDirectory(
+			at: directoryURL,
+			includingPropertiesForKeys: [.isDirectoryKey, .contentModificationDateKey]
+		)
 
 		return await withTaskGroup(of: AssetItem?.self) { group in
 			for url in urls {
@@ -105,11 +106,11 @@ public actor AssetDiscoveryService {
 						if isDirectory {
 							let children = try? await self.scanDirectory(
 								url,
-								relativeTo: baseURL,
 								rootURL: rootURL,
 								sceneUUIDLookup: sceneUUIDLookup
 							)
 							return AssetItem(
+								id: AssetItem.stableID(for: url),
 								name: url.lastPathComponent,
 								url: url,
 								isDirectory: true,
@@ -120,6 +121,7 @@ public actor AssetDiscoveryService {
 						} else {
 							let sceneUUID = sceneUUIDForURL(url, rootURL: rootURL, lookup: sceneUUIDLookup)
 							return AssetItem(
+								id: AssetItem.stableID(for: url),
 								name: url.lastPathComponent,
 								url: url,
 								isDirectory: false,
@@ -146,30 +148,27 @@ public actor AssetDiscoveryService {
 }
 
 public enum AssetDiscoveryError: Error, Sendable {
-	case cannotReadProjectData
-	case invalidProjectData
 	case rkassetsNotFound
 }
 
-private func buildSceneUUIDLookup(projectData: RCPProjectData) -> [String: String] {
+// MARK: - UUID Lookup
+
+private func loadSceneUUIDLookup(documentURL: URL) -> [String: String] {
+	let mainJsonURL = documentURL.appendingPathComponent("ProjectData/main.json")
+	guard let data = try? Data(contentsOf: mainJsonURL),
+	      let projectData = try? JSONDecoder().decode(RCPProjectData.self, from: data) else {
+		return [:]
+	}
 	var lookup: [String: String] = [:]
 	for (path, uuid) in projectData.pathsToIds {
-		if let normalized = normalizedScenePath(path) {
-			lookup[normalized] = uuid
-		}
+		let components = path
+			.split(separator: "/")
+			.map { String($0) }
+			.map { $0.removingPercentEncoding ?? $0 }
+		guard !components.isEmpty else { continue }
+		lookup[components.joined(separator: "/")] = uuid
 	}
 	return lookup
-}
-
-private func normalizedScenePath(_ path: String) -> String? {
-	let components = path
-		.split(separator: "/")
-		.map { String($0) }
-		.map { $0.removingPercentEncoding ?? $0 }
-	guard !components.isEmpty else {
-		return nil
-	}
-	return components.joined(separator: "/")
 }
 
 private func sceneUUIDForURL(_ url: URL, rootURL: URL, lookup: [String: String]) -> String? {

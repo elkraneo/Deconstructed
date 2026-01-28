@@ -11,13 +11,12 @@ struct AssetGridView: View {
 	}
 
 	private var filteredAndSortedItems: [AssetItem] {
-		// Get the root .rkassets directory's children
-		guard let rkassetsRoot = store.assetItems.first(where: { $0.url.path.contains(".rkassets") }),
-		      let children = rkassetsRoot.children else {
+		let directoryItems = currentDirectoryChildren()
+		guard !directoryItems.isEmpty else {
 			return []
 		}
 
-		var items = children.filter { item in
+		var items = directoryItems.filter { item in
 			matchesFilter(item: item, text: store.filterText)
 		}
 
@@ -49,13 +48,35 @@ struct AssetGridView: View {
 						}
 					)
 					.onDrag {
-						NSItemProvider(object: item.id.uuidString as NSString)
+						let ids: [UUID]
+						if store.selectedItems.contains(item.id) {
+							ids = Array(store.selectedItems)
+						} else {
+							ids = [item.id]
+						}
+						store.send(.dragStarted(ids))
+						let payload = ids.map { $0.uuidString }.joined(separator: ",")
+						return NSItemProvider(object: payload as NSString)
 					}
-					.onTapGesture {
-						store.send(.itemSelected(item.id))
+					.onDrop(
+						of: [.text, .plainText, .utf8PlainText],
+						isTargeted: nil
+					) { _ in
+						guard item.isDirectory else { return false }
+						let ids = store.draggingItemIds
+						guard !ids.isEmpty else { return false }
+						store.send(.moveItems(ids, to: item.id))
+						store.send(.dragEnded)
+						return true
 					}
 					.onTapGesture(count: 2) {
 						store.send(.itemDoubleClicked(item.id))
+						if item.isDirectory {
+							store.send(.setCurrentDirectory(item.id))
+						}
+					}
+					.onTapGesture {
+						store.send(.itemSelected(item.id))
 					}
 					.contextMenu {
 						Button("Rename") {
@@ -72,6 +93,19 @@ struct AssetGridView: View {
 			.padding()
 		}
 		.background(.windowBackground)
+	}
+
+	private func currentDirectoryChildren() -> [AssetItem] {
+		guard let rkassetsRoot = store.assetItems.first(where: { $0.url.path.contains(".rkassets") }) else {
+			return []
+		}
+		guard let currentId = store.currentDirectoryId else {
+			return rkassetsRoot.children ?? []
+		}
+		guard let current = findItem(in: [rkassetsRoot], id: currentId) else {
+			return rkassetsRoot.children ?? []
+		}
+		return current.children ?? []
 	}
 }
 
@@ -107,4 +141,17 @@ private func sortItems(lhs: AssetItem, rhs: AssetItem, order: BrowserSortOrder, 
 	} else {
 		return comparison == .orderedDescending
 	}
+}
+
+private func findItem(in items: [AssetItem], id: AssetItem.ID) -> AssetItem? {
+	for item in items {
+		if item.id == id {
+			return item
+		}
+		if let children = item.children,
+		   let match = findItem(in: children, id: id) {
+			return match
+		}
+	}
+	return nil
 }

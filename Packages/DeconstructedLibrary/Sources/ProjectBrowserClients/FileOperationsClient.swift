@@ -8,7 +8,7 @@ public struct FileOperationsClient: Sendable {
 	public var createScene: @Sendable (_ parentURL: URL, _ baseName: String) async throws -> URL
 	public var rename: @Sendable (_ item: URL, _ newName: String) async throws -> URL
 	public var delete: @Sendable (_ items: [URL]) async throws -> Void
-	public var move: @Sendable (_ items: [URL], _ destination: URL) async throws -> Void
+	public var move: @Sendable (_ items: [URL], _ destination: URL) async throws -> [URL: URL]
 	public var duplicate: @Sendable (_ item: URL) async throws -> URL
 	public var importFile: @Sendable (_ source: URL, _ destination: URL) async throws -> URL
 }
@@ -36,10 +36,16 @@ extension FileOperationsClient: DependencyKey {
 			}
 		},
 		move: { items, destination in
+			var results: [URL: URL] = [:]
 			for item in items {
-				let dest = destination.appendingPathComponent(item.lastPathComponent)
+				let isDirectory = (try? item.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
+				let baseName = isDirectory ? item.lastPathComponent : item.deletingPathExtension().lastPathComponent
+				let ext = isDirectory ? "" : item.pathExtension
+				let dest = uniqueURL(parentURL: destination, baseName: baseName, pathExtension: ext)
 				try FileManager.default.moveItem(at: item, to: dest)
+				results[item] = dest
 			}
+			return results
 		},
 		duplicate: { item in
 			let name = item.deletingPathExtension().lastPathComponent

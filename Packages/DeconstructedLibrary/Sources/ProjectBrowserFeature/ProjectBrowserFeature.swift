@@ -14,6 +14,7 @@ public struct ProjectBrowserFeature {
         public var selectedItems: Set<AssetItem.ID> = []
         public var expandedDirectories: Set<AssetItem.ID> = []
 		public var documentURL: URL? = nil
+		public var currentDirectoryId: AssetItem.ID? = nil
 
         // View Options
         public var viewMode: ViewMode = .icons
@@ -26,6 +27,9 @@ public struct ProjectBrowserFeature {
         // State
         public var isLoading: Bool = false
         public var errorMessage: String? = nil
+
+		// Drag
+		public var draggingItemIds: [AssetItem.ID] = []
 
         // Editing
         public var renamingItemId: AssetItem.ID? = nil
@@ -46,6 +50,11 @@ public struct ProjectBrowserFeature {
         case itemSelected(AssetItem.ID)
         case itemDoubleClicked(AssetItem.ID)
         case selectionCleared
+		case setCurrentDirectory(AssetItem.ID?)
+
+		// Drag
+		case dragStarted([AssetItem.ID])
+		case dragEnded
 
         // File Operations
 		case importContentTapped
@@ -106,6 +115,12 @@ public struct ProjectBrowserFeature {
             case let .assetsLoaded(items):
                 state.isLoading = false
                 state.assetItems = items
+				if state.currentDirectoryId == nil {
+					state.currentDirectoryId = items.first?.id
+				}
+				if let rootId = items.first?.id {
+					state.expandedDirectories.insert(rootId)
+				}
                 return .none
 
             case let .loadingFailed(message):
@@ -123,6 +138,18 @@ public struct ProjectBrowserFeature {
             case .selectionCleared:
                 state.selectedItems.removeAll()
                 return .none
+
+			case let .setCurrentDirectory(id):
+				state.currentDirectoryId = id
+				return .none
+
+			case let .dragStarted(ids):
+				state.draggingItemIds = ids
+				return .none
+
+			case .dragEnded:
+				state.draggingItemIds = []
+				return .none
 
 			case .importContentTapped:
 				guard let destination = resolveTargetDirectory(state: state) else {
@@ -260,11 +287,10 @@ public struct ProjectBrowserFeature {
 					}
 
 					do {
-						try await fileOperations.move(itemURLs, destination)
+						let moved = try await fileOperations.move(itemURLs, destination)
 						if let documentURL {
-							for itemURL in itemURLs {
-								let newURL = destination.appendingPathComponent(itemURL.lastPathComponent)
-								try updateProjectDataForMove(documentURL: documentURL, from: itemURL, to: newURL)
+							for (from, to) in moved {
+								try updateProjectDataForMove(documentURL: documentURL, from: from, to: to)
 							}
 						}
 						await send(.fileOperationCompleted)
@@ -279,7 +305,10 @@ public struct ProjectBrowserFeature {
 				      destinationItem.isDirectory else {
 					return .none
 				}
-				let itemURLs = itemIDs.compactMap { id in
+				// Don't move an item into itself
+				let safeIDs = itemIDs.filter { $0 != destinationID }
+				guard !safeIDs.isEmpty else { return .none }
+				let itemURLs = safeIDs.compactMap { id in
 					findItem(in: state.assetItems, id: id)?.url
 				}
 				guard !itemURLs.isEmpty else {
@@ -290,11 +319,10 @@ public struct ProjectBrowserFeature {
 				let fileOperations = self.fileOperations
 				return .run { send in
 					do {
-						try await fileOperations.move(itemURLs, destinationURL)
+						let moved = try await fileOperations.move(itemURLs, destinationURL)
 						if let documentURL {
-							for itemURL in itemURLs {
-								let newURL = destinationURL.appendingPathComponent(itemURL.lastPathComponent)
-								try updateProjectDataForMove(documentURL: documentURL, from: itemURL, to: newURL)
+							for (from, to) in moved {
+								try updateProjectDataForMove(documentURL: documentURL, from: from, to: to)
 							}
 						}
 						await send(.fileOperationCompleted)
