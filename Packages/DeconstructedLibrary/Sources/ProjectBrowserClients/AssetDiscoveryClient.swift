@@ -93,7 +93,7 @@ public actor AssetDiscoveryService {
 		let urls = try fileManager.contentsOfDirectory(
 			at: directoryURL,
 			includingPropertiesForKeys: [.isDirectoryKey, .contentModificationDateKey]
-		)
+		).filter { $0.lastPathComponent != ".DS_Store" }
 
 		return await withTaskGroup(of: AssetItem?.self) { group in
 			for url in urls {

@@ -128,40 +128,43 @@ struct DebugFileStructureView: View {
 			.listStyle(.sidebar)
 			.navigationSplitViewColumnWidth(min: 200, ideal: 250)
 		} detail: {
-			VStack(spacing: 16) {
-				if let projectData = document.parsedProjectData {
-					GroupBox("Project Info") {
-						LabeledContent("Project ID", value: String(projectData.projectID))
-						LabeledContent("Scenes", value: "\(projectData.uniqueSceneCount)")
-					}
+			ScrollView([.vertical, .horizontal]) {
+				VStack(spacing: 16) {
+					if let projectData = document.parsedProjectData {
+						GroupBox("Project Info") {
+							LabeledContent("Project ID", value: String(projectData.projectID))
+							LabeledContent("Scenes", value: "\(projectData.uniqueSceneCount)")
+						}
 
-					if !projectData.normalizedScenePaths.isEmpty {
-						GroupBox("Scene Paths") {
-							ForEach(
-								Array(projectData.normalizedScenePaths.keys.sorted()),
-								id: \.self
-							) { path in
-								LabeledContent(
-									path,
-									value: projectData.normalizedScenePaths[path] ?? ""
-								)
-								.font(.caption)
+						if !projectData.normalizedScenePaths.isEmpty {
+							GroupBox("Scene Paths") {
+								ForEach(
+									Array(projectData.normalizedScenePaths.keys.sorted()),
+									id: \.self
+								) { path in
+									LabeledContent(
+										path,
+										value: projectData.normalizedScenePaths[path] ?? ""
+									)
+									.font(.caption)
+								}
 							}
 						}
-					}
 
-					if let documentURL = document.documentURL {
-						SceneConsistencyView(documentURL: documentURL, projectData: projectData)
+						if let documentURL = document.documentURL {
+							SceneConsistencyView(documentURL: documentURL, projectData: projectData)
+						}
+					} else {
+						ContentUnavailableView(
+							"No Project Data",
+							systemImage: "doc.questionmark",
+							description: Text("Could not parse ProjectData/main.json")
+						)
 					}
-				} else {
-					ContentUnavailableView(
-						"No Project Data",
-						systemImage: "doc.questionmark",
-						description: Text("Could not parse ProjectData/main.json")
-					)
 				}
+				.padding()
+				.frame(maxWidth: .infinity, alignment: .topLeading)
 			}
-			.padding()
 			.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 		}
 	}
