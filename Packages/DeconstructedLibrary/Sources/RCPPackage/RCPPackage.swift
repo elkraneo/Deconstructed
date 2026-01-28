@@ -34,14 +34,17 @@ public struct RCPPackage {
 	/// Parses first path from pathsToIds dictionary (e.g., "/Base/Sources/Base/Base.rkassets/Scene.usda" -> "Base")
 	public var projectName: String? {
 		guard let projectData = projectData,
-		      let firstPath = projectData.pathsToIds.values.first
+		      let firstPath = projectData.normalizedScenePaths.keys.first
 		else {
 			return nil
 		}
 
 		// Parse path like "/Base/Sources/Base/Base.rkassets/Scene.usda"
 		// First component is project name
-		let components = firstPath.components(separatedBy: "/").filter { !$0.isEmpty }
+		let components = firstPath
+			.split(separator: "/")
+			.map { String($0) }
+			.map { $0.removingPercentEncoding ?? $0 }
 		guard components.count >= 4 else {
 			return nil
 		}

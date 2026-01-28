@@ -40,9 +40,10 @@ public actor AssetDiscoveryService {
 			throw AssetDiscoveryError.invalidProjectData
 		}
 
-		let components = URL(fileURLWithPath: firstPath)
-			.pathComponents
-			.filter { $0 != "/" }
+		let components = firstPath
+			.split(separator: "/")
+			.map { String($0) }
+			.map { $0.removingPercentEncoding ?? $0 }
 		guard components.count >= 4 else {
 			throw AssetDiscoveryError.invalidProjectData
 		}

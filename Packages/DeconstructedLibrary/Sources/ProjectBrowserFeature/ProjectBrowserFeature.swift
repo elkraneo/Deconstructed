@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import DeconstructedModels
 import ProjectBrowserModels
 import ProjectBrowserClients
 import ComposableArchitecture
@@ -55,6 +56,7 @@ public struct ProjectBrowserFeature {
 		case renameItemCommitted(AssetItem.ID, String)
 		case renameCancelled
         case duplicateSelectedTapped
+		case moveSelectedTapped
         case moveItems([AssetItem.ID], to: AssetItem.ID?)
 
         // View Options
@@ -171,10 +173,14 @@ public struct ProjectBrowserFeature {
 					state.errorMessage = "Could not determine destination folder."
 					return .none
 				}
+				let documentURL = state.documentURL
 				let fileOperations = self.fileOperations
 				return .run { send in
 					do {
-						_ = try await fileOperations.createScene(destination, "Untitled Scene")
+						let sceneURL = try await fileOperations.createScene(destination, "Untitled Scene")
+						if let documentURL {
+							try updateProjectDataForNewScene(documentURL: documentURL, sceneURL: sceneURL)
+						}
 						await send(.fileOperationCompleted)
 					} catch {
 						await send(.fileOperationFailed(error.localizedDescription))
@@ -200,10 +206,15 @@ public struct ProjectBrowserFeature {
 				      trimmed != item.url.lastPathComponent else {
 					return .none
 				}
+				let documentURL = state.documentURL
+				let itemURL = item.url
 				let fileOperations = self.fileOperations
 				return .run { send in
 					do {
-						_ = try await fileOperations.rename(item.url, trimmed)
+						let newURL = try await fileOperations.rename(itemURL, trimmed)
+						if let documentURL {
+							try updateProjectDataForMove(documentURL: documentURL, from: itemURL, to: newURL)
+						}
 						await send(.fileOperationCompleted)
 					} catch {
 						await send(.fileOperationFailed(error.localizedDescription))
@@ -216,6 +227,51 @@ public struct ProjectBrowserFeature {
 
             case .duplicateSelectedTapped:
                 return .none
+
+			case .moveSelectedTapped:
+				guard let rootURL = resolveRootDirectory(state: state) else {
+					state.errorMessage = "Could not resolve project root."
+					return .none
+				}
+				let itemURLs = state.selectedItems.compactMap { id in
+					findItem(in: state.assetItems, id: id)?.url
+				}
+				guard !itemURLs.isEmpty else {
+					return .none
+				}
+				let documentURL = state.documentURL
+				let fileOperations = self.fileOperations
+				return .run { send in
+					let destination = await MainActor.run { () -> URL? in
+						let panel = NSOpenPanel()
+						panel.canChooseFiles = false
+						panel.canChooseDirectories = true
+						panel.allowsMultipleSelection = false
+						panel.directoryURL = rootURL
+						panel.title = "Move To Folder"
+						panel.prompt = "Move"
+						return panel.runModal() == .OK ? panel.url : nil
+					}
+
+					guard let destination else { return }
+					guard destination.path.hasPrefix(rootURL.path) else {
+						await send(.fileOperationFailed("Destination must be inside the project."))
+						return
+					}
+
+					do {
+						try await fileOperations.move(itemURLs, destination)
+						if let documentURL {
+							for itemURL in itemURLs {
+								let newURL = destination.appendingPathComponent(itemURL.lastPathComponent)
+								try updateProjectDataForMove(documentURL: documentURL, from: itemURL, to: newURL)
+							}
+						}
+						await send(.fileOperationCompleted)
+					} catch {
+						await send(.fileOperationFailed(error.localizedDescription))
+					}
+				}
 
             case .moveItems:
                 return .none
@@ -279,4 +335,90 @@ private func resolveTargetDirectory(state: ProjectBrowserFeature.State) -> URL? 
 	}
 
 	return nil
+}
+
+private func resolveRootDirectory(state: ProjectBrowserFeature.State) -> URL? {
+	if let rkassetsRoot = state.assetItems.first(where: { $0.url.pathExtension == "rkassets" }) {
+		return rkassetsRoot.url
+	}
+	return nil
+}
+
+private func updateProjectDataForNewScene(documentURL: URL, sceneURL: URL) throws {
+	let projectDataURL = documentURL.appendingPathComponent("ProjectData/main.json")
+	let data = try Data(contentsOf: projectDataURL)
+	var projectData = try JSONDecoder().decode(RCPProjectData.self, from: data)
+
+	let sceneUUID = UUID().uuidString
+	let scenePath = try scenePathForURL(documentURL: documentURL, sceneURL: sceneURL)
+	projectData.pathsToIds[scenePath] = sceneUUID
+	projectData.uuidToIntID[sceneUUID] = Int64.random(in: Int64.min...Int64.max)
+
+	let encoder = JSONEncoder()
+	encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+	let updated = try encoder.encode(projectData)
+	try updated.write(to: projectDataURL, options: .atomic)
+}
+
+private func updateProjectDataForMove(documentURL: URL, from: URL, to: URL) throws {
+	let projectDataURL = documentURL.appendingPathComponent("ProjectData/main.json")
+	let data = try Data(contentsOf: projectDataURL)
+	let decoder = JSONDecoder()
+	var projectData = try decoder.decode(RCPProjectData.self, from: data)
+
+	let rootURL = documentURL.deletingLastPathComponent()
+	let fromComponents = relativeComponents(from: rootURL, to: from)
+	let toComponents = relativeComponents(from: rootURL, to: to)
+	guard !fromComponents.isEmpty, !toComponents.isEmpty else {
+		return
+	}
+
+	var updatedPaths: [String: String] = [:]
+	for (path, uuid) in projectData.pathsToIds {
+		let components = pathComponents(from: path)
+		if components.starts(with: fromComponents) {
+			let newComponents = toComponents + components.dropFirst(fromComponents.count)
+			let newPath = encodedScenePath(from: Array(newComponents))
+			updatedPaths[newPath] = uuid
+		} else {
+			updatedPaths[path] = uuid
+		}
+	}
+
+	projectData.pathsToIds = updatedPaths
+	let encoder = JSONEncoder()
+	encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+	let updated = try encoder.encode(projectData)
+	try updated.write(to: projectDataURL, options: .atomic)
+}
+
+private func scenePathForURL(documentURL: URL, sceneURL: URL) throws -> String {
+	let rootURL = documentURL.deletingLastPathComponent()
+	let components = relativeComponents(from: rootURL, to: sceneURL)
+	guard !components.isEmpty else {
+		throw CocoaError(.fileReadInvalidFileName)
+	}
+	return encodedScenePath(from: components)
+}
+
+private func relativeComponents(from rootURL: URL, to fileURL: URL) -> [String] {
+	let rootComponents = rootURL.standardizedFileURL.pathComponents
+	let fileComponents = fileURL.standardizedFileURL.pathComponents
+	guard fileComponents.starts(with: rootComponents) else {
+		return []
+	}
+	return Array(fileComponents.dropFirst(rootComponents.count))
+}
+
+private func pathComponents(from path: String) -> [String] {
+	path.split(separator: "/")
+		.map { String($0) }
+		.map { $0.removingPercentEncoding ?? $0 }
+}
+
+private func encodedScenePath(from components: [String]) -> String {
+	let encoded = components.map { component in
+		component.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? component
+	}
+	return "/" + encoded.joined(separator: "/")
 }

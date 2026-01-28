@@ -58,6 +58,10 @@ struct AssetGridView: View {
 							store.send(.itemSelected(item.id))
 							store.send(.renameSelectedTapped)
 						}
+						Button("Move to Folder…") {
+							store.send(.itemSelected(item.id))
+							store.send(.moveSelectedTapped)
+						}
 					}
 				}
 			}
