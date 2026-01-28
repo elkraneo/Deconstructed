@@ -66,6 +66,87 @@ Base/                                      # SPM package (wrapper for integratio
 - RCP does NOT display the parent folder structure
 - Asset paths in `main.json` like `/Base/Sources/Base/Base.rkassets/Scene.usda` navigate relative to SPM root
 
+## Source of Truth: Filesystem vs main.json
+
+### The Problem
+
+`main.json` contains `pathsToIds` mapping scene file paths to UUIDs. However, RCP treats this as a **loose index**, not a strict manifest:
+
+- **Stale entries persist**: Deleted/renamed files keep their old entries
+- **Duplicates exist**: Same file may appear with different path formats and different UUIDs
+- **Path formats are inconsistent**: Mix of `/Project/Sources/...`, `Project/Sources/...`, `/Sources/...`
+- **Percent-encoding varies**: Some paths have `%20` for spaces, others don't
+
+Example from a real project:
+```json
+{
+  "/MyProject/Sources/MyProject/MyProject.rkassets/Scene.usda": "UUID-1",
+  "MyProject/Sources/MyProject/MyProject.rkassets/Scene.usda": "UUID-2",
+  "/Sources/MyProject/MyProject.rkassets/Deleted.usda": "UUID-3"
+}
+```
+
+### Our Architecture Decision
+
+**Filesystem is the source of truth for what exists. `main.json` is a best-effort UUID lookup.**
+
+#### Asset Discovery (`AssetDiscoveryClient`)
+
+1. Scan `Sources/` directory on disk to find `.rkassets`
+2. Recursively enumerate actual files/folders
+3. Consult `main.json` only for UUID assignment (optional, gracefully handles missing)
+
+```swift
+// Find .rkassets by scanning disk, not parsing main.json paths
+private func findRKAssets(in sourcesURL: URL) -> URL? {
+    // Scan Sources/<ProjectName>/<ProjectName>.rkassets
+}
+
+// UUID lookup is best-effort
+private func loadSceneUUIDLookup(documentURL: URL) -> [String: String] {
+    // Returns empty dict if main.json unreadable - discovery still works
+}
+```
+
+#### File Operations
+
+When moving/renaming files:
+1. Perform filesystem operation first (`FileManager.moveItem`)
+2. Update `main.json` path mappings to match new locations
+3. Re-scan filesystem to rebuild asset tree
+
+This ensures the UI always reflects actual disk state, even if `main.json` gets out of sync.
+
+#### Why RCP Keeps Stale Entries
+
+Inferred reasons (not from Apple docs):
+- **Undo/history support**: Old UUIDs preserved for potential restoration
+- **Reference stability**: External links to scenes by UUID survive renames
+- **Collaboration**: Merging projects with different rename histories
+- **Lazy cleanup**: No benefit to aggressive pruning
+
+### Implications for Deconstructed
+
+1. **Never trust `main.json` for file existence** - always verify on disk
+2. **Generate stable IDs from paths** - `AssetItem.stableID(for:)` uses MD5 of path
+3. **Handle missing UUIDs gracefully** - new files may not be in `main.json` yet
+4. **Update `main.json` on moves/renames** - keep it roughly in sync for RCP compatibility
+5. **Don't prune stale entries** - match RCP's behavior for interoperability
+
+### Change Detection
+
+`AssetItem.Equatable` must compare more than just `id`:
+
+```swift
+public static func == (lhs: AssetItem, rhs: AssetItem) -> Bool {
+    lhs.id == rhs.id
+    && lhs.name == rhs.name
+    && lhs.children == rhs.children  // Critical for tree updates
+}
+```
+
+Since `stableID` is path-based, a folder's ID stays constant even when children change. Without comparing `children`, SwiftUI/TCA won't detect tree structure changes after file moves.
+
 ## Technical Stack
 
 | Component | Choice |
