@@ -35,12 +35,14 @@ public actor AssetDiscoveryService {
 			throw AssetDiscoveryError.cannotReadProjectData
 		}
 
-		// Step 3: Extract project name from first path
-		guard let firstPath = projectData.pathsToIds.values.first else {
+		// Step 3: Extract project name from first scene path
+		guard let firstPath = projectData.normalizedScenePaths.keys.first else {
 			throw AssetDiscoveryError.invalidProjectData
 		}
 
-		let components = firstPath.components(separatedBy: "/").filter { !$0.isEmpty }
+		let components = URL(fileURLWithPath: firstPath)
+			.pathComponents
+			.filter { $0 != "/" }
 		guard components.count >= 4 else {
 			throw AssetDiscoveryError.invalidProjectData
 		}
@@ -58,8 +60,22 @@ public actor AssetDiscoveryService {
 			throw AssetDiscoveryError.rkassetsNotFound
 		}
 
-		// Step 6: Recursively scan directory
-		return try await scanDirectory(rkassetsURL, relativeTo: rkassetsURL)
+		// Step 6: Recursively scan directory and return as a single root item
+		let children = try await scanDirectory(rkassetsURL, relativeTo: rkassetsURL)
+
+		// Return the .rkassets directory as the root item with all assets as children
+		let resourceValues = try rkassetsURL.resourceValues(forKeys: [.isDirectoryKey, .contentModificationDateKey])
+		return [
+			AssetItem(
+				name: rkassetsURL.lastPathComponent,
+				url: rkassetsURL,
+				isDirectory: true,
+				fileType: .directory,
+				children: children,
+				sceneUUID: nil,
+				modificationDate: resourceValues.contentModificationDate ?? Date()
+			)
+		]
 	}
 
 	private func scanDirectory(_ directoryURL: URL, relativeTo baseURL: URL) async throws -> [AssetItem] {

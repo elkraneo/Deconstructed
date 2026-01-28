@@ -11,7 +11,17 @@ struct AssetGridView: View {
 	}
 
 	private var filteredAndSortedItems: [AssetItem] {
-		var items = store.assetItems.filter { item in
+		// Get the root .rkassets directory's children
+		guard let rkassetsRoot = store.assetItems.first(where: { $0.url.path.contains(".rkassets") }),
+		      let children = rkassetsRoot.children else {
+			return []
+		}
+
+		var items = children.filter { item in
+			// Show only files, not directories
+			if item.isDirectory {
+				return false
+			}
 			if store.filterText.isEmpty {
 				return true
 			}
