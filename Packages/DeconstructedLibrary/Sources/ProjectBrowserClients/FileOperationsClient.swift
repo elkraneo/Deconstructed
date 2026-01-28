@@ -5,6 +5,7 @@ import ComposableArchitecture
 @DependencyClient
 public struct FileOperationsClient: Sendable {
 	public var createFolder: @Sendable (_ parentURL: URL, _ name: String) async throws -> URL
+	public var createScene: @Sendable (_ parentURL: URL, _ baseName: String) async throws -> URL
 	public var rename: @Sendable (_ item: URL, _ newName: String) async throws -> URL
 	public var delete: @Sendable (_ items: [URL]) async throws -> Void
 	public var move: @Sendable (_ items: [URL], _ destination: URL) async throws -> Void
@@ -15,8 +16,13 @@ public struct FileOperationsClient: Sendable {
 extension FileOperationsClient: DependencyKey {
 	public static let liveValue: Self = .init(
 		createFolder: { parentURL, name in
-			let newURL = parentURL.appendingPathComponent(name)
+			let newURL = uniqueURL(parentURL: parentURL, baseName: name, pathExtension: "")
 			try FileManager.default.createDirectory(at: newURL, withIntermediateDirectories: false)
+			return newURL
+		},
+		createScene: { parentURL, baseName in
+			let newURL = uniqueURL(parentURL: parentURL, baseName: baseName, pathExtension: "usda")
+			try sceneTemplate().write(to: newURL, atomically: true, encoding: .utf8)
 			return newURL
 		},
 		rename: { url, newName in
@@ -67,4 +73,40 @@ extension FileOperationsClient: DependencyKey {
 			return destinationURL
 		}
 	)
+}
+
+private func uniqueURL(parentURL: URL, baseName: String, pathExtension: String) -> URL {
+	let fileManager = FileManager.default
+	var counter = 0
+	var candidate: URL
+
+	repeat {
+		let suffix = counter == 0 ? "" : " \(counter + 1)"
+		let name = baseName + suffix
+		candidate = parentURL.appendingPathComponent(name)
+		if !pathExtension.isEmpty {
+			candidate = candidate.appendingPathExtension(pathExtension)
+		}
+		counter += 1
+	} while fileManager.fileExists(atPath: candidate.path)
+
+	return candidate
+}
+
+private func sceneTemplate(creator: String = "Deconstructed Version 1.0") -> String {
+	"""
+	#usda 1.0
+	(
+		customLayerData = {
+			string creator = "\(creator)"
+		}
+		defaultPrim = "Root"
+		metersPerUnit = 1
+		upAxis = "Y"
+	)
+
+	def Xform "Root"
+	{
+	}
+	"""
 }

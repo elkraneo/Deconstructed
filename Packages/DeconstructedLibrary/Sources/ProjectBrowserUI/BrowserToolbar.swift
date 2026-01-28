@@ -8,17 +8,23 @@ struct BrowserToolbar: View {
 
 	var body: some View {
 		HStack(spacing: 12) {
-			// Add actions
+			// Primary actions (RCP-aligned)
 			Button {
-				store.send(.createFolderTapped)
+				store.send(.importContentTapped)
 			} label: {
-				Label("Add", systemImage: "plus")
+				Label("Import Content", systemImage: "tray.and.arrow.down")
 			}
 
 			Button {
 				store.send(.createFolderTapped)
 			} label: {
 				Label("New Folder", systemImage: "folder.badge.plus")
+			}
+
+			Button {
+				store.send(.createSceneTapped)
+			} label: {
+				Label("New Scene", systemImage: "square.and.pencil")
 			}
 
 			Spacer()

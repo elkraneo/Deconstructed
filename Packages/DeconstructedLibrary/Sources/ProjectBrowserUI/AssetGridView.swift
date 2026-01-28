@@ -18,10 +18,6 @@ struct AssetGridView: View {
 		}
 
 		var items = children.filter { item in
-			// Show only files, not directories
-			if item.isDirectory {
-				return false
-			}
 			if store.filterText.isEmpty {
 				return true
 			}
@@ -29,7 +25,7 @@ struct AssetGridView: View {
 		}
 
 		if let filterType = store.filterFileType {
-			items = items.filter { $0.fileType == filterType }
+			items = items.filter { !$0.isDirectory && $0.fileType == filterType }
 		}
 
 		return items
@@ -43,13 +39,25 @@ struct AssetGridView: View {
 						item: item,
 						iconSize: store.iconSize,
 						isSelected: store.selectedItems.contains(item.id),
-						isRenaming: store.renamingItemId == item.id
+						isRenaming: store.renamingItemId == item.id,
+						onRenameCommit: { newName in
+							store.send(.renameItemCommitted(item.id, newName))
+						},
+						onRenameCancel: {
+							store.send(.renameCancelled)
+						}
 					)
 					.onTapGesture {
 						store.send(.itemSelected(item.id))
 					}
 					.onTapGesture(count: 2) {
 						store.send(.itemDoubleClicked(item.id))
+					}
+					.contextMenu {
+						Button("Rename") {
+							store.send(.itemSelected(item.id))
+							store.send(.renameSelectedTapped)
+						}
 					}
 				}
 			}

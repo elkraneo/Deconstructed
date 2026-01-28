@@ -6,6 +6,8 @@ struct AssetGridItem: View {
 	let iconSize: CGFloat
 	let isSelected: Bool
 	let isRenaming: Bool
+	let onRenameCommit: (String) -> Void
+	let onRenameCancel: () -> Void
 	@State private var editingName: String = ""
 
 	var body: some View {
@@ -25,6 +27,8 @@ struct AssetGridItem: View {
 					.textFieldStyle(.plain)
 					.multilineTextAlignment(.center)
 					.onAppear { editingName = item.name }
+					.onSubmit { onRenameCommit(editingName) }
+					.onExitCommand { onRenameCancel() }
 			} else {
 				Text(item.name)
 					.font(.caption)
