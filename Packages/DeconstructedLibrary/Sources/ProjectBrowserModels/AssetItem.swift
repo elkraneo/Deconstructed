@@ -52,6 +52,8 @@ public struct AssetItem: Identifiable, Sendable, Equatable, Hashable {
 
     public static func == (lhs: AssetItem, rhs: AssetItem) -> Bool {
         lhs.id == rhs.id
+		&& lhs.name == rhs.name
+		&& lhs.children == rhs.children
     }
 
     // MARK: - Hashable
