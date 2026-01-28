@@ -6,8 +6,16 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		33EF3B3E097F4643940814EC /* DeconstructedUI in Frameworks */ = {isa = PBXBuildFile; productRef = 48ECA5A5964B403CB25F24F7 /* DeconstructedUI */; };
+		6C27E524610F4C0B8B20D3E6 /* RCPDocument in Frameworks */ = {isa = PBXBuildFile; productRef = B0EBBEFCE3604A0A933EC5BE /* RCPDocument */; };
+		9991B6348A2042B7BDCA5674 /* DeconstructedFeatures in Frameworks */ = {isa = PBXBuildFile; productRef = 5F6C1ACCAF07417D86212E58 /* DeconstructedFeatures */; };
+		A4BC991C920D4E4F8F5A464A /* DeconstructedClients in Frameworks */ = {isa = PBXBuildFile; productRef = 4C624E32E7E6488699328A16 /* DeconstructedClients */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		AE746AF72F278AE90087A28B /* Deconstructed.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Deconstructed.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		AE746B772F297B300087A28B /* DeconstructedLibrary */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = DeconstructedLibrary; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -36,6 +44,10 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				33EF3B3E097F4643940814EC /* DeconstructedUI in Frameworks */,
+				6C27E524610F4C0B8B20D3E6 /* RCPDocument in Frameworks */,
+				9991B6348A2042B7BDCA5674 /* DeconstructedFeatures in Frameworks */,
+				A4BC991C920D4E4F8F5A464A /* DeconstructedClients in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -45,7 +57,9 @@
 		AE746AEE2F278AE90087A28B = {
 			isa = PBXGroup;
 			children = (
+				AE746B762F297A590087A28B /* Packages */,
 				AE746AF92F278AE90087A28B /* Deconstructed */,
+				AE746B782F297B5E0087A28B /* Frameworks */,
 				AE746AF82F278AE90087A28B /* Products */,
 			);
 			sourceTree = "<group>";
@@ -56,6 +70,21 @@
 				AE746AF72F278AE90087A28B /* Deconstructed.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		AE746B762F297A590087A28B /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				AE746B772F297B300087A28B /* DeconstructedLibrary */,
+			);
+			path = Packages;
+			sourceTree = "<group>";
+		};
+		AE746B782F297B5E0087A28B /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -78,6 +107,10 @@
 			);
 			name = Deconstructed;
 			packageProductDependencies = (
+				48ECA5A5964B403CB25F24F7 /* DeconstructedUI */,
+				B0EBBEFCE3604A0A933EC5BE /* RCPDocument */,
+				5F6C1ACCAF07417D86212E58 /* DeconstructedFeatures */,
+				4C624E32E7E6488699328A16 /* DeconstructedClients */,
 			);
 			productName = Deconstructed;
 			productReference = AE746AF72F278AE90087A28B /* Deconstructed.app */;
@@ -372,6 +405,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		48ECA5A5964B403CB25F24F7 /* DeconstructedUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = DeconstructedUI;
+		};
+		4C624E32E7E6488699328A16 /* DeconstructedClients */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = DeconstructedClients;
+		};
+		5F6C1ACCAF07417D86212E58 /* DeconstructedFeatures */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = DeconstructedFeatures;
+		};
+		B0EBBEFCE3604A0A933EC5BE /* RCPDocument */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RCPDocument;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = AE746AEF2F278AE90087A28B /* Project object */;
 }

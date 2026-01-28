@@ -21,6 +21,8 @@
 - `AppKit` / `NSApplication` / `NSWindow` for macOS-specific needs
 - `SwiftUI` with macOS idioms (Window scenes, Settings scenes, NSOpenPanel)
 - Swift 6.2 concurrency (MainActor isolation by default)
+- TCA 1.23.1 modern patterns: `@ObservableState`, `StoreOf`, `@Bindable` (no `WithViewStore`)
+- On macOS 26, Observation is native; do not use `WithPerceptionTracking` unless targeting older OSes.
 
 ## Project Purpose
 
@@ -80,10 +82,11 @@ Base/                                      # SPM package (wrapper for integratio
 | File | Purpose |
 |------|---------|
 | `DeconstructedApp.swift` | App entry point, scene declarations |
-| `DeconstructedDocument.swift` | FileDocument conformance for packages |
-| `ProjectModels.swift` | Codable structs matching RCP JSON schemas |
-| `ContentView.swift` | Main document editing interface |
-| `UI/LaunchExperience.swift` | Welcome window with recent projects |
+| `Packages/DeconstructedLibrary/Sources/RCPDocument/DeconstructedDocument.swift` | FileDocument conformance for packages |
+| `Packages/DeconstructedLibrary/Sources/DeconstructedModels/ProjectModels.swift` | Codable structs matching RCP JSON schemas |
+| `Packages/DeconstructedLibrary/Sources/DeconstructedUI/ContentView.swift` | Main document editing interface |
+| `Packages/DeconstructedLibrary/Sources/DeconstructedFeatures/LaunchExperience.swift` | Welcome window UI + recent projects |
+| `Packages/DeconstructedLibrary/Sources/DeconstructedClients/NewProjectCreator.swift` | New project scaffolding + open workflow |
 
 ## Before Writing Code
 

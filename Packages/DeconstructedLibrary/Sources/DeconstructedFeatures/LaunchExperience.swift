@@ -1,11 +1,25 @@
+import AppKit
+import ComposableArchitecture
 import SwiftUI
 import UniformTypeIdentifiers
+import RCPDocument
 
-struct LaunchExperience: View {
-	var onNewProject: () -> Void
-	var onOpenProject: (URL) -> Void
+public struct LaunchExperience: View {
+	@Bindable public var store: StoreOf<AppFeature>
+	public var onNewProject: () -> Void
+	public var onOpenProject: (URL) -> Void
 
-	var body: some View {
+	public init(
+		store: StoreOf<AppFeature>,
+		onNewProject: @escaping () -> Void,
+		onOpenProject: @escaping (URL) -> Void
+	) {
+		self.store = store
+		self.onNewProject = onNewProject
+		self.onOpenProject = onOpenProject
+	}
+
+	public var body: some View {
 		HStack(spacing: 0) {
 			// Left panel - branding and actions
 			VStack(spacing: 24) {
@@ -34,6 +48,7 @@ struct LaunchExperience: View {
 				// Action buttons
 				VStack(spacing: 12) {
 					LaunchButton(title: "Create New Project...", systemImage: "plus.circle.fill") {
+						store.send(.newProjectButtonTapped)
 						onNewProject()
 					}
 
@@ -62,10 +77,13 @@ struct LaunchExperience: View {
 			Divider()
 
 			// Right panel - recent documents
-			RecentDocumentsList(onSelect: onOpenProject)
+			RecentDocumentsList(store: store, onSelect: onOpenProject)
 				.frame(minWidth: 280, maxWidth: 320)
 		}
 		.frame(minWidth: 700, minHeight: 450)
+		.task {
+			store.send(.onAppear)
+		}
 	}
 
 	private func openWithPanel() {
@@ -111,8 +129,8 @@ struct LaunchButton: View {
 }
 
 struct RecentDocumentsList: View {
+	@Bindable var store: StoreOf<AppFeature>
 	var onSelect: (URL) -> Void
-	@State private var recentURLs: [URL] = []
 
 	var body: some View {
 		VStack(alignment: .leading, spacing: 0) {
@@ -122,24 +140,17 @@ struct RecentDocumentsList: View {
 
 			Divider()
 
-			if recentURLs.isEmpty {
+			if store.recentProjects.isEmpty {
 				ContentUnavailableView("No Recent Projects", systemImage: "clock", description: Text("Projects you open will appear here."))
 					.frame(maxWidth: .infinity, maxHeight: .infinity)
 			} else {
-				List(recentURLs, id: \.self) { url in
+				List(store.recentProjects, id: \.self) { url in
 					RecentDocumentRow(url: url, onSelect: onSelect)
 				}
 				.listStyle(.plain)
 			}
 		}
 		.background(Color(nsColor: .controlBackgroundColor))
-		.onAppear {
-			loadRecentDocuments()
-		}
-	}
-
-	private func loadRecentDocuments() {
-		recentURLs = NSDocumentController.shared.recentDocumentURLs
 	}
 }
 
