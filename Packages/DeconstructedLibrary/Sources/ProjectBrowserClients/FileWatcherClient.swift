@@ -3,6 +3,7 @@ import ComposableArchitecture
 
 @DependencyClient
 public struct FileWatcherClient: Sendable {
+	/// Start watching a directory recursively for file system changes
 	public var watch: @Sendable (_ directory: URL) -> AsyncStream<Event> = { _ in
 		AsyncStream { continuation in
 			continuation.finish()
@@ -12,9 +13,10 @@ public struct FileWatcherClient: Sendable {
 
 extension FileWatcherClient: DependencyKey {
 	public static let liveValue: Self = {
+		let storage = WatcherStorage()
 		return Self(
 			watch: { directory in
-				FileSystemWatcher.stream(for: directory)
+				storage.watch(directory: directory)
 			}
 		)
 	}()
@@ -29,63 +31,170 @@ extension FileWatcherClient {
 	}
 }
 
-/// Watches a directory for file system changes using DispatchSource
-public struct FileSystemWatcher: Sendable {
-	private final class Storage: @unchecked Sendable {
-		var sources: [URL: DispatchSourceFileSystemObject] = [:]
-		var continuation: AsyncStream<FileWatcherClient.Event>.Continuation?
+// MARK: - Storage
+
+/// Global storage to keep watchers alive
+private final class WatcherStorage: @unchecked Sendable {
+	private var watchers: [UUID: FSEventsWatcher] = [:]
+	private let lock = NSLock()
+
+	func watch(directory: URL) -> AsyncStream<FileWatcherClient.Event> {
+		let watcherID = UUID()
+		let watcher = FSEventsWatcher(directory: directory)
+		lock.withLock {
+			watchers[watcherID] = watcher
+		}
+		return watcher.start { [weak self] in
+			self?.lock.withLock {
+				self?.watchers.removeValue(forKey: watcherID)
+			}
+		}
+	}
+}
+
+// MARK: - FSEvents Implementation
+
+import CoreServices
+
+/// Efficient recursive file watcher using macOS FSEvents API
+private final class FSEventsWatcher: @unchecked Sendable {
+	private var stream: FSEventStreamRef?
+	private let directory: URL
+	private let queue = DispatchQueue(label: "com.deconstructed.fsevents", qos: .utility)
+
+	init(directory: URL) {
+		self.directory = directory
 	}
 
-	private let storage = Storage()
-
-	public static func stream(for directory: URL) -> AsyncStream<FileWatcherClient.Event> {
-		let watcher = FileSystemWatcher()
-		return watcher.watch(directory)
+	deinit {
+		stop()
 	}
 
-	private func watch(_ directory: URL) -> AsyncStream<FileWatcherClient.Event> {
-		AsyncStream { [storage] continuation in
-			storage.continuation = continuation
-			watchDirectory(directory)
+	func start(onStop: @escaping @Sendable () -> Void) -> AsyncStream<FileWatcherClient.Event> {
+		AsyncStream { [weak self] continuation in
+			guard let self else {
+				continuation.finish()
+				return
+			}
 
-			if let enumerator = FileManager.default.enumerator(
-				at: directory,
-				includingPropertiesForKeys: [.isDirectoryKey],
-				options: [.skipsHiddenFiles]
-			) {
-				for case let url as URL in enumerator {
-					if (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true {
-						watchDirectory(url)
-					}
+			self.setupStream(continuation: continuation)
+
+			continuation.onTermination = { [weak self] _ in
+				self?.stop()
+				onStop()
+			}
+		}
+	}
+
+	func stop() {
+		guard let stream else { return }
+		FSEventStreamStop(stream)
+		FSEventStreamInvalidate(stream)
+		FSEventStreamRelease(stream)
+		self.stream = nil
+	}
+
+	private func setupStream(continuation: AsyncStream<FileWatcherClient.Event>.Continuation) {
+		let callback: FSEventStreamCallback = { (
+			streamRef: ConstFSEventStreamRef,
+			clientCallBackInfo: UnsafeMutableRawPointer?,
+			numEvents: Int,
+			eventPaths: UnsafeMutableRawPointer,
+			eventFlags: UnsafePointer<FSEventStreamEventFlags>,
+			eventIds: UnsafePointer<FSEventStreamEventId>
+		) in
+			guard let clientCallBackInfo else { return }
+			let continuation = Unmanaged<ContinuationBox>
+				.fromOpaque(clientCallBackInfo)
+				.takeUnretainedValue()
+				.continuation
+
+			let paths = Unmanaged<CFArray>
+				.fromOpaque(eventPaths)
+				.takeUnretainedValue() as! [String]
+
+			for i in 0..<numEvents {
+				let path = paths[i]
+				let flags = eventFlags[i]
+				let url = URL(fileURLWithPath: path)
+
+				// Determine event type from flags
+				if flags & UInt32(kFSEventStreamEventFlagItemCreated) != 0 {
+					continuation.yield(.created(url))
+				} else if flags & UInt32(kFSEventStreamEventFlagItemRemoved) != 0 {
+					continuation.yield(.deleted(url))
+				} else if flags & UInt32(kFSEventStreamEventFlagItemModified) != 0 {
+					continuation.yield(.modified(url))
+				} else if flags & UInt32(kFSEventStreamEventFlagItemRenamed) != 0 {
+					// Renames need special handling - FSEvents sends two events
+					// We'll treat both as modified and let the consumer figure it out
+					continuation.yield(.modified(url))
+				} else {
+					// Generic change
+					continuation.yield(.modified(url))
 				}
 			}
-
-			continuation.onTermination = { [storage] _ in
-				storage.sources.values.forEach { $0.cancel() }
-				storage.sources.removeAll()
-			}
 		}
-	}
 
-	private func watchDirectory(_ url: URL) {
-		let fd = open(url.path, O_EVTONLY)
-		guard fd >= 0 else { return }
+		// Box to hold continuation for the C callback
+		let box = ContinuationBox(continuation: continuation)
 
-		let source = DispatchSource.makeFileSystemObjectSource(
-			fileDescriptor: fd,
-			eventMask: [.write, .delete, .rename, .extend],
-			queue: .global()
+		// Create context with the box as info pointer
+		var context = FSEventStreamContext(
+			version: 0,
+			info: Unmanaged.passUnretained(box).toOpaque(),
+			retain: { info in
+				_ = Unmanaged<ContinuationBox>.fromOpaque(info!).retain()
+				return info
+			},
+			release: { info in
+				Unmanaged<ContinuationBox>.fromOpaque(info!).release()
+			},
+			copyDescription: nil
 		)
 
-		source.setEventHandler { [storage] in
-			storage.continuation?.yield(.modified(url))
+		// Watch the directory and all subdirectories recursively
+		let pathsToWatch = [directory.path] as CFArray
+
+		// Create the stream with file-level notification
+		stream = FSEventStreamCreate(
+			kCFAllocatorDefault,
+			callback,
+			&context,
+			pathsToWatch,
+			FSEventStreamEventId(kFSEventStreamEventIdSinceNow),
+			0.1, // 100ms latency for coalescing
+			FSEventStreamCreateFlags(
+				UInt32(kFSEventStreamCreateFlagFileEvents) |
+				UInt32(kFSEventStreamCreateFlagUseCFTypes) |
+				UInt32(kFSEventStreamCreateFlagNoDefer)
+			)
+		)
+
+		guard let stream else {
+			continuation.finish()
+			return
 		}
 
-		source.setCancelHandler {
-			close(fd)
-		}
+		// Schedule and start
+		FSEventStreamSetDispatchQueue(stream, queue)
+		FSEventStreamStart(stream)
+	}
+}
 
-		storage.sources[url] = source
-		source.resume()
+// Box class to hold the continuation
+private final class ContinuationBox: @unchecked Sendable {
+	let continuation: AsyncStream<FileWatcherClient.Event>.Continuation
+
+	init(continuation: AsyncStream<FileWatcherClient.Event>.Continuation) {
+		self.continuation = continuation
+	}
+}
+
+private extension NSLock {
+	func withLock<T>(_ operation: () -> T) -> T {
+		lock()
+		defer { unlock() }
+		return operation()
 	}
 }

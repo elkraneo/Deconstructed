@@ -27,6 +27,8 @@ public struct ProjectBrowserFeature {
 		// State
 		public var isLoading: Bool = false
 		public var errorMessage: String? = nil
+		public var isWatchingFiles: Bool = false
+		public var watchedDocumentURL: URL? = nil
 
 		// Drag
 		public var draggingItemIds: [AssetItem.ID] = []
@@ -80,6 +82,7 @@ public struct ProjectBrowserFeature {
 
 		// File watching
 		case fileSystemEvent(FileWatcherClient.Event)
+		case debouncedRefresh
 
 		// Responses
 		case fileOperationCompleted
@@ -89,6 +92,7 @@ public struct ProjectBrowserFeature {
 	@Dependency(\.assetDiscoveryClient) var assetDiscovery
 	@Dependency(\.fileOperationsClient) var fileOperations
 	@Dependency(\.fileWatcherClient) var fileWatcher
+	@Dependency(\.continuousClock) var clock
 
 	public init() {}
 
@@ -102,9 +106,12 @@ public struct ProjectBrowserFeature {
 
 		case .onAppear:
 			// Start file watching if document URL is available
-			guard let documentURL = state.documentURL else {
+			guard let documentURL = state.documentURL,
+			      state.watchedDocumentURL != documentURL else {
 				return .none
 			}
+			state.isWatchingFiles = true
+			state.watchedDocumentURL = documentURL
 			let parentURL = documentURL.deletingLastPathComponent()
 			let fileWatcher = self.fileWatcher
 			return .run { send in
@@ -112,24 +119,43 @@ public struct ProjectBrowserFeature {
 					await send(.fileSystemEvent(event))
 				}
 			}
-			.cancellable(id: FileWatcherCancellationID.watcher)
+			.cancellable(id: FileWatcherCancellationID.watcher, cancelInFlight: true)
 
-			case .onDisappear:
-				return .cancel(id: FileWatcherCancellationID.watcher)
+		case .onDisappear:
+			state.isWatchingFiles = false
+			state.watchedDocumentURL = nil
+			return .cancel(id: FileWatcherCancellationID.watcher)
 
 			case let .loadAssets(documentURL):
 				state.isLoading = true
 				state.errorMessage = nil
 				state.documentURL = documentURL
-				let assetDiscovery = self.assetDiscovery
-				return .run { send in
-					do {
-						let items = try await assetDiscovery.discover(documentURL)
-						await send(.assetsLoaded(items))
-					} catch {
-						await send(.loadingFailed(error.localizedDescription))
-					}
+				let shouldStartWatching = state.watchedDocumentURL != documentURL
+				if shouldStartWatching {
+					state.isWatchingFiles = true
+					state.watchedDocumentURL = documentURL
 				}
+				let assetDiscovery = self.assetDiscovery
+				let fileWatcher = self.fileWatcher
+				let parentURL = documentURL.deletingLastPathComponent()
+				return .merge(
+					.run { send in
+						do {
+							let items = try await assetDiscovery.discover(documentURL)
+							await send(.assetsLoaded(items))
+						} catch {
+							await send(.loadingFailed(error.localizedDescription))
+						}
+					},
+					shouldStartWatching
+						? .run { send in
+							for await event in fileWatcher.watch(parentURL) {
+								await send(.fileSystemEvent(event))
+							}
+						}
+						.cancellable(id: FileWatcherCancellationID.watcher, cancelInFlight: true)
+						: .none
+				)
 
 			case let .assetsLoaded(items):
 				state.isLoading = false
@@ -382,20 +408,32 @@ public struct ProjectBrowserFeature {
 				return .none
 
 			case .fileSystemEvent:
-				// Auto-refresh assets when file system changes detected
-				guard let documentURL = state.documentURL else {
-					return .none
-				}
+				// Debounce file system events to prevent excessive reloads
+				let clock = self.clock
 				return .run { send in
-					await send(.loadAssets(documentURL: documentURL))
+					try await clock.sleep(for: .milliseconds(300))
+					await send(.debouncedRefresh)
 				}
+				.cancellable(id: FileWatcherCancellationID.debounce, cancelInFlight: true)
+
+		case .debouncedRefresh:
+			// Actually perform the refresh after debouncing
+			guard let documentURL = state.documentURL else {
+				return .none
+			}
+			return .run { send in
+				await send(.loadAssets(documentURL: documentURL))
+			}
 			}
 		}
 	}
 }
 
 // MARK: - Effect Cancellation ID
-private enum FileWatcherCancellationID: Hashable { case watcher }
+private enum FileWatcherCancellationID: Hashable {
+	case watcher
+	case debounce
+}
 
 private func findItem(in items: [AssetItem], id: AssetItem.ID) -> AssetItem? {
 	AssetItem.find(in: items, id: id)
