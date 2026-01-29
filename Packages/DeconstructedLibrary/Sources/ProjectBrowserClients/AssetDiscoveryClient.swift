@@ -1,4 +1,4 @@
-import DeconstructedCore
+import DeconstructedModels
 import DeconstructedModels
 import Foundation
 import ProjectBrowserModels

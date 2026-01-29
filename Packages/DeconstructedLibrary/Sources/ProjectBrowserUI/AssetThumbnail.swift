@@ -1,4 +1,4 @@
-import DeconstructedCore
+import DeconstructedModels
 import SwiftUI
 import ProjectBrowserModels
 

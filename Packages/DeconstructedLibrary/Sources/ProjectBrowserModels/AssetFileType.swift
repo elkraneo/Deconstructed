@@ -1,4 +1,4 @@
-import DeconstructedCore
+import DeconstructedModels
 import Foundation
 
 public enum AssetFileType: String, CaseIterable, Sendable, Equatable {

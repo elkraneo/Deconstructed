@@ -1,5 +1,5 @@
 import ComposableArchitecture
-import DeconstructedCore
+import DeconstructedModels
 import ProjectBrowserFeature
 import ProjectBrowserModels
 import SwiftUI

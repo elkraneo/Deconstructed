@@ -1,6 +1,6 @@
 import AppKit
 import ComposableArchitecture
-import DeconstructedCore
+import DeconstructedModels
 import SwiftUI
 import UniformTypeIdentifiers
 import RCPDocument

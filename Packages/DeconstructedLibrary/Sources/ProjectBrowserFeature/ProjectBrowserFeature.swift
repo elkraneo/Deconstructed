@@ -1,5 +1,5 @@
 import AppKit
-import DeconstructedCore
+import DeconstructedModels
 import DeconstructedModels
 import Foundation
 import ProjectBrowserClients
