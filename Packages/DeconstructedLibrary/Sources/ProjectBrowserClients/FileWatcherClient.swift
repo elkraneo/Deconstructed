@@ -35,19 +35,14 @@ extension FileWatcherClient {
 
 /// Global storage to keep watchers alive
 private final class WatcherStorage: @unchecked Sendable {
-	private var watchers: [UUID: FSEventsWatcher] = [:]
-	private let lock = NSLock()
+	private let registry = WatcherRegistry()
 
 	func watch(directory: URL) -> AsyncStream<FileWatcherClient.Event> {
 		let watcherID = UUID()
 		let watcher = FSEventsWatcher(directory: directory)
-		lock.withLock {
-			watchers[watcherID] = watcher
-		}
-		return watcher.start { [weak self] in
-			self?.lock.withLock {
-				self?.watchers.removeValue(forKey: watcherID)
-			}
+		Task { await registry.register(watcher, id: watcherID) }
+		return watcher.start { [registry] in
+			Task { await registry.unregister(id: watcherID) }
 		}
 	}
 }
@@ -191,10 +186,14 @@ private final class ContinuationBox: @unchecked Sendable {
 	}
 }
 
-private extension NSLock {
-	func withLock<T>(_ operation: () -> T) -> T {
-		lock()
-		defer { unlock() }
-		return operation()
+private actor WatcherRegistry {
+	private var watchers: [UUID: FSEventsWatcher] = [:]
+
+	func register(_ watcher: FSEventsWatcher, id: UUID) {
+		watchers[id] = watcher
+	}
+
+	func unregister(id: UUID) {
+		watchers.removeValue(forKey: id)
 	}
 }
