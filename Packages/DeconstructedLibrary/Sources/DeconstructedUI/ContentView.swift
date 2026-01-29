@@ -49,28 +49,58 @@ public struct ContentView: View {
 	@ViewBuilder
 	private var viewportArea: some View {
 		if let store {
-			// Show viewport if there's a selected scene
-			if case .scene(let id) = store.selectedTab,
-			   let sceneTab = store.openScenes[id: id] {
-				ViewportView(
-					modelURL: sceneTab.fileURL,
-					configuration: ViewportConfiguration(showGrid: true, showAxes: true)
-				)
-			} else if !store.openScenes.isEmpty {
-				// Show first scene if none selected but some are open
-				if let firstScene = store.openScenes.first {
-					ViewportView(
-						modelURL: firstScene.fileURL,
-						configuration: ViewportConfiguration(showGrid: true, showAxes: true)
-					)
+			VStack(spacing: 0) {
+				// Scene tabs at the top of viewport
+				if !store.openScenes.isEmpty {
+					ScrollView(.horizontal, showsIndicators: false) {
+						HStack(spacing: 0) {
+							ForEach(store.openScenes) { scene in
+								TabButton(
+									label: scene.displayName,
+									icon: "cube.transparent",
+									isSelected: store.selectedTab == .scene(id: scene.id),
+									canClose: true,
+									onSelect: {
+										store.send(.tabSelected(.scene(id: scene.id)))
+									},
+									onClose: {
+										store.send(.sceneClosed(scene.id))
+									}
+								)
+							}
+						}
+						.padding(.horizontal, 8)
+						.padding(.vertical, 4)
+					}
+					.background(.ultraThinMaterial)
+					Divider()
 				}
-			} else {
-				// No scene open - show placeholder
-				ContentUnavailableView(
-					"No Scene Open",
-					systemImage: "cube.transparent",
-					description: Text("Double-click a .usda file in the Project Browser to open it.")
-				)
+				
+				// Viewport content
+				Group {
+					if case .scene(let id) = store.selectedTab,
+					   let sceneTab = store.openScenes[id: id] {
+						ViewportView(
+							modelURL: sceneTab.fileURL,
+							configuration: ViewportConfiguration(showGrid: true, showAxes: true)
+						)
+					} else if !store.openScenes.isEmpty {
+						// Show first scene if none selected but some are open
+						if let firstScene = store.openScenes.first {
+							ViewportView(
+								modelURL: firstScene.fileURL,
+								configuration: ViewportConfiguration(showGrid: true, showAxes: true)
+							)
+						}
+					} else {
+						// No scene open - show placeholder
+						ContentUnavailableView(
+							"No Scene Open",
+							systemImage: "cube.transparent",
+							description: Text("Double-click a .usda file in the Project Browser to open it.")
+						)
+					}
+				}
 			}
 		} else {
 			ContentUnavailableView(
@@ -125,28 +155,6 @@ public struct ContentView: View {
 					) {
 						store.send(.bottomTabSelected(.debug))
 					}
-						
-						if !store.openScenes.isEmpty {
-							Divider()
-								.frame(height: 20)
-								.padding(.horizontal, 4)
-							
-							// Scene tabs
-							ForEach(store.openScenes) { scene in
-								TabButton(
-									label: scene.displayName,
-									icon: "cube.transparent",
-									isSelected: store.selectedTab == .scene(id: scene.id),
-									canClose: true,
-									onSelect: {
-										store.send(.tabSelected(.scene(id: scene.id)))
-									},
-									onClose: {
-										store.send(.sceneClosed(scene.id))
-									}
-								)
-							}
-						}
 					}
 					.padding(.horizontal, 8)
 					.padding(.vertical, 4)
