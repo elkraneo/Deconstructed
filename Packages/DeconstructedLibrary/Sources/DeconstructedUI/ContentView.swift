@@ -84,6 +84,7 @@ public struct ContentView: View {
 							modelURL: sceneTab.fileURL,
 							configuration: ViewportConfiguration(showGrid: true, showAxes: true)
 						)
+						.id(sceneTab.fileURL)
 					} else if !store.openScenes.isEmpty {
 						// Show first scene if none selected but some are open
 						if let firstScene = store.openScenes.first {
@@ -91,6 +92,7 @@ public struct ContentView: View {
 								modelURL: firstScene.fileURL,
 								configuration: ViewportConfiguration(showGrid: true, showAxes: true)
 							)
+							.id(firstScene.fileURL)
 						}
 					} else {
 						// No scene open - show placeholder
@@ -127,24 +129,6 @@ public struct ContentView: View {
 						canClose: false
 					) {
 						store.send(.bottomTabSelected(.projectBrowser))
-					}
-					
-					TabButton(
-						label: "Shader Graph",
-						icon: "circle.hexagongrid",
-						isSelected: store.selectedBottomTab == .shaderGraph,
-						canClose: false
-					) {
-						store.send(.bottomTabSelected(.shaderGraph))
-					}
-					
-					TabButton(
-						label: "Timelines",
-						icon: "clock",
-						isSelected: store.selectedBottomTab == .timeline,
-						canClose: false
-					) {
-						store.send(.bottomTabSelected(.timeline))
 					}
 					
 					TabButton(

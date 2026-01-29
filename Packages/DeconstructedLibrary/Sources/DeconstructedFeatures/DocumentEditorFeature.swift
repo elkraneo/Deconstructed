@@ -11,8 +11,9 @@ public struct SceneTab: Equatable, Identifiable {
     
     public init(fileURL: URL) {
         self.id = UUID()
-        self.fileURL = fileURL
-        self.displayName = fileURL.lastPathComponent
+        let normalized = normalizedSceneURL(fileURL)
+        self.fileURL = normalized
+        self.displayName = normalized.lastPathComponent
     }
 }
 
@@ -112,16 +113,17 @@ public struct DocumentEditorFeature {
                 return .none
                 
 			case let .sceneOpened(url):
-				print("[DocumentEditorFeature] Opening scene: \(url.lastPathComponent)")
+				let normalizedURL = normalizedSceneURL(url)
+				print("[DocumentEditorFeature] Opening scene: \(normalizedURL.lastPathComponent)")
 				// Check if already open
-				if let existing = state.openScenes.first(where: { $0.fileURL == url }) {
+				if let existing = state.openScenes.first(where: { $0.fileURL == normalizedURL }) {
 					print("[DocumentEditorFeature] Scene already open, switching to tab")
 					state.selectedTab = .scene(id: existing.id)
 					return .none
 				}
 				
 				// Open new scene
-				let newTab = SceneTab(fileURL: url)
+				let newTab = SceneTab(fileURL: normalizedURL)
 				print("[DocumentEditorFeature] Created new tab: \(newTab.id)")
 				state.openScenes.append(newTab)
 				state.selectedTab = .scene(id: newTab.id)
@@ -131,7 +133,11 @@ public struct DocumentEditorFeature {
             case let .sceneClosed(id):
                 state.openScenes.remove(id: id)
                 if case .scene(let selectedId) = state.selectedTab, selectedId == id {
-                    state.selectedTab = nil
+                    if let next = state.openScenes.first {
+                        state.selectedTab = .scene(id: next.id)
+                    } else {
+                        state.selectedTab = nil
+                    }
                 }
                 return .none
                 
@@ -140,4 +146,8 @@ public struct DocumentEditorFeature {
             }
         }
     }
+}
+
+private func normalizedSceneURL(_ url: URL) -> URL {
+    URL(fileURLWithPath: url.path).standardizedFileURL
 }
