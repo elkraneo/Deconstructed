@@ -1,4 +1,5 @@
 import ComposableArchitecture
+import DeconstructedCore
 import ProjectBrowserFeature
 import ProjectBrowserModels
 import SwiftUI
@@ -28,13 +29,13 @@ public struct ProjectBrowserView: View {
 				} else if let error = store.errorMessage {
 					ContentUnavailableView(
 						"Failed to Load",
-						systemImage: "exclamationmark.triangle",
+						systemImage: DeconstructedConstants.SFSymbol.exclamationmarkTriangle,
 						description: Text(error)
 					)
 				} else if store.assetItems.isEmpty {
 					ContentUnavailableView(
 						"No Assets",
-						systemImage: "folder",
+						systemImage: DeconstructedConstants.SFSymbol.folder,
 						description: Text("Open a .realitycomposerpro project to browse assets.")
 					)
 				} else {

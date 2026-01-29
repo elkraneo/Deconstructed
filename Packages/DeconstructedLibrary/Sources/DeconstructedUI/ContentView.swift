@@ -1,4 +1,5 @@
 import ComposableArchitecture
+import DeconstructedCore
 import DeconstructedFeatures
 import DeconstructedModels
 import Foundation
@@ -104,20 +105,20 @@ public struct ContentView: View {
 							)
 							.id(firstScene.fileURL)
 						}
-					} else {
-						// No scene open - show placeholder
-						ContentUnavailableView(
-							"No Scene Open",
-							systemImage: "cube.transparent",
-							description: Text("Double-click a .usda file in the Project Browser to open it.")
-						)
-					}
+						} else {
+							// No scene open - show placeholder
+							ContentUnavailableView(
+								"No Scene Open",
+								systemImage: DeconstructedConstants.SFSymbol.cubeTransparent,
+								description: Text("Double-click a .usda file in the Project Browser to open it.")
+							)
+						}
 				}
 			}
 		} else {
 			ContentUnavailableView(
 				"Loading...",
-				systemImage: "arrow.triangle.2.circlepath"
+				systemImage: DeconstructedConstants.SFSymbol.arrowTriangle2Circlepath
 			)
 		}
 	}
@@ -271,7 +272,7 @@ private struct DebugFileStructureView: View {
 					} else {
 						ContentUnavailableView(
 							"No Project Data",
-							systemImage: "doc.questionmark",
+							systemImage: DeconstructedConstants.SFSymbol.docQuestionmark,
 							description: Text("Could not parse ProjectData/main.json")
 						)
 					}
@@ -348,9 +349,9 @@ private func sceneFilesOnDisk(documentURL: URL, projectData: RCPProjectData) -> 
 		return []
 	}
 	let rkassetsURL = rootURL
-		.appendingPathComponent("Sources")
+		.appendingPathComponent(DeconstructedConstants.DirectoryName.sources)
 		.appendingPathComponent(projectName)
-		.appendingPathComponent("\(projectName).rkassets")
+		.appendingPathComponent(DeconstructedConstants.PathPattern.rkassetsBundle(projectName: projectName))
 	let fileManager = FileManager.default
 	guard let enumerator = fileManager.enumerator(
 		at: rkassetsURL,
@@ -362,7 +363,7 @@ private func sceneFilesOnDisk(documentURL: URL, projectData: RCPProjectData) -> 
 
 	var result: [URL] = []
 	for case let url as URL in enumerator {
-		if url.pathExtension.lowercased() == "usda" {
+		if url.isUSDFile {
 			result.append(url)
 		}
 	}
@@ -423,23 +424,25 @@ struct FileWrapperRow: View {
 	}
 
 	private var folderIcon: String {
-		if name.hasSuffix(".rkassets") {
-			return "cube.fill"
-		} else if name.hasSuffix(".realitycomposerpro") {
-			return "shippingbox.fill"
+		if name.hasSuffix(".\(DeconstructedConstants.FileExtension.rkassets)") {
+			return DeconstructedConstants.SFSymbol.cubeFill
+		} else if name.hasSuffix(".\(DeconstructedConstants.FileExtension.realityComposerPro)") {
+			return DeconstructedConstants.SFSymbol.shippingboxFill
 		}
-		return "folder.fill"
+		return DeconstructedConstants.SFSymbol.folderFill
 	}
 
 	private var fileIcon: String {
-		if name.hasSuffix(".json") || name.hasSuffix(".rcprojectdata") {
-			return "doc.text.fill"
-		} else if name.hasSuffix(".swift") {
-			return "swift"
-		} else if name.hasSuffix(".usda") || name.hasSuffix(".usd") {
-			return "cube.transparent"
+		if name.hasSuffix(".\(DeconstructedConstants.FileExtension.json)")
+			|| name.hasSuffix(".\(DeconstructedConstants.FileExtension.rcprojectdata)") {
+			return DeconstructedConstants.SFSymbol.docTextFill
+		} else if name.hasSuffix(".\(DeconstructedConstants.FileExtension.swift)") {
+			return DeconstructedConstants.SFSymbol.swift
+		} else if name.hasSuffix(".\(DeconstructedConstants.FileExtension.usda)")
+			|| name.hasSuffix(".\(DeconstructedConstants.FileExtension.usd)") {
+			return DeconstructedConstants.SFSymbol.cubeTransparent
 		}
-		return "doc.fill"
+		return DeconstructedConstants.SFSymbol.docFill
 	}
 }
 

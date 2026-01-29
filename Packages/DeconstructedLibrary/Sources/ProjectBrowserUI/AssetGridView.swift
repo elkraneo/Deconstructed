@@ -1,4 +1,5 @@
 import ComposableArchitecture
+import DeconstructedCore
 import ProjectBrowserFeature
 import ProjectBrowserModels
 import SwiftUI
@@ -125,7 +126,7 @@ struct AssetGridView: View {
 	}
 
 	private func currentDirectoryChildren() -> [AssetItem] {
-		guard let rkassetsRoot = store.assetItems.first(where: { $0.url.path.contains(".rkassets") }) else {
+		guard let rkassetsRoot = store.assetItems.first(where: { $0.url.isRKAssets }) else {
 			return []
 		}
 		guard let currentId = store.currentDirectoryId else {

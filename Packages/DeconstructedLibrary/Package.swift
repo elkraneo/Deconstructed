@@ -11,6 +11,10 @@ let package = Package(
 	products: [
 		// Products define the executables and libraries a package produces, making them visible to other packages.
 		.library(
+			name: "DeconstructedCore",
+			targets: ["DeconstructedCore"]
+		),
+		.library(
 			name: "DeconstructedModels",
 			targets: ["DeconstructedModels"]
 		),
@@ -73,23 +77,34 @@ let package = Package(
 		// Targets are the basic building blocks of a package, defining a module or a test suite.
 		// Targets can depend on other targets in this package and products from dependencies.
 		.target(
-			name: "DeconstructedModels"
+			name: "DeconstructedCore"
+		),
+		.target(
+			name: "DeconstructedModels",
+			dependencies: [
+				"DeconstructedCore"
+			]
 		),
 		.target(
 			name: "RCPPackage",
 			dependencies: [
+				"DeconstructedCore",
 				"DeconstructedModels"
 			]
 		),
 		.target(
 			name: "RCPDocument",
 			dependencies: [
+				"DeconstructedCore",
 				"RCPPackage",
 				"DeconstructedModels"
 			]
 		),
 		.target(
-			name: "ProjectScaffolding"
+			name: "ProjectScaffolding",
+			dependencies: [
+				"DeconstructedCore"
+			]
 		),
 		.target(
 			name: "DeconstructedClients",
@@ -105,6 +120,7 @@ let package = Package(
 		.target(
 			name: "DeconstructedUI",
 			dependencies: [
+				"DeconstructedCore",
 				"RCPDocument",
 				"ProjectBrowserUI",
 				"ProjectBrowserFeature",
@@ -120,6 +136,7 @@ let package = Package(
 		.target(
 			name: "DeconstructedFeatures",
 			dependencies: [
+				"DeconstructedCore",
 				"DeconstructedClients",
 				"RCPDocument",
 				"ProjectBrowserFeature",
@@ -131,11 +148,15 @@ let package = Package(
 			]
 		),
 		.target(
-			name: "ProjectBrowserModels"
+			name: "ProjectBrowserModels",
+			dependencies: [
+				"DeconstructedCore"
+			]
 		),
 		.target(
 			name: "ProjectBrowserClients",
 			dependencies: [
+				"DeconstructedCore",
 				"ProjectBrowserModels",
 				"DeconstructedModels",
 				.product(
@@ -147,6 +168,7 @@ let package = Package(
 		.target(
 			name: "ProjectBrowserFeature",
 			dependencies: [
+				"DeconstructedCore",
 				"ProjectBrowserModels",
 				"ProjectBrowserClients",
 				.product(

@@ -1,3 +1,4 @@
+import DeconstructedCore
 import Foundation
 
 public enum ProjectScaffolder {
@@ -22,25 +23,29 @@ public enum ProjectScaffolder {
 		}
 
 		// 2. Write our custom Package.swift with macOS 26
-		let packageSwiftURL = packageURL.appendingPathComponent("Package.swift")
+		let packageSwiftURL = packageURL.appendingPathComponent(DeconstructedConstants.FileName.packageManifest)
 		try PackageTemplate.content(projectName: projectName)
 			.write(to: packageSwiftURL, atomically: true, encoding: .utf8)
 
 		// 3. Create Sources structure
-		let sourcesURL = packageURL.appendingPathComponent("Sources").appendingPathComponent(projectName)
+		let sourcesURL = packageURL
+			.appendingPathComponent(DeconstructedConstants.DirectoryName.sources)
+			.appendingPathComponent(projectName)
 		try fileManager.createDirectory(at: sourcesURL, withIntermediateDirectories: true)
 
 		// 4. Create bundle accessor Swift file
-		let swiftFileURL = sourcesURL.appendingPathComponent("\(projectName).swift")
+		let swiftFileURL = sourcesURL.appendingPathComponent("\(projectName).\(DeconstructedConstants.FileExtension.swift)")
 		try BundleAccessorTemplate.content(projectName: projectName)
 			.write(to: swiftFileURL, atomically: true, encoding: .utf8)
 
 		// 5. Create .rkassets bundle
-		let rkassetsURL = sourcesURL.appendingPathComponent("\(projectName).rkassets")
+		let rkassetsURL = sourcesURL.appendingPathComponent(
+			DeconstructedConstants.PathPattern.rkassetsBundle(projectName: projectName)
+		)
 		try fileManager.createDirectory(at: rkassetsURL, withIntermediateDirectories: true)
 
 		// 6. Create Scene.usda (RealityKit scene format)
-		let sceneURL = rkassetsURL.appendingPathComponent("Scene.usda")
+		let sceneURL = rkassetsURL.appendingPathComponent(DeconstructedConstants.FileName.sceneUsda)
 		try SceneTemplate.emptyScene()
 			.write(to: sceneURL, atomically: true, encoding: .utf8)
 	}

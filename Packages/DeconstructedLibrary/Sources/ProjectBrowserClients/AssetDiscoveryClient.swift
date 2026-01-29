@@ -1,7 +1,8 @@
+import DeconstructedCore
+import DeconstructedModels
 import Foundation
 import ProjectBrowserModels
 import ComposableArchitecture
-import DeconstructedModels
 
 @DependencyClient
 public struct AssetDiscoveryClient: Sendable {
@@ -31,7 +32,7 @@ public actor AssetDiscoveryService {
 		let sceneUUIDLookup = loadSceneUUIDLookup(documentURL: documentURL)
 
 		// Find .rkassets directory by scanning Sources/ on disk
-		let sourcesURL = parentURL.appendingPathComponent("Sources")
+		let sourcesURL = parentURL.appendingPathComponent(DeconstructedConstants.DirectoryName.sources)
 		guard let rkassetsURL = findRKAssets(in: sourcesURL) else {
 			throw AssetDiscoveryError.rkassetsNotFound
 		}
@@ -75,7 +76,7 @@ public actor AssetDiscoveryService {
 				includingPropertiesForKeys: [.isDirectoryKey]
 			) {
 				for item in inner {
-					if item.pathExtension == "rkassets" {
+					if item.pathExtension == DeconstructedConstants.FileExtension.rkassets {
 						let isItemDir = (try? item.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
 						if isItemDir { return item }
 					}
@@ -154,7 +155,9 @@ public enum AssetDiscoveryError: Error, Sendable {
 // MARK: - UUID Lookup
 
 private func loadSceneUUIDLookup(documentURL: URL) -> [String: String] {
-	let mainJsonURL = documentURL.appendingPathComponent("ProjectData/main.json")
+	let mainJsonURL = documentURL
+		.appendingPathComponent(DeconstructedConstants.DirectoryName.projectData)
+		.appendingPathComponent(DeconstructedConstants.FileName.mainJson)
 	guard let data = try? Data(contentsOf: mainJsonURL),
 	      let projectData = try? JSONDecoder().decode(RCPProjectData.self, from: data) else {
 		return [:]

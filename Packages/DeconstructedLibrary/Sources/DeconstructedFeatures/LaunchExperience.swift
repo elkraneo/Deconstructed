@@ -1,5 +1,6 @@
 import AppKit
 import ComposableArchitecture
+import DeconstructedCore
 import SwiftUI
 import UniformTypeIdentifiers
 import RCPDocument
@@ -47,12 +48,12 @@ public struct LaunchExperience: View {
 
 				// Action buttons
 				VStack(spacing: 12) {
-					LaunchButton(title: "Create New Project...", systemImage: "plus.circle.fill") {
+					LaunchButton(title: "Create New Project...", systemImage: DeconstructedConstants.SFSymbol.plusCircleFill) {
 						store.send(.newProjectButtonTapped)
 						onNewProject()
 					}
 
-					LaunchButton(title: "Open Existing Project...", systemImage: "folder.fill") {
+					LaunchButton(title: "Open Existing Project...", systemImage: DeconstructedConstants.SFSymbol.folderFill) {
 						openWithPanel()
 					}
 				}
@@ -141,7 +142,11 @@ struct RecentDocumentsList: View {
 			Divider()
 
 			if store.recentProjects.isEmpty {
-				ContentUnavailableView("No Recent Projects", systemImage: "clock", description: Text("Projects you open will appear here."))
+				ContentUnavailableView(
+					"No Recent Projects",
+					systemImage: DeconstructedConstants.SFSymbol.clock,
+					description: Text("Projects you open will appear here.")
+				)
 					.frame(maxWidth: .infinity, maxHeight: .infinity)
 			} else {
 				List(store.recentProjects, id: \.self) { url in

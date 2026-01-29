@@ -1,5 +1,6 @@
-import Foundation
+import DeconstructedCore
 import DeconstructedModels
+import Foundation
 
 public struct RCPPackage {
 	public var bundle: FileWrapper
@@ -10,8 +11,8 @@ public struct RCPPackage {
 
 	/// Parses ProjectData/main.json
 	public var projectData: RCPProjectData? {
-		guard let projectDataFolder = bundle.fileWrappers?["ProjectData"],
-		      let mainJsonWrapper = projectDataFolder.fileWrappers?["main.json"],
+		guard let projectDataFolder = bundle.fileWrappers?[DeconstructedConstants.DirectoryName.projectData],
+		      let mainJsonWrapper = projectDataFolder.fileWrappers?[DeconstructedConstants.FileName.mainJson],
 		      let data = mainJsonWrapper.regularFileContents
 		else {
 			return nil
@@ -21,8 +22,8 @@ public struct RCPPackage {
 
 	/// Parses WorkspaceData/Settings.rcprojectdata
 	public var settings: RCPSettings? {
-		guard let workspaceFolder = bundle.fileWrappers?["WorkspaceData"],
-		      let settingsWrapper = workspaceFolder.fileWrappers?["Settings.rcprojectdata"],
+		guard let workspaceFolder = bundle.fileWrappers?[DeconstructedConstants.DirectoryName.workspaceData],
+		      let settingsWrapper = workspaceFolder.fileWrappers?[DeconstructedConstants.FileName.settings],
 		      let data = settingsWrapper.regularFileContents
 		else {
 			return nil
@@ -59,7 +60,7 @@ public struct RCPPackage {
 		guard let name = projectName else {
 			return nil
 		}
-		return "Sources/\(name)/\(name).rkassets"
+		return DeconstructedConstants.PathPattern.rkassets(projectName: name)
 	}
 
 	/// Given document URL pointing to .realitycomposerpro bundle, returns the full URL to the .rkassets directory
@@ -78,48 +79,59 @@ public struct RCPPackage {
 	}
 
 	/// Creates the .realitycomposerpro bundle contents
-	public static func createInitialBundle(projectName: String = "MyProject") -> FileWrapper {
+	public static func createInitialBundle(
+		projectName: String = DeconstructedConstants.DefaultValue.projectName
+	) -> FileWrapper {
 		let bundle = FileWrapper(directoryWithFileWrappers: [:])
 		let encoder = JSONEncoder()
 		encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
 
 		let sceneUUID = UUID().uuidString
 		// Standard RCP path structure within a Swift Package
-		let scenePath = "/\(projectName)/Sources/\(projectName)/\(projectName).rkassets/Scene.usda"
+		let scenePath = DeconstructedConstants.PathPattern.scenePath(projectName: projectName)
 
 		// ProjectData/main.json
 		let projectDataFolder = FileWrapper(directoryWithFileWrappers: [:])
-		projectDataFolder.preferredFilename = "ProjectData"
+		projectDataFolder.preferredFilename = DeconstructedConstants.DirectoryName.projectData
 		let projectData = RCPProjectData.initial(scenePath: scenePath, sceneUUID: sceneUUID)
 		if let mainJson = try? encoder.encode(projectData) {
-			projectDataFolder.addRegularFile(withContents: mainJson, preferredFilename: "main.json")
+			projectDataFolder.addRegularFile(
+				withContents: mainJson,
+				preferredFilename: DeconstructedConstants.FileName.mainJson
+			)
 		}
 		bundle.addFileWrapper(projectDataFolder)
 
 		// WorkspaceData/
 		let workspaceDataFolder = FileWrapper(directoryWithFileWrappers: [:])
-		workspaceDataFolder.preferredFilename = "WorkspaceData"
+		workspaceDataFolder.preferredFilename = DeconstructedConstants.DirectoryName.workspaceData
 
 		// Settings.rcprojectdata
 		if let settingsJson = try? encoder.encode(RCPSettings.initial()) {
-			workspaceDataFolder.addRegularFile(withContents: settingsJson, preferredFilename: "Settings.rcprojectdata")
+			workspaceDataFolder.addRegularFile(
+				withContents: settingsJson,
+				preferredFilename: DeconstructedConstants.FileName.settings
+			)
 		}
 
 		// SceneMetadataList.json
 		let sceneMetadataList = RCPSceneMetadataList.initial(sceneUUID: sceneUUID)
 		if let metadataJson = try? sceneMetadataList.encode() {
-			workspaceDataFolder.addRegularFile(withContents: metadataJson, preferredFilename: "SceneMetadataList.json")
+			workspaceDataFolder.addRegularFile(
+				withContents: metadataJson,
+				preferredFilename: DeconstructedConstants.FileName.sceneMetadataList
+			)
 		}
 		bundle.addFileWrapper(workspaceDataFolder)
 
 		// Library/ (empty)
 		let library = FileWrapper(directoryWithFileWrappers: [:])
-		library.preferredFilename = "Library"
+		library.preferredFilename = DeconstructedConstants.DirectoryName.library
 		bundle.addFileWrapper(library)
 
 		// PluginData/ (empty)
 		let pluginData = FileWrapper(directoryWithFileWrappers: [:])
-		pluginData.preferredFilename = "PluginData"
+		pluginData.preferredFilename = DeconstructedConstants.DirectoryName.pluginData
 		bundle.addFileWrapper(pluginData)
 
 		return bundle

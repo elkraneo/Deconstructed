@@ -1,8 +1,9 @@
-import Foundation
 import AppKit
+import DeconstructedCore
 import DeconstructedModels
-import ProjectBrowserModels
+import Foundation
 import ProjectBrowserClients
+import ProjectBrowserModels
 import ComposableArchitecture
 
 @Reducer
@@ -226,39 +227,45 @@ public struct ProjectBrowserFeature {
 					}
 				}
 
-			case .createFolderTapped:
-				guard let destination = resolveTargetDirectory(state: state) else {
-					state.errorMessage = "Could not determine destination folder."
-					return .none
+		case .createFolderTapped:
+			guard let destination = resolveTargetDirectory(state: state) else {
+				state.errorMessage = "Could not determine destination folder."
+				return .none
+			}
+			let fileOperations = self.fileOperations
+			return .run { send in
+				do {
+					_ = try await fileOperations.createFolder(
+						destination,
+						DeconstructedConstants.FileName.newFolder
+					)
+					await send(.fileOperationCompleted)
+				} catch {
+					await send(.fileOperationFailed(error.localizedDescription))
 				}
-				let fileOperations = self.fileOperations
-				return .run { send in
-					do {
-						_ = try await fileOperations.createFolder(destination, "New Folder")
-						await send(.fileOperationCompleted)
-					} catch {
-						await send(.fileOperationFailed(error.localizedDescription))
-					}
-				}
+			}
 
-			case .createSceneTapped:
-				guard let destination = resolveTargetDirectory(state: state) else {
-					state.errorMessage = "Could not determine destination folder."
-					return .none
-				}
-				let documentURL = state.documentURL
-				let fileOperations = self.fileOperations
-				return .run { send in
-					do {
-						let sceneURL = try await fileOperations.createScene(destination, "Untitled Scene")
-						if let documentURL {
-							try? updateProjectDataForNewScene(documentURL: documentURL, sceneURL: sceneURL)
-						}
-						await send(.fileOperationCompleted)
-					} catch {
-						await send(.fileOperationFailed(error.localizedDescription))
+		case .createSceneTapped:
+			guard let destination = resolveTargetDirectory(state: state) else {
+				state.errorMessage = "Could not determine destination folder."
+				return .none
+			}
+			let documentURL = state.documentURL
+			let fileOperations = self.fileOperations
+			return .run { send in
+				do {
+					let sceneURL = try await fileOperations.createScene(
+						destination,
+						DeconstructedConstants.FileName.untitledScene
+					)
+					if let documentURL {
+						try? updateProjectDataForNewScene(documentURL: documentURL, sceneURL: sceneURL)
 					}
+					await send(.fileOperationCompleted)
+				} catch {
+					await send(.fileOperationFailed(error.localizedDescription))
 				}
+			}
 
 			case .deleteSelectedTapped:
 				return .none
@@ -457,7 +464,7 @@ private func resolveTargetDirectory(state: ProjectBrowserFeature.State) -> URL? 
 		return current.url
 	}
 
-	if let rkassetsRoot = state.assetItems.first(where: { $0.url.pathExtension == "rkassets" }) {
+	if let rkassetsRoot = state.assetItems.first(where: { $0.url.isRKAssets }) {
 		return rkassetsRoot.url
 	}
 
@@ -465,7 +472,7 @@ private func resolveTargetDirectory(state: ProjectBrowserFeature.State) -> URL? 
 }
 
 private func resolveRootDirectory(state: ProjectBrowserFeature.State) -> URL? {
-	if let rkassetsRoot = state.assetItems.first(where: { $0.url.pathExtension == "rkassets" }) {
+	if let rkassetsRoot = state.assetItems.first(where: { $0.url.isRKAssets }) {
 		return rkassetsRoot.url
 	}
 	return nil
@@ -491,7 +498,9 @@ private func isDescendant(_ url: URL, of root: URL) -> Bool {
 }
 
 private func updateProjectDataForNewScene(documentURL: URL, sceneURL: URL) throws {
-	let projectDataURL = documentURL.appendingPathComponent("ProjectData/main.json")
+	let projectDataURL = documentURL
+		.appendingPathComponent(DeconstructedConstants.DirectoryName.projectData)
+		.appendingPathComponent(DeconstructedConstants.FileName.mainJson)
 	let data = try Data(contentsOf: projectDataURL)
 	var projectData = try JSONDecoder().decode(RCPProjectData.self, from: data)
 
@@ -510,7 +519,9 @@ private func updateProjectDataForNewScene(documentURL: URL, sceneURL: URL) throw
 }
 
 private func updateProjectDataForMove(documentURL: URL, from: URL, to: URL) throws {
-	let projectDataURL = documentURL.appendingPathComponent("ProjectData/main.json")
+	let projectDataURL = documentURL
+		.appendingPathComponent(DeconstructedConstants.DirectoryName.projectData)
+		.appendingPathComponent(DeconstructedConstants.FileName.mainJson)
 	let data = try Data(contentsOf: projectDataURL)
 	let decoder = JSONDecoder()
 	var projectData = try decoder.decode(RCPProjectData.self, from: data)
@@ -573,7 +584,9 @@ private func encodedScenePath(from components: [String]) -> String {
 }
 
 private func updateSceneMetadataListForNewScene(documentURL: URL, sceneUUID: String) throws {
-	let metadataURL = documentURL.appendingPathComponent("WorkspaceData/SceneMetadataList.json")
+	let metadataURL = documentURL
+		.appendingPathComponent(DeconstructedConstants.DirectoryName.workspaceData)
+		.appendingPathComponent(DeconstructedConstants.FileName.sceneMetadataList)
 	let existingData = try? Data(contentsOf: metadataURL)
 	var metadataList: RCPSceneMetadataList
 	if let existingData,
@@ -586,7 +599,7 @@ private func updateSceneMetadataListForNewScene(documentURL: URL, sceneUUID: Str
 	if metadataList.scenes[sceneUUID] == nil {
 		metadataList.scenes[sceneUUID] = RCPSceneMetadataList.SceneMetadata(
 			uuid: sceneUUID,
-			name: "Root",
+			name: DeconstructedConstants.DefaultValue.rootNodeName,
 			isExpanded: true,
 			isLocked: false
 		)
@@ -598,10 +611,10 @@ private func updateSceneMetadataListForNewScene(documentURL: URL, sceneUUID: Str
 
 private func ensurePluginDataForScene(documentURL: URL, sceneUUID: String) throws {
 	let pluginRoot = documentURL
-		.appendingPathComponent("PluginData")
+		.appendingPathComponent(DeconstructedConstants.DirectoryName.pluginData)
 		.appendingPathComponent(sceneUUID)
-		.appendingPathComponent("ShaderGraphEditorPluginID")
-	let fileURL = pluginRoot.appendingPathComponent("ShaderGraphEditorPluginID")
+		.appendingPathComponent(DeconstructedConstants.FileName.shaderGraphEditorPluginID)
+	let fileURL = pluginRoot.appendingPathComponent(DeconstructedConstants.FileName.shaderGraphEditorPluginID)
 
 	if FileManager.default.fileExists(atPath: fileURL.path) {
 		return
@@ -609,8 +622,8 @@ private func ensurePluginDataForScene(documentURL: URL, sceneUUID: String) throw
 
 	try FileManager.default.createDirectory(at: pluginRoot, withIntermediateDirectories: true)
 	let payload: [String: Any] = [
-		"materialPreviewEnvironmentType": 2,
-		"materialPreviewObjectType": 0
+		DeconstructedConstants.JSONKey.materialPreviewEnvironmentType: DeconstructedConstants.DefaultValue.materialPreviewEnvironmentType,
+		DeconstructedConstants.JSONKey.materialPreviewObjectType: DeconstructedConstants.DefaultValue.materialPreviewObjectType
 	]
 	let data = try JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted, .sortedKeys])
 	try data.write(to: fileURL, options: .atomic)

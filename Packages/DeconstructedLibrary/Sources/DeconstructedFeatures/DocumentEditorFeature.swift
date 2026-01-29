@@ -1,8 +1,9 @@
 import ComposableArchitecture
+import DeconstructedCore
+import DeconstructedModels
 import Foundation
 import ProjectBrowserFeature
 import ViewportModels
-import DeconstructedModels
 
 /// Represents an open scene tab with its viewport state
 public struct SceneTab: Equatable, Identifiable {
@@ -230,7 +231,7 @@ private func updateUserData(
 	openSceneURLs: [URL],
 	selectedSceneURL: URL?
 ) throws {
-	let workspaceURL = documentURL.appendingPathComponent("WorkspaceData")
+	let workspaceURL = documentURL.appendingPathComponent(DeconstructedConstants.DirectoryName.workspaceData)
 	let userDataURL = resolveUserDataURL(in: workspaceURL)
 	let rkassetsURL = findRKAssets(for: documentURL)
 
@@ -297,7 +298,7 @@ private func updateSceneCameraHistory(
 	guard let sceneUUID = sceneUUIDForURL(documentURL: documentURL, sceneURL: sceneURL) else {
 		return
 	}
-	let workspaceURL = documentURL.appendingPathComponent("WorkspaceData")
+	let workspaceURL = documentURL.appendingPathComponent(DeconstructedConstants.DirectoryName.workspaceData)
 	let userDataURL = resolveUserDataURL(in: workspaceURL)
 	var rootObject = loadJSONDictionary(url: userDataURL) ?? [:]
 
@@ -323,19 +324,23 @@ private func resolveUserDataURL(in workspaceURL: URL) -> URL {
 		return existing
 	}
 	let username = NSUserName()
-	return workspaceURL.appendingPathComponent("\(username).rcuserdata")
+	return workspaceURL.appendingPathComponent(
+		DeconstructedConstants.PathPattern.userDataFile(username: username)
+	)
 }
 
 private func findUserDataURL(in workspaceURL: URL) -> URL? {
 	let username = NSUserName()
-	let preferred = workspaceURL.appendingPathComponent("\(username).rcuserdata")
+	let preferred = workspaceURL.appendingPathComponent(
+		DeconstructedConstants.PathPattern.userDataFile(username: username)
+	)
 	if FileManager.default.fileExists(atPath: preferred.path) {
 		return preferred
 	}
 	if let existing = (try? FileManager.default.contentsOfDirectory(
 		at: workspaceURL,
 		includingPropertiesForKeys: nil
-	))?.first(where: { $0.pathExtension == "rcuserdata" }) {
+	))?.first(where: { $0.pathExtension == DeconstructedConstants.FileExtension.rcuserdata }) {
 		return existing
 	}
 	return nil
@@ -366,7 +371,7 @@ private func sceneURL(fromRelativePath path: String, rkassetsURL: URL?) -> URL? 
 
 private func findRKAssets(for documentURL: URL) -> URL? {
 	let parentURL = documentURL.deletingLastPathComponent()
-	let sourcesURL = parentURL.appendingPathComponent("Sources")
+	let sourcesURL = parentURL.appendingPathComponent(DeconstructedConstants.DirectoryName.sources)
 	guard let contents = try? FileManager.default.contentsOfDirectory(
 		at: sourcesURL,
 		includingPropertiesForKeys: [.isDirectoryKey]
@@ -381,7 +386,7 @@ private func findRKAssets(for documentURL: URL) -> URL? {
 			includingPropertiesForKeys: [.isDirectoryKey]
 		) {
 			for item in inner {
-				if item.pathExtension == "rkassets" {
+				if item.pathExtension == DeconstructedConstants.FileExtension.rkassets {
 					let isItemDir = (try? item.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
 					if isItemDir { return item }
 				}
@@ -392,7 +397,9 @@ private func findRKAssets(for documentURL: URL) -> URL? {
 }
 
 private func sceneUUIDForURL(documentURL: URL, sceneURL: URL) -> String? {
-	let mainJsonURL = documentURL.appendingPathComponent("ProjectData/main.json")
+	let mainJsonURL = documentURL
+		.appendingPathComponent(DeconstructedConstants.DirectoryName.projectData)
+		.appendingPathComponent(DeconstructedConstants.FileName.mainJson)
 	guard let data = try? Data(contentsOf: mainJsonURL),
 	      let projectData = try? JSONDecoder().decode(RCPProjectData.self, from: data) else {
 		return nil
@@ -427,14 +434,14 @@ private func sceneUUIDForURL(documentURL: URL, sceneURL: URL) -> String? {
 /// dictionary-based approach. This gives us partial type safety without the overhead
 /// of a full Codable model.
 private enum RCUserDataKeys {
-	static let openSceneRelativePaths = "openSceneRelativePaths"
-	static let selectedSceneRelativePath = "selectedSceneRelativePath"
-	static let sceneCameraHistory = "sceneCameraHistory"
-	
+	static let openSceneRelativePaths = DeconstructedConstants.JSONKey.openSceneRelativePaths
+	static let selectedSceneRelativePath = DeconstructedConstants.JSONKey.selectedSceneRelativePath
+	static let sceneCameraHistory = DeconstructedConstants.JSONKey.sceneCameraHistory
+
 	// Entry keys for camera history records
-	static let date = "date"
-	static let title = "title"
-	static let transform = "transform"
+	static let date = DeconstructedConstants.JSONKey.date
+	static let title = DeconstructedConstants.JSONKey.title
+	static let transform = DeconstructedConstants.JSONKey.transform
 }
 
 // MARK: - JSON Dictionary Helpers

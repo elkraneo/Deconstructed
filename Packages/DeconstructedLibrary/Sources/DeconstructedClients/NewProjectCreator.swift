@@ -1,4 +1,5 @@
 import AppKit
+import DeconstructedCore
 import Foundation
 import ProjectScaffolding
 import RCPPackage
@@ -31,7 +32,7 @@ public final class NewProjectCreator {
 			try ProjectScaffolder.createPackage(at: packageURL, projectName: projectName)
 
 			// 3. Create the .realitycomposerpro document inside
-			let documentURL = packageURL.appendingPathComponent("Package.realitycomposerpro")
+			let documentURL = packageURL.appendingPathComponent(DeconstructedConstants.FileName.document)
 
 			// Use consolidated logic from RCPPackage
 			let wrapper = RCPPackage.createInitialBundle(projectName: projectName)

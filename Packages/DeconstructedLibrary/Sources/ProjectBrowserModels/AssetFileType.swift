@@ -1,3 +1,4 @@
+import DeconstructedCore
 import Foundation
 
 public enum AssetFileType: String, CaseIterable, Sendable, Equatable {
@@ -13,14 +14,14 @@ public enum AssetFileType: String, CaseIterable, Sendable, Equatable {
 
 	public var iconName: String {
 		switch self {
-		case .usda, .usdz: return "cube.transparent.fill"
-		case .texture: return "photo.fill"
-		case .audio: return "waveform"
-		case .realityFile: return "arkit"
-		case .swift: return "swift"
-		case .json: return "doc.text"
-		case .directory: return "folder.fill"
-		case .unknown: return "doc.fill"
+		case .usda, .usdz: return DeconstructedConstants.SFSymbol.cubeTransparentFill
+		case .texture: return DeconstructedConstants.SFSymbol.photoFill
+		case .audio: return DeconstructedConstants.SFSymbol.waveform
+		case .realityFile: return DeconstructedConstants.SFSymbol.arkit
+		case .swift: return DeconstructedConstants.SFSymbol.swift
+		case .json: return DeconstructedConstants.SFSymbol.docText
+		case .directory: return DeconstructedConstants.SFSymbol.folderFill
+		case .unknown: return DeconstructedConstants.SFSymbol.docFill
 		}
 	}
 
@@ -47,14 +48,25 @@ public enum AssetFileType: String, CaseIterable, Sendable, Equatable {
 	public static func from(_ url: URL) -> AssetFileType {
 		let ext = url.pathExtension.lowercased()
 		switch ext {
-		case "usda", "usd": return .usda
-		case "usdz", "usdc": return .usdz
-		case "png", "jpg", "jpeg", "exr", "hdr": return .texture
-		case "wav", "mp3", "aiff": return .audio
-		case "reality": return .realityFile
-		case "swift": return .swift
-		case "json": return .json
-		default: return .unknown
+		case DeconstructedConstants.FileExtension.usda, DeconstructedConstants.FileExtension.usd:
+			return .usda
+		case DeconstructedConstants.FileExtension.usdz, DeconstructedConstants.FileExtension.usdc:
+			return .usdz
+		case DeconstructedConstants.FileExtension.png, DeconstructedConstants.FileExtension.jpg,
+			 DeconstructedConstants.FileExtension.jpeg, DeconstructedConstants.FileExtension.exr,
+			 DeconstructedConstants.FileExtension.hdr:
+			return .texture
+		case DeconstructedConstants.FileExtension.wav, DeconstructedConstants.FileExtension.mp3,
+			 DeconstructedConstants.FileExtension.aiff:
+			return .audio
+		case DeconstructedConstants.FileExtension.reality:
+			return .realityFile
+		case DeconstructedConstants.FileExtension.swift:
+			return .swift
+		case DeconstructedConstants.FileExtension.json:
+			return .json
+		default:
+			return .unknown
 		}
 	}
 }

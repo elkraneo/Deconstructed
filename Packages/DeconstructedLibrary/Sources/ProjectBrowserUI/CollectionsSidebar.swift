@@ -1,4 +1,5 @@
 import ComposableArchitecture
+import DeconstructedCore
 import ProjectBrowserFeature
 import ProjectBrowserModels
 import SwiftUI
@@ -10,12 +11,12 @@ struct CollectionsSidebar: View {
 	var body: some View {
 		List {
 			Section("Collections") {
-				Label("All Files", systemImage: "doc.on.doc")
+				Label("All Files", systemImage: DeconstructedConstants.SFSymbol.docOnDoc)
 			}
 
 			Section("Project") {
 				if let rkassetsRoot = store.assetItems.first(where: {
-					$0.url.path.contains(".rkassets") && $0.isDirectory
+					$0.url.isRKAssets && $0.isDirectory
 				}) {
 					ProjectSidebarNode(item: rkassetsRoot, store: store)
 				}
