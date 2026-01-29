@@ -179,5 +179,13 @@ let package = Package(
 			name: "ProjectBrowserFeatureTests",
 			dependencies: ["ProjectBrowserFeature"]
 		),
+		.testTarget(
+			name: "DeconstructedFeaturesTests",
+			dependencies: [
+				"DeconstructedFeatures",
+				"ProjectBrowserFeature",
+				"DeconstructedModels"
+			]
+		),
 	]
 )

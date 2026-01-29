@@ -479,6 +479,9 @@ private func updateProjectDataForNewScene(documentURL: URL, sceneURL: URL) throw
 	encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
 	let updated = try encoder.encode(projectData)
 	try updated.write(to: projectDataURL, options: .atomic)
+
+	try updateSceneMetadataListForNewScene(documentURL: documentURL, sceneUUID: sceneUUID)
+	try ensurePluginDataForScene(documentURL: documentURL, sceneUUID: sceneUUID)
 }
 
 private func updateProjectDataForMove(documentURL: URL, from: URL, to: URL) throws {
@@ -542,4 +545,48 @@ private func encodedScenePath(from components: [String]) -> String {
 		component.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? component
 	}
 	return "/" + encoded.joined(separator: "/")
+}
+
+private func updateSceneMetadataListForNewScene(documentURL: URL, sceneUUID: String) throws {
+	let metadataURL = documentURL.appendingPathComponent("WorkspaceData/SceneMetadataList.json")
+	let existingData = try? Data(contentsOf: metadataURL)
+	var metadataList: RCPSceneMetadataList
+	if let existingData,
+	   let decoded = try? JSONDecoder().decode(RCPSceneMetadataList.self, from: existingData) {
+		metadataList = decoded
+	} else {
+		metadataList = RCPSceneMetadataList(scenes: [:])
+	}
+
+	if metadataList.scenes[sceneUUID] == nil {
+		metadataList.scenes[sceneUUID] = RCPSceneMetadataList.SceneMetadata(
+			uuid: sceneUUID,
+			name: "Root",
+			isExpanded: true,
+			isLocked: false
+		)
+	}
+
+	let updated = try metadataList.encode()
+	try updated.write(to: metadataURL, options: .atomic)
+}
+
+private func ensurePluginDataForScene(documentURL: URL, sceneUUID: String) throws {
+	let pluginRoot = documentURL
+		.appendingPathComponent("PluginData")
+		.appendingPathComponent(sceneUUID)
+		.appendingPathComponent("ShaderGraphEditorPluginID")
+	let fileURL = pluginRoot.appendingPathComponent("ShaderGraphEditorPluginID")
+
+	if FileManager.default.fileExists(atPath: fileURL.path) {
+		return
+	}
+
+	try FileManager.default.createDirectory(at: pluginRoot, withIntermediateDirectories: true)
+	let payload: [String: Any] = [
+		"materialPreviewEnvironmentType": 2,
+		"materialPreviewObjectType": 0
+	]
+	let data = try JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted, .sortedKeys])
+	try data.write(to: fileURL, options: .atomic)
 }

@@ -2,6 +2,7 @@ import ComposableArchitecture
 import Foundation
 import ProjectBrowserFeature
 import ViewportModels
+import DeconstructedModels
 
 /// Represents an open scene tab with its viewport state
 public struct SceneTab: Equatable, Identifiable {
@@ -92,10 +93,13 @@ public struct DocumentEditorFeature {
         case bottomTabSelected(BottomTab)
         case sceneOpened(URL)
         case sceneClosed(UUID)
+		case sceneCameraChanged(URL, [Float])
         case projectBrowser(ProjectBrowserFeature.Action)
     }
     
     public init() {}
+
+	@Dependency(\.continuousClock) var clock
     
     public var body: some ReducerOf<Self> {
         Scope(state: \.projectBrowser, action: \.projectBrowser) {
@@ -106,7 +110,7 @@ public struct DocumentEditorFeature {
             switch action {
             case let .tabSelected(tab):
                 state.selectedTab = tab
-                return .none
+				return updateUserDataEffect(state: state)
                 
             case let .bottomTabSelected(tab):
                 state.selectedBottomTab = tab
@@ -119,7 +123,7 @@ public struct DocumentEditorFeature {
 				if let existing = state.openScenes.first(where: { $0.fileURL == normalizedURL }) {
 					print("[DocumentEditorFeature] Scene already open, switching to tab")
 					state.selectedTab = .scene(id: existing.id)
-					return .none
+					return updateUserDataEffect(state: state)
 				}
 				
 				// Open new scene
@@ -128,7 +132,7 @@ public struct DocumentEditorFeature {
 				state.openScenes.append(newTab)
 				state.selectedTab = .scene(id: newTab.id)
 				print("[DocumentEditorFeature] Total open scenes: \(state.openScenes.count)")
-				return .none
+				return updateUserDataEffect(state: state)
                 
             case let .sceneClosed(id):
                 state.openScenes.remove(id: id)
@@ -139,7 +143,24 @@ public struct DocumentEditorFeature {
                         state.selectedTab = nil
                     }
                 }
-                return .none
+                return updateUserDataEffect(state: state)
+
+			case let .sceneCameraChanged(url, transform):
+				guard let documentURL = state.projectBrowser.documentURL else {
+					return .none
+				}
+				let title = url.deletingPathExtension().lastPathComponent
+				let clock = self.clock
+				return .run { _ in
+					try await clock.sleep(for: .milliseconds(300))
+					try? updateSceneCameraHistory(
+						documentURL: documentURL,
+						sceneURL: url,
+						title: title,
+						transform: transform
+					)
+				}
+				.cancellable(id: CameraHistoryDebounceId.write, cancelInFlight: true)
                 
             case .projectBrowser:
                 return .none
@@ -150,4 +171,231 @@ public struct DocumentEditorFeature {
 
 private func normalizedSceneURL(_ url: URL) -> URL {
     URL(fileURLWithPath: url.path).standardizedFileURL
+}
+
+private func updateUserDataEffect(state: DocumentEditorFeature.State) -> Effect<DocumentEditorFeature.Action> {
+	guard let documentURL = state.projectBrowser.documentURL else {
+		return .none
+	}
+	let openScenes = state.openScenes.map(\.fileURL)
+	let selectedURL: URL?
+	if case .scene(let id) = state.selectedTab,
+	   let tab = state.openScenes[id: id] {
+		selectedURL = tab.fileURL
+	} else {
+		selectedURL = nil
+	}
+	return .run { _ in
+		try? updateUserData(
+			documentURL: documentURL,
+			openSceneURLs: openScenes,
+			selectedSceneURL: selectedURL
+		)
+	}
+}
+
+private func updateUserData(
+	documentURL: URL,
+	openSceneURLs: [URL],
+	selectedSceneURL: URL?
+) throws {
+	let workspaceURL = documentURL.appendingPathComponent("WorkspaceData")
+	let userDataURL = resolveUserDataURL(in: workspaceURL)
+	let rkassetsURL = findRKAssets(for: documentURL)
+
+	let openPaths = openSceneURLs.map { url in
+		relativeScenePath(url, rkassetsURL: rkassetsURL)
+	}
+	let selectedPath = selectedSceneURL.map { url in
+		relativeScenePath(url, rkassetsURL: rkassetsURL)
+	}
+
+	var rootObject = loadJSONDictionary(url: userDataURL) ?? [:]
+	rootObject[RCUserDataKeys.openSceneRelativePaths] = openPaths
+	if let selectedPath {
+		rootObject[RCUserDataKeys.selectedSceneRelativePath] = selectedPath
+	} else {
+		rootObject.removeValue(forKey: RCUserDataKeys.selectedSceneRelativePath)
+	}
+
+	try writeJSONDictionary(rootObject, to: userDataURL)
+}
+
+private func updateSceneCameraHistory(
+	documentURL: URL,
+	sceneURL: URL,
+	title: String,
+	transform: [Float]
+) throws {
+	guard let sceneUUID = sceneUUIDForURL(documentURL: documentURL, sceneURL: sceneURL) else {
+		return
+	}
+	let workspaceURL = documentURL.appendingPathComponent("WorkspaceData")
+	let userDataURL = resolveUserDataURL(in: workspaceURL)
+	var rootObject = loadJSONDictionary(url: userDataURL) ?? [:]
+
+	var historyByScene = rootObject[RCUserDataKeys.sceneCameraHistory] as? [String: Any] ?? [:]
+	var entries = historyByScene[sceneUUID] as? [[String: Any]] ?? []
+	let entry: [String: Any] = [
+		RCUserDataKeys.date: Date().timeIntervalSinceReferenceDate,
+		RCUserDataKeys.title: title,
+		RCUserDataKeys.transform: transform
+	]
+	entries.append(entry)
+	historyByScene[sceneUUID] = entries
+	rootObject[RCUserDataKeys.sceneCameraHistory] = historyByScene
+
+	try writeJSONDictionary(rootObject, to: userDataURL)
+}
+
+private func resolveUserDataURL(in workspaceURL: URL) -> URL {
+	if let existing = (try? FileManager.default.contentsOfDirectory(
+		at: workspaceURL,
+		includingPropertiesForKeys: nil
+	))?.first(where: { $0.pathExtension == "rcuserdata" }) {
+		return existing
+	}
+	let username = NSUserName()
+	return workspaceURL.appendingPathComponent("\(username).rcuserdata")
+}
+
+private func relativeScenePath(_ sceneURL: URL, rkassetsURL: URL?) -> String {
+	guard let rkassetsURL else {
+		return sceneURL.lastPathComponent
+	}
+	let rootComponents = rkassetsURL.standardizedFileURL.pathComponents
+	let fileComponents = sceneURL.standardizedFileURL.pathComponents
+	guard fileComponents.starts(with: rootComponents) else {
+		return sceneURL.lastPathComponent
+	}
+	let relativeComponents = fileComponents.dropFirst(rootComponents.count)
+	let path = relativeComponents.joined(separator: "/")
+	return path.isEmpty ? sceneURL.lastPathComponent : path
+}
+
+private func findRKAssets(for documentURL: URL) -> URL? {
+	let parentURL = documentURL.deletingLastPathComponent()
+	let sourcesURL = parentURL.appendingPathComponent("Sources")
+	guard let contents = try? FileManager.default.contentsOfDirectory(
+		at: sourcesURL,
+		includingPropertiesForKeys: [.isDirectoryKey]
+	) else {
+		return nil
+	}
+	for projectDir in contents {
+		let isDir = (try? projectDir.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
+		guard isDir else { continue }
+		if let inner = try? FileManager.default.contentsOfDirectory(
+			at: projectDir,
+			includingPropertiesForKeys: [.isDirectoryKey]
+		) {
+			for item in inner {
+				if item.pathExtension == "rkassets" {
+					let isItemDir = (try? item.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
+					if isItemDir { return item }
+				}
+			}
+		}
+	}
+	return nil
+}
+
+private func sceneUUIDForURL(documentURL: URL, sceneURL: URL) -> String? {
+	let mainJsonURL = documentURL.appendingPathComponent("ProjectData/main.json")
+	guard let data = try? Data(contentsOf: mainJsonURL),
+	      let projectData = try? JSONDecoder().decode(RCPProjectData.self, from: data) else {
+		return nil
+	}
+	let rootURL = documentURL.deletingLastPathComponent()
+	let rootComponents = rootURL.standardizedFileURL.pathComponents
+	let fileComponents = sceneURL.standardizedFileURL.pathComponents
+	guard fileComponents.starts(with: rootComponents) else {
+		return nil
+	}
+	let relativeComponents = Array(fileComponents.dropFirst(rootComponents.count))
+	let normalized = relativeComponents.joined(separator: "/")
+
+	for (path, uuid) in projectData.pathsToIds {
+		let components = path
+			.split(separator: "/")
+			.map { String($0) }
+			.map { $0.removingPercentEncoding ?? $0 }
+		guard !components.isEmpty else { continue }
+		let candidate = components.joined(separator: "/")
+		if candidate == normalized {
+			return uuid
+		}
+	}
+	return nil
+}
+
+// MARK: - RCUserData Keys
+
+/// Known keys for `.rcuserdata` JSON files.
+///
+/// We extract these into constants to prevent typos while preserving the dynamic
+/// dictionary-based approach. This gives us partial type safety without the overhead
+/// of a full Codable model.
+private enum RCUserDataKeys {
+	static let openSceneRelativePaths = "openSceneRelativePaths"
+	static let selectedSceneRelativePath = "selectedSceneRelativePath"
+	static let sceneCameraHistory = "sceneCameraHistory"
+	
+	// Entry keys for camera history records
+	static let date = "date"
+	static let title = "title"
+	static let transform = "transform"
+}
+
+// MARK: - JSON Dictionary Helpers
+
+/// Loads a JSON file as a dynamic dictionary.
+///
+/// ## Why JSONSerialization over Codable?
+///
+/// The `*.rcuserdata` files are **loose, user-specific JSON blobs** with an evolving schema
+/// controlled by Apple's Reality Composer. We use `JSONSerialization` + `[String: Any]`
+/// instead of `Codable` for several important reasons:
+///
+/// 1. **Preserves unknown keys**: RCUserData may contain keys we don't model (e.g., future
+///    additions by Apple). `JSONSerialization` round-trips these perfectly, whereas a strict
+///    `Codable` struct would drop them → **data loss**.
+///
+/// 2. **Partial updates**: We only need to read/write a few known fields while preserving
+///    everything else exactly as-is. This is trivial with dictionaries:
+///    ```swift
+///    dict[RCUserDataKeys.selectedSceneRelativePath] = newPath
+///    // All other keys remain untouched
+///    ```
+///
+/// 3. **Avoids brittle Codable scaffolding**: To achieve the same with `Codable`, we'd need
+///    either a passthrough `additionalProperties: [String: AnyCodable]` dictionary or a
+///    custom `init(from:)/encode(to:)` implementation—both add complexity with little gain.
+///
+/// **Trade-off**: We lose compile-time type checking for the entire structure, but the
+/// `RCUserDataKeys` enum above mitigates key-name typos. This is an acceptable balance for
+/// a foreign JSON format we don't own.
+///
+/// - Parameter url: The file URL to read from.
+/// - Returns: The parsed dictionary, or `nil` if the file doesn't exist or isn't valid JSON.
+private func loadJSONDictionary(url: URL) -> [String: Any]? {
+	guard let data = try? Data(contentsOf: url) else { return nil }
+	return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+}
+
+/// Writes a dictionary back to a JSON file atomically.
+///
+/// See `loadJSONDictionary(url:)` for rationale on using `JSONSerialization` over `Codable`.
+///
+/// - Parameters:
+///   - object: The dictionary to serialize.
+///   - url: The destination file URL.
+/// - Throws: If serialization or file writing fails.
+private func writeJSONDictionary(_ object: [String: Any], to url: URL) throws {
+	let data = try JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys])
+	try data.write(to: url, options: .atomic)
+}
+
+private enum CameraHistoryDebounceId: Hashable {
+	case write
 }

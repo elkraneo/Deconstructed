@@ -10,6 +10,7 @@ public struct ViewportView: View {
     
     /// Optional URL to load a model from
     let modelURL: URL?
+	let onCameraStateChanged: (([Float]) -> Void)?
     
     // Internal state
     @State private var rootEntity: Entity?
@@ -19,10 +20,12 @@ public struct ViewportView: View {
     
     public init(
         modelURL: URL? = nil,
-        configuration: ViewportConfiguration = ViewportConfiguration()
+        configuration: ViewportConfiguration = ViewportConfiguration(),
+		onCameraStateChanged: (([Float]) -> Void)? = nil
     ) {
         self.modelURL = modelURL
         self.configuration = configuration
+		self.onCameraStateChanged = onCameraStateChanged
     }
     
     public var body: some View {
@@ -45,6 +48,9 @@ public struct ViewportView: View {
             sceneBounds: sceneBounds,
             configuration: configuration
         )
+		.onChange(of: cameraState) { _, newState in
+			onCameraStateChanged?(matrixToArray(newState.transform))
+		}
     }
     
     // MARK: - Scene Setup
@@ -154,4 +160,14 @@ fileprivate extension SIMD4 where Scalar == Float {
     var isFinite: Bool {
         x.isFinite && y.isFinite && z.isFinite && w.isFinite
     }
+}
+
+private func matrixToArray(_ matrix: simd_float4x4) -> [Float] {
+	let columns = matrix.columns
+	return [
+		columns.0.x, columns.0.y, columns.0.z, columns.0.w,
+		columns.1.x, columns.1.y, columns.1.z, columns.1.w,
+		columns.2.x, columns.2.y, columns.2.z, columns.2.w,
+		columns.3.x, columns.3.y, columns.3.z, columns.3.w
+	]
 }

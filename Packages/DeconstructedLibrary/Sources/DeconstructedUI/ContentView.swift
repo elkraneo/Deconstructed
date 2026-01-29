@@ -82,7 +82,10 @@ public struct ContentView: View {
 					   let sceneTab = store.openScenes[id: id] {
 						ViewportView(
 							modelURL: sceneTab.fileURL,
-							configuration: ViewportConfiguration(showGrid: true, showAxes: true)
+							configuration: ViewportConfiguration(showGrid: true, showAxes: true),
+							onCameraStateChanged: { transform in
+								store.send(.sceneCameraChanged(sceneTab.fileURL, transform))
+							}
 						)
 						.id(sceneTab.fileURL)
 					} else if !store.openScenes.isEmpty {
@@ -90,7 +93,10 @@ public struct ContentView: View {
 						if let firstScene = store.openScenes.first {
 							ViewportView(
 								modelURL: firstScene.fileURL,
-								configuration: ViewportConfiguration(showGrid: true, showAxes: true)
+								configuration: ViewportConfiguration(showGrid: true, showAxes: true),
+								onCameraStateChanged: { transform in
+									store.send(.sceneCameraChanged(firstScene.fileURL, transform))
+								}
 							)
 							.id(firstScene.fileURL)
 						}
