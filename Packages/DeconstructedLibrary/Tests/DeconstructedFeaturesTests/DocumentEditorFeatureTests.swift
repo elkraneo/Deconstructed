@@ -188,13 +188,13 @@ struct DocumentEditorFeatureTests {
 			$0.isLoading = true
 			$0.errorMessage = nil
 			$0.documentURL = documentURL
-			$0.isWatchingFiles = true
-			$0.watchedDocumentURL = documentURL
 		}
 		await store.receive(.assetsLoaded([rkassetsRoot])) {
 			$0.isLoading = false
 			$0.assetItems = [rkassetsRoot]
 			$0.expandedDirectories = [rkassetsRoot.id]
+			$0.isWatchingFiles = true
+			$0.watchedDirectoryURL = rkassetsRoot.url
 		}
 
 		let updatedData = try Data(contentsOf: documentURL.appendingPathComponent("ProjectData/main.json"))

@@ -28,7 +28,7 @@ public struct ProjectBrowserFeature {
 		public var isLoading: Bool = false
 		public var errorMessage: String? = nil
 		public var isWatchingFiles: Bool = false
-		public var watchedDocumentURL: URL? = nil
+		public var watchedDirectoryURL: URL? = nil
 
 		// Drag
 		public var draggingItemIds: [AssetItem.ID] = []
@@ -105,17 +105,16 @@ public struct ProjectBrowserFeature {
 				return .none
 
 		case .onAppear:
-			// Start file watching if document URL is available
-			guard let documentURL = state.documentURL,
-			      state.watchedDocumentURL != documentURL else {
+			// Start file watching once we know the .rkassets root
+			guard let rootURL = resolveRootDirectory(state: state),
+			      state.watchedDirectoryURL != rootURL else {
 				return .none
 			}
 			state.isWatchingFiles = true
-			state.watchedDocumentURL = documentURL
-			let parentURL = documentURL.deletingLastPathComponent()
+			state.watchedDirectoryURL = rootURL
 			let fileWatcher = self.fileWatcher
 			return .run { send in
-				for await event in fileWatcher.watch(parentURL) {
+				for await event in fileWatcher.watch(rootURL) {
 					await send(.fileSystemEvent(event))
 				}
 			}
@@ -123,39 +122,22 @@ public struct ProjectBrowserFeature {
 
 		case .onDisappear:
 			state.isWatchingFiles = false
-			state.watchedDocumentURL = nil
+			state.watchedDirectoryURL = nil
 			return .cancel(id: FileWatcherCancellationID.watcher)
 
 			case let .loadAssets(documentURL):
 				state.isLoading = true
 				state.errorMessage = nil
 				state.documentURL = documentURL
-				let shouldStartWatching = state.watchedDocumentURL != documentURL
-				if shouldStartWatching {
-					state.isWatchingFiles = true
-					state.watchedDocumentURL = documentURL
-				}
 				let assetDiscovery = self.assetDiscovery
-				let fileWatcher = self.fileWatcher
-				let parentURL = documentURL.deletingLastPathComponent()
-				return .merge(
-					.run { send in
-						do {
-							let items = try await assetDiscovery.discover(documentURL)
-							await send(.assetsLoaded(items))
-						} catch {
-							await send(.loadingFailed(error.localizedDescription))
-						}
-					},
-					shouldStartWatching
-						? .run { send in
-							for await event in fileWatcher.watch(parentURL) {
-								await send(.fileSystemEvent(event))
-							}
-						}
-						.cancellable(id: FileWatcherCancellationID.watcher, cancelInFlight: true)
-						: .none
-				)
+				return .run { send in
+					do {
+						let items = try await assetDiscovery.discover(documentURL)
+						await send(.assetsLoaded(items))
+					} catch {
+						await send(.loadingFailed(error.localizedDescription))
+					}
+				}
 
 			case let .assetsLoaded(items):
 				state.isLoading = false
@@ -166,7 +148,26 @@ public struct ProjectBrowserFeature {
 				if let rootId = items.first?.id {
 					state.expandedDirectories.insert(rootId)
 				}
-				return .none
+				guard let rootURL = resolveRootDirectory(state: state) else {
+					if state.isWatchingFiles {
+						state.isWatchingFiles = false
+						state.watchedDirectoryURL = nil
+						return .cancel(id: FileWatcherCancellationID.watcher)
+					}
+					return .none
+				}
+				guard state.watchedDirectoryURL != rootURL else {
+					return .none
+				}
+				state.isWatchingFiles = true
+				state.watchedDirectoryURL = rootURL
+				let fileWatcher = self.fileWatcher
+				return .run { send in
+					for await event in fileWatcher.watch(rootURL) {
+						await send(.fileSystemEvent(event))
+					}
+				}
+				.cancellable(id: FileWatcherCancellationID.watcher, cancelInFlight: true)
 
 			case let .loadingFailed(message):
 				state.isLoading = false
@@ -407,14 +408,19 @@ public struct ProjectBrowserFeature {
 				state.errorMessage = message
 				return .none
 
-			case .fileSystemEvent:
-				// Debounce file system events to prevent excessive reloads
-				let clock = self.clock
-				return .run { send in
-					try await clock.sleep(for: .milliseconds(300))
-					await send(.debouncedRefresh)
-				}
-				.cancellable(id: FileWatcherCancellationID.debounce, cancelInFlight: true)
+		case let .fileSystemEvent(event):
+			guard let rootURL = resolveRootDirectory(state: state),
+			      let eventURL = eventURL(event),
+			      isDescendant(eventURL, of: rootURL) else {
+				return .none
+			}
+			// Debounce file system events to prevent excessive reloads
+			let clock = self.clock
+			return .run { send in
+				try await clock.sleep(for: .milliseconds(300))
+				await send(.debouncedRefresh)
+			}
+			.cancellable(id: FileWatcherCancellationID.debounce, cancelInFlight: true)
 
 		case .debouncedRefresh:
 			// Actually perform the refresh after debouncing
@@ -463,6 +469,25 @@ private func resolveRootDirectory(state: ProjectBrowserFeature.State) -> URL? {
 		return rkassetsRoot.url
 	}
 	return nil
+}
+
+private func eventURL(_ event: FileWatcherClient.Event) -> URL? {
+	switch event {
+	case let .created(url):
+		return url
+	case let .modified(url):
+		return url
+	case let .deleted(url):
+		return url
+	case let .renamed(_, to):
+		return to
+	}
+}
+
+private func isDescendant(_ url: URL, of root: URL) -> Bool {
+	let rootPath = root.standardizedFileURL.path
+	let urlPath = url.standardizedFileURL.path
+	return urlPath == rootPath || urlPath.hasPrefix(rootPath + "/")
 }
 
 private func updateProjectDataForNewScene(documentURL: URL, sceneURL: URL) throws {
