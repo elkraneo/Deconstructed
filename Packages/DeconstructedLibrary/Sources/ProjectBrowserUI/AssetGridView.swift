@@ -5,6 +5,7 @@ import SwiftUI
 
 struct AssetGridView: View {
 	@Bindable var store: StoreOf<ProjectBrowserFeature>
+	let onOpenURL: ((URL) -> Void)?
 
 	private var columns: [GridItem] {
 		[GridItem(.adaptive(minimum: store.iconSize + 20), spacing: 16)]
@@ -35,64 +36,92 @@ struct AssetGridView: View {
 		ScrollView {
 			LazyVGrid(columns: columns, spacing: 16) {
 				ForEach(filteredAndSortedItems) { item in
-					AssetGridItem(
-						item: item,
-						iconSize: store.iconSize,
-						isSelected: store.selectedItems.contains(item.id),
-						isRenaming: store.renamingItemId == item.id,
-						onRenameCommit: { newName in
-							store.send(.renameItemCommitted(item.id, newName))
-						},
-						onRenameCancel: {
-							store.send(.renameCancelled)
-						}
-					)
-					.onDrag {
-						let ids: [UUID]
-						if store.selectedItems.contains(item.id) {
-							ids = Array(store.selectedItems)
-						} else {
-							ids = [item.id]
-						}
-						store.send(.dragStarted(ids))
-						let payload = ids.map { $0.uuidString }.joined(separator: ",")
-						return NSItemProvider(object: payload as NSString)
-					}
-					.onDrop(
-						of: [.text, .plainText, .utf8PlainText],
-						isTargeted: nil
-					) { _ in
-						guard item.isDirectory else { return false }
-						let ids = store.draggingItemIds
-						guard !ids.isEmpty else { return false }
-						store.send(.moveItems(ids, to: item.id))
-						store.send(.dragEnded)
-						return true
-					}
-					.onTapGesture(count: 2) {
-						store.send(.itemDoubleClicked(item.id))
-						if item.isDirectory {
-							store.send(.setCurrentDirectory(item.id))
-						}
-					}
-					.onTapGesture {
-						store.send(.itemSelected(item.id))
-					}
-					.contextMenu {
-						Button("Rename") {
-							store.send(.itemSelected(item.id))
-							store.send(.renameSelectedTapped)
-						}
-						Button("Move to Folder…") {
-							store.send(.itemSelected(item.id))
-							store.send(.moveSelectedTapped)
-						}
-					}
+					gridItemView(for: item)
 				}
 			}
 			.padding()
 		}
 		.background(.windowBackground)
+	}
+	
+	@ViewBuilder
+	private func gridItemView(for item: AssetItem) -> some View {
+		let isSelected = store.selectedItems.contains(item.id)
+		let isRenaming = store.renamingItemId == item.id
+		
+		AssetGridItem(
+			item: item,
+			iconSize: store.iconSize,
+			isSelected: isSelected,
+			isRenaming: isRenaming,
+			onRenameCommit: { newName in
+				store.send(.renameItemCommitted(item.id, newName))
+			},
+			onRenameCancel: {
+				store.send(.renameCancelled)
+			}
+		)
+		.onDrag {
+			makeDragItem(for: item)
+		}
+		.onDrop(
+			of: [.text, .plainText, .utf8PlainText],
+			isTargeted: nil
+		) { _ in
+			handleDrop(on: item)
+		}
+		.onTapGesture(count: 2) {
+			handleDoubleClick(item: item)
+		}
+		.onTapGesture {
+			store.send(.itemSelected(item.id))
+		}
+		.contextMenu {
+			contextMenu(for: item)
+		}
+	}
+	
+	private func makeDragItem(for item: AssetItem) -> NSItemProvider {
+		let ids: [UUID]
+		if store.selectedItems.contains(item.id) {
+			ids = Array(store.selectedItems)
+		} else {
+			ids = [item.id]
+		}
+		store.send(.dragStarted(ids))
+		let payload = ids.map { $0.uuidString }.joined(separator: ",")
+		return NSItemProvider(object: payload as NSString)
+	}
+	
+	private func handleDrop(on item: AssetItem) -> Bool {
+		guard item.isDirectory else { return false }
+		let ids = store.draggingItemIds
+		guard !ids.isEmpty else { return false }
+		store.send(.moveItems(ids, to: item.id))
+		store.send(.dragEnded)
+		return true
+	}
+	
+	private func handleDoubleClick(item: AssetItem) {
+		store.send(.itemDoubleClicked(item.id))
+		if item.isDirectory {
+			store.send(.setCurrentDirectory(item.id))
+		} else if item.fileType == .usda {
+			print("[AssetGridView] Opening USDA file: \(item.url)")
+			onOpenURL?(item.url)
+		}
+	}
+	
+	@ViewBuilder
+	private func contextMenu(for item: AssetItem) -> some View {
+		Button("Rename") {
+			store.send(.itemSelected(item.id))
+			store.send(.renameSelectedTapped)
+		}
+		Button("Move to Folder…") {
+			store.send(.itemSelected(item.id))
+			store.send(.moveSelectedTapped)
+		}
 	}
 
 	private func currentDirectoryChildren() -> [AssetItem] {

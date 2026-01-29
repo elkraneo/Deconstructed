@@ -47,7 +47,7 @@ public enum AssetFileType: String, CaseIterable, Sendable, Equatable {
 	public static func from(_ url: URL) -> AssetFileType {
 		let ext = url.pathExtension.lowercased()
 		switch ext {
-		case "usda": return .usda
+		case "usda", "usd": return .usda
 		case "usdz", "usdc": return .usdz
 		case "png", "jpg", "jpeg", "exr", "hdr": return .texture
 		case "wav", "mp3", "aiff": return .audio

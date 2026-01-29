@@ -1,45 +1,17 @@
-//
-//  ContentView.swift
-//  Deconstructed
-//
-//  Created by Cristian Díaz on 26.01.26.
-//
-
 import ComposableArchitecture
+import DeconstructedFeatures
 import DeconstructedModels
 import Foundation
 import ProjectBrowserFeature
 import ProjectBrowserUI
 import RCPDocument
 import SwiftUI
+import ViewportUI
+import ViewportModels
 
 public struct ContentView: View {
 	@Binding public var document: DeconstructedDocument
-	@State private var store: StoreOf<ProjectBrowserFeature>?
-
-	// Tab selection
-	@State private var selectedTab: EditorTab = .projectBrowser
-
-	enum EditorTab: String, CaseIterable, Identifiable {
-		case projectBrowser = "Project Browser"
-		case shaderGraph = "Shader Graph"
-		case timeline = "Timelines"
-		case audio = "Audio Mixer"
-		case statistics = "Statistics"
-		case debug = "Debug Info"  // The old view
-
-		var id: String { rawValue }
-		var icon: String {
-			switch self {
-			case .projectBrowser: return "square.grid.2x2"
-			case .shaderGraph: return "circle.hexagongrid"
-			case .timeline: return "clock"
-			case .audio: return "waveform"
-			case .statistics: return "chart.bar"
-			case .debug: return "ladybug"
-			}
-		}
-	}
+	@State private var store: StoreOf<DocumentEditorFeature>?
 
 	public init(document: Binding<DeconstructedDocument>) {
 		self._document = document
@@ -47,71 +19,211 @@ public struct ContentView: View {
 
 	public var body: some View {
 		VStack(spacing: 0) {
-			Spacer()
-			Divider()
-
-			// Editor Toolbar / Tab Bar
-			Picker("Editor Mode", selection: $selectedTab) {
-				ForEach([EditorTab.projectBrowser, .debug]) { tab in
-					Label(tab.rawValue, systemImage: tab.icon)
-						.tag(tab)
-				}
-			}
-			.pickerStyle(.segmented)
-			.padding(8)
-			.labelsHidden()
-			.controlSize(.small)
-
-			Divider()
-
-			// Main Content
-			switch selectedTab {
-			case .projectBrowser:
-				if let store {
-					ProjectBrowserView(store: store)
-				} else {
-					ContentUnavailableView(
-						"Loading...",
-						systemImage: "arrow.triangle.2.circlepath"
-					)
-				}
-
-			case .debug:
-				// Existing debug view
-				DebugFileStructureView(document: document)
-
-			default:
-				ContentUnavailableView(
-					selectedTab.rawValue,
-					systemImage: selectedTab.icon,
-					description: Text("This editor is not yet implemented.")
-				)
-			}
+			// Top: Viewport (if a scene is open)
+			viewportArea
+			
+			// Middle: Divider with tab bar
+			editorPanelArea
 		}
 		.onAppear {
 			if store == nil {
-				store = Store(initialState: ProjectBrowserFeature.State()) {
-					ProjectBrowserFeature()
+				store = Store(initialState: DocumentEditorFeature.State()) {
+					DocumentEditorFeature()
 				}
 			}
 		}
-		// When document URL becomes available (from DocumentGroup), load assets
 		.onChange(of: document.documentURL) { oldUrl, newUrl in
 			if let newUrl, let store {
-				store.send(.loadAssets(documentURL: newUrl))
+				store.send(.projectBrowser(.loadAssets(documentURL: newUrl)))
 			}
 		}
-		// Also Trigger immediately if we already have it (unlikely on first render but good safety)
 		.task {
 			if let url = document.documentURL, let store {
-				store.send(.loadAssets(documentURL: url))
+				store.send(.projectBrowser(.loadAssets(documentURL: url)))
 			}
+		}
+	}
+	
+	// MARK: - Viewport Area (Top)
+	
+	@ViewBuilder
+	private var viewportArea: some View {
+		if let store {
+			// Show viewport if there's a selected scene
+			if case .scene(let id) = store.selectedTab,
+			   let sceneTab = store.openScenes[id: id] {
+				ViewportView(
+					modelURL: sceneTab.fileURL,
+					configuration: ViewportConfiguration(showGrid: true, showAxes: true)
+				)
+			} else if !store.openScenes.isEmpty {
+				// Show first scene if none selected but some are open
+				if let firstScene = store.openScenes.first {
+					ViewportView(
+						modelURL: firstScene.fileURL,
+						configuration: ViewportConfiguration(showGrid: true, showAxes: true)
+					)
+				}
+			} else {
+				// No scene open - show placeholder
+				ContentUnavailableView(
+					"No Scene Open",
+					systemImage: "cube.transparent",
+					description: Text("Double-click a .usda file in the Project Browser to open it.")
+				)
+			}
+		} else {
+			ContentUnavailableView(
+				"Loading...",
+				systemImage: "arrow.triangle.2.circlepath"
+			)
+		}
+	}
+	
+	// MARK: - Editor Panel Area (Bottom with Tabs)
+	
+	@ViewBuilder
+	private var editorPanelArea: some View {
+		if let store {
+			VStack(spacing: 0) {
+				// Tab bar
+				ScrollView(.horizontal, showsIndicators: false) {
+					HStack(spacing: 0) {
+						// Fixed editor tabs
+					TabButton(
+						label: "Project Browser",
+						icon: "square.grid.2x2",
+						isSelected: store.selectedBottomTab == .projectBrowser,
+						canClose: false
+					) {
+						store.send(.bottomTabSelected(.projectBrowser))
+					}
+					
+					TabButton(
+						label: "Shader Graph",
+						icon: "circle.hexagongrid",
+						isSelected: store.selectedBottomTab == .shaderGraph,
+						canClose: false
+					) {
+						store.send(.bottomTabSelected(.shaderGraph))
+					}
+					
+					TabButton(
+						label: "Timelines",
+						icon: "clock",
+						isSelected: store.selectedBottomTab == .timeline,
+						canClose: false
+					) {
+						store.send(.bottomTabSelected(.timeline))
+					}
+					
+					TabButton(
+						label: "Debug",
+						icon: "ladybug",
+						isSelected: store.selectedBottomTab == .debug,
+						canClose: false
+					) {
+						store.send(.bottomTabSelected(.debug))
+					}
+						
+						if !store.openScenes.isEmpty {
+							Divider()
+								.frame(height: 20)
+								.padding(.horizontal, 4)
+							
+							// Scene tabs
+							ForEach(store.openScenes) { scene in
+								TabButton(
+									label: scene.displayName,
+									icon: "cube.transparent",
+									isSelected: store.selectedTab == .scene(id: scene.id),
+									canClose: true,
+									onSelect: {
+										store.send(.tabSelected(.scene(id: scene.id)))
+									},
+									onClose: {
+										store.send(.sceneClosed(scene.id))
+									}
+								)
+							}
+						}
+					}
+					.padding(.horizontal, 8)
+					.padding(.vertical, 4)
+				}
+				.background(.ultraThinMaterial)
+				
+				Divider()
+				
+			// Editor content
+			switch store.selectedBottomTab {
+			case .projectBrowser:
+				ProjectBrowserView(
+					store: store.scope(state: \.projectBrowser, action: \.projectBrowser),
+					onOpenURL: { url in
+						store.send(.sceneOpened(url))
+					}
+				)
+				.frame(minHeight: 200, idealHeight: 300)
+				
+			case .debug:
+				DebugFileStructureView(document: document)
+				.frame(minHeight: 200, idealHeight: 300)
+				
+			case .shaderGraph, .timeline, .audio, .statistics:
+				ContentUnavailableView(
+					store.selectedBottomTab.displayName,
+					systemImage: store.selectedBottomTab.icon,
+					description: Text("This editor is not yet implemented.")
+				)
+				.frame(minHeight: 200, idealHeight: 300)
+			}
+			}
+			.frame(maxHeight: .infinity, alignment: .bottom)
 		}
 	}
 }
 
-// Extracted the old view to keep ContentView clean
-struct DebugFileStructureView: View {
+// MARK: - Tab Button
+
+private struct TabButton: View {
+	let label: String
+	let icon: String
+	let isSelected: Bool
+	let canClose: Bool
+	let onSelect: () -> Void
+	var onClose: (() -> Void)? = nil
+	
+	var body: some View {
+		Button(action: onSelect) {
+			HStack(spacing: 4) {
+				Image(systemName: icon)
+					.font(.caption)
+				Text(label)
+					.font(.caption)
+					.lineLimit(1)
+				
+				if canClose {
+					Button(action: { onClose?() }) {
+						Image(systemName: "xmark")
+							.font(.caption2)
+							.foregroundStyle(.secondary)
+					}
+					.buttonStyle(.plain)
+				}
+			}
+			.padding(.horizontal, 8)
+			.padding(.vertical, 4)
+			.background(isSelected ? Color.accentColor.opacity(0.2) : Color.clear)
+			.cornerRadius(4)
+		}
+		.buttonStyle(.plain)
+	}
+}
+
+// MARK: - Debug View
+
+private struct DebugFileStructureView: View {
 	let document: DeconstructedDocument
 
 	var body: some View {

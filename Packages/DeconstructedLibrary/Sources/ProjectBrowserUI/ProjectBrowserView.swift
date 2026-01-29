@@ -5,9 +5,11 @@ import SwiftUI
 
 public struct ProjectBrowserView: View {
 	@Bindable var store: StoreOf<ProjectBrowserFeature>
+	let onOpenURL: ((URL) -> Void)?
 
-	public init(store: StoreOf<ProjectBrowserFeature>) {
+	public init(store: StoreOf<ProjectBrowserFeature>, onOpenURL: ((URL) -> Void)? = nil) {
 		self.store = store
+		self.onOpenURL = onOpenURL
 	}
 
 	public var body: some View {
@@ -36,7 +38,7 @@ public struct ProjectBrowserView: View {
 						description: Text("Open a .realitycomposerpro project to browse assets.")
 					)
 				} else {
-					AssetGridView(store: store)
+					AssetGridView(store: store, onOpenURL: onOpenURL)
 				}
 			}
 

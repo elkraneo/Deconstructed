@@ -53,6 +53,14 @@ let package = Package(
 		.library(
 			name: "ProjectBrowserUI",
 			targets: ["ProjectBrowserUI"]
+		),
+		.library(
+			name: "ViewportModels",
+			targets: ["ViewportModels"]
+		),
+		.library(
+			name: "ViewportUI",
+			targets: ["ViewportUI"]
 		)
 	],
 	dependencies: [
@@ -100,6 +108,9 @@ let package = Package(
 				"RCPDocument",
 				"ProjectBrowserUI",
 				"ProjectBrowserFeature",
+				"DeconstructedFeatures",
+				"ViewportUI",
+				"ViewportModels",
 				.product(
 					name: "ComposableArchitecture",
 					package: "swift-composable-architecture"
@@ -111,6 +122,8 @@ let package = Package(
 			dependencies: [
 				"DeconstructedClients",
 				"RCPDocument",
+				"ProjectBrowserFeature",
+				"ViewportModels",
 				.product(
 					name: "ComposableArchitecture",
 					package: "swift-composable-architecture"
@@ -147,6 +160,15 @@ let package = Package(
 			dependencies: [
 				"ProjectBrowserFeature",
 				"ProjectBrowserModels"
+			]
+		),
+		.target(
+			name: "ViewportModels"
+		),
+		.target(
+			name: "ViewportUI",
+			dependencies: [
+				"ViewportModels"
 			]
 		),
 		.testTarget(
