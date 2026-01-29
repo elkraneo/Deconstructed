@@ -11,21 +11,25 @@ public struct ViewportView: View {
     /// Optional URL to load a model from
     let modelURL: URL?
 	let onCameraStateChanged: (([Float]) -> Void)?
+	let initialCameraTransform: [Float]?
     
     // Internal state
     @State private var rootEntity: Entity?
     @State private var cameraState = ArcballCameraState()
     @State private var sceneBounds = SceneBounds()
     @State private var isZUp = false
+	@State private var appliedInitialTransform = false
     
     public init(
         modelURL: URL? = nil,
         configuration: ViewportConfiguration = ViewportConfiguration(),
-		onCameraStateChanged: (([Float]) -> Void)? = nil
+		onCameraStateChanged: (([Float]) -> Void)? = nil,
+		initialCameraTransform: [Float]? = nil
     ) {
         self.modelURL = modelURL
         self.configuration = configuration
 		self.onCameraStateChanged = onCameraStateChanged
+		self.initialCameraTransform = initialCameraTransform
     }
     
     public var body: some View {
@@ -122,23 +126,32 @@ public struct ViewportView: View {
                 let bounds = entity.visualBounds(relativeTo: nil)
                 sceneBounds = SceneBounds(min: bounds.min, max: bounds.max)
 
-                // Dynamic Camera Framing
-                if let camera = rootEntity?.findEntity(named: "MainCamera") {
-                    let extents = bounds.extents
-                    let center = bounds.center
-                    let maxDim = max(extents.x, max(extents.y, extents.z))
+				if !appliedInitialTransform,
+				   let initialCameraTransform,
+				   let matrix = matrixFromArray(initialCameraTransform),
+				   let restoredState = cameraStateFromTransform(
+					matrix,
+					focus: bounds.center
+				   ) {
+					cameraState = restoredState
+					appliedInitialTransform = true
+				} else {
+					// Dynamic Camera Framing
+					let extents = bounds.extents
+					let center = bounds.center
+					let maxDim = max(extents.x, max(extents.y, extents.z))
 
-                    let fov: Float = 60.0 * .pi / 180.0
-                    let tanFov = tan(fov / 2.0)
-                    let distance = maxDim / (2.0 * tanFov)
-                    let clampedDistance = max(distance, 0.05)
+					let fov: Float = 60.0 * .pi / 180.0
+					let tanFov = tan(fov / 2.0)
+					let distance = maxDim / (2.0 * tanFov)
+					let clampedDistance = max(distance, 0.05)
 
-                    var newState = ArcballCameraState()
-                    newState.focus = center
-                    newState.distance = clampedDistance * 1.5
-                    newState.rotation = SIMD3<Float>(-20 * .pi / 180, 0, 0)
-                    cameraState = newState
-                }
+					var newState = ArcballCameraState()
+					newState.focus = center
+					newState.distance = clampedDistance * 1.5
+					newState.rotation = SIMD3<Float>(-20 * .pi / 180, 0, 0)
+					cameraState = newState
+				}
             }
         } catch {
             print("[ViewportView] Failed to load model: \(error.localizedDescription)")
@@ -170,4 +183,47 @@ private func matrixToArray(_ matrix: simd_float4x4) -> [Float] {
 		columns.2.x, columns.2.y, columns.2.z, columns.2.w,
 		columns.3.x, columns.3.y, columns.3.z, columns.3.w
 	]
+}
+
+private func matrixFromArray(_ values: [Float]) -> simd_float4x4? {
+	guard values.count == 16 else { return nil }
+	return simd_float4x4(
+		SIMD4(values[0], values[1], values[2], values[3]),
+		SIMD4(values[4], values[5], values[6], values[7]),
+		SIMD4(values[8], values[9], values[10], values[11]),
+		SIMD4(values[12], values[13], values[14], values[15])
+	)
+}
+
+private func cameraStateFromTransform(
+	_ transform: simd_float4x4,
+	focus: SIMD3<Float>
+) -> ArcballCameraState? {
+	let rotation = simd_float3x3(
+		SIMD3(transform.columns.0.x, transform.columns.0.y, transform.columns.0.z),
+		SIMD3(transform.columns.1.x, transform.columns.1.y, transform.columns.1.z),
+		SIMD3(transform.columns.2.x, transform.columns.2.y, transform.columns.2.z)
+	)
+	let forward = SIMD3<Float>(
+		rotation.columns.2.x,
+		rotation.columns.2.y,
+		rotation.columns.2.z
+	)
+	let normalizedForward = simd_length(forward) > 0 ? simd_normalize(forward) : SIMD3<Float>(0, 0, 1)
+	let clampedY = max(-1.0 as Float, min(1.0 as Float, normalizedForward.y))
+	let pitch = -asinf(clampedY)
+	let yaw = atan2f(normalizedForward.x, normalizedForward.z)
+
+	let cameraPosition = SIMD3<Float>(
+		transform.columns.3.x,
+		transform.columns.3.y,
+		transform.columns.3.z
+	)
+	let distance = max(0.001, simd_length(cameraPosition - focus))
+
+	var state = ArcballCameraState()
+	state.focus = focus
+	state.rotation = SIMD3<Float>(pitch, yaw, 0)
+	state.distance = distance
+	return state
 }

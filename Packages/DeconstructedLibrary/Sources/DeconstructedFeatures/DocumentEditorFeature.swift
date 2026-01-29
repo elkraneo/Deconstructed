@@ -9,12 +9,14 @@ public struct SceneTab: Equatable, Identifiable {
     public let id: UUID
     public let fileURL: URL
     public let displayName: String
+	public let cameraTransform: [Float]?
     
-    public init(fileURL: URL) {
+    public init(fileURL: URL, cameraTransform: [Float]? = nil) {
         self.id = UUID()
         let normalized = normalizedSceneURL(fileURL)
         self.fileURL = normalized
         self.displayName = normalized.lastPathComponent
+		self.cameraTransform = cameraTransform
     }
 }
 
@@ -89,6 +91,8 @@ public struct DocumentEditorFeature {
     }
     
     public enum Action {
+		case documentOpened(URL)
+		case workspaceRestored(WorkspaceRestore)
         case tabSelected(EditorTab?)
         case bottomTabSelected(BottomTab)
         case sceneOpened(URL)
@@ -108,6 +112,27 @@ public struct DocumentEditorFeature {
         
         Reduce { state, action in
             switch action {
+			case let .documentOpened(documentURL):
+				return .run { send in
+					if let restored = loadWorkspaceRestore(documentURL: documentURL) {
+						await send(.workspaceRestored(restored))
+					}
+				}
+
+			case let .workspaceRestored(restored):
+				state.openScenes = IdentifiedArray(
+					uniqueElements: restored.openSceneURLs.map { url in
+						SceneTab(fileURL: url, cameraTransform: restored.cameraTransforms[url])
+					}
+				)
+				if let selected = restored.selectedSceneURL,
+				   let selectedTab = state.openScenes.first(where: { $0.fileURL == selected }) {
+					state.selectedTab = .scene(id: selectedTab.id)
+				} else {
+					state.selectedTab = nil
+				}
+				return .none
+
             case let .tabSelected(tab):
                 state.selectedTab = tab
 				return updateUserDataEffect(state: state)
@@ -173,6 +198,12 @@ private func normalizedSceneURL(_ url: URL) -> URL {
     URL(fileURLWithPath: url.path).standardizedFileURL
 }
 
+public struct WorkspaceRestore: Sendable, Equatable {
+	let openSceneURLs: [URL]
+	let selectedSceneURL: URL?
+	let cameraTransforms: [URL: [Float]]
+}
+
 private func updateUserDataEffect(state: DocumentEditorFeature.State) -> Effect<DocumentEditorFeature.Action> {
 	guard let documentURL = state.projectBrowser.documentURL else {
 		return .none
@@ -221,6 +252,42 @@ private func updateUserData(
 	try writeJSONDictionary(rootObject, to: userDataURL)
 }
 
+private func loadWorkspaceRestore(documentURL: URL) -> WorkspaceRestore? {
+	let workspaceURL = documentURL.appendingPathComponent("WorkspaceData")
+	guard let userDataURL = findUserDataURL(in: workspaceURL),
+	      let rootObject = loadJSONDictionary(url: userDataURL) else {
+		return nil
+	}
+	let rkassetsURL = findRKAssets(for: documentURL)
+	let openPaths = rootObject["openSceneRelativePaths"] as? [String] ?? []
+	let openSceneURLs = openPaths.compactMap { path in
+		sceneURL(fromRelativePath: path, rkassetsURL: rkassetsURL)
+	}.filter { FileManager.default.fileExists(atPath: $0.path) }
+
+	let selectedPath = rootObject["selectedSceneRelativePath"] as? String
+	let selectedSceneURL = selectedPath.flatMap { path in
+		sceneURL(fromRelativePath: path, rkassetsURL: rkassetsURL)
+	}
+
+	let historyByScene = rootObject["sceneCameraHistory"] as? [String: Any] ?? [:]
+	var cameraTransforms: [URL: [Float]] = [:]
+	for url in openSceneURLs {
+		if let uuid = sceneUUIDForURL(documentURL: documentURL, sceneURL: url),
+		   let entries = historyByScene[uuid] as? [[String: Any]],
+		   let last = entries.last,
+		   let transformArray = last["transform"] as? [NSNumber],
+		   transformArray.count == 16 {
+			cameraTransforms[url] = transformArray.map { $0.floatValue }
+		}
+	}
+
+	return WorkspaceRestore(
+		openSceneURLs: openSceneURLs,
+		selectedSceneURL: selectedSceneURL,
+		cameraTransforms: cameraTransforms
+	)
+}
+
 private func updateSceneCameraHistory(
 	documentURL: URL,
 	sceneURL: URL,
@@ -259,6 +326,21 @@ private func resolveUserDataURL(in workspaceURL: URL) -> URL {
 	return workspaceURL.appendingPathComponent("\(username).rcuserdata")
 }
 
+private func findUserDataURL(in workspaceURL: URL) -> URL? {
+	let username = NSUserName()
+	let preferred = workspaceURL.appendingPathComponent("\(username).rcuserdata")
+	if FileManager.default.fileExists(atPath: preferred.path) {
+		return preferred
+	}
+	if let existing = (try? FileManager.default.contentsOfDirectory(
+		at: workspaceURL,
+		includingPropertiesForKeys: nil
+	))?.first(where: { $0.pathExtension == "rcuserdata" }) {
+		return existing
+	}
+	return nil
+}
+
 private func relativeScenePath(_ sceneURL: URL, rkassetsURL: URL?) -> String {
 	guard let rkassetsURL else {
 		return sceneURL.lastPathComponent
@@ -271,6 +353,15 @@ private func relativeScenePath(_ sceneURL: URL, rkassetsURL: URL?) -> String {
 	let relativeComponents = fileComponents.dropFirst(rootComponents.count)
 	let path = relativeComponents.joined(separator: "/")
 	return path.isEmpty ? sceneURL.lastPathComponent : path
+}
+
+private func sceneURL(fromRelativePath path: String, rkassetsURL: URL?) -> URL? {
+	guard let rkassetsURL else { return nil }
+	var url = rkassetsURL
+	for component in path.split(separator: "/") {
+		url.appendPathComponent(String(component))
+	}
+	return url.standardizedFileURL
 }
 
 private func findRKAssets(for documentURL: URL) -> URL? {
@@ -313,16 +404,15 @@ private func sceneUUIDForURL(documentURL: URL, sceneURL: URL) -> String? {
 		return nil
 	}
 	let relativeComponents = Array(fileComponents.dropFirst(rootComponents.count))
-	let normalized = relativeComponents.joined(separator: "/")
+	guard !relativeComponents.isEmpty else { return nil }
 
 	for (path, uuid) in projectData.pathsToIds {
 		let components = path
 			.split(separator: "/")
 			.map { String($0) }
 			.map { $0.removingPercentEncoding ?? $0 }
-		guard !components.isEmpty else { continue }
-		let candidate = components.joined(separator: "/")
-		if candidate == normalized {
+		guard components.count >= relativeComponents.count else { continue }
+		if components.suffix(relativeComponents.count).elementsEqual(relativeComponents) {
 			return uuid
 		}
 	}

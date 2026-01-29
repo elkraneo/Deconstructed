@@ -35,11 +35,13 @@ public struct ContentView: View {
 		.onChange(of: document.documentURL) { oldUrl, newUrl in
 			if let newUrl, let store {
 				store.send(.projectBrowser(.loadAssets(documentURL: newUrl)))
+				store.send(.documentOpened(newUrl))
 			}
 		}
 		.task {
 			if let url = document.documentURL, let store {
 				store.send(.projectBrowser(.loadAssets(documentURL: url)))
+				store.send(.documentOpened(url))
 			}
 		}
 	}
@@ -85,7 +87,8 @@ public struct ContentView: View {
 							configuration: ViewportConfiguration(showGrid: true, showAxes: true),
 							onCameraStateChanged: { transform in
 								store.send(.sceneCameraChanged(sceneTab.fileURL, transform))
-							}
+							},
+							initialCameraTransform: sceneTab.cameraTransform
 						)
 						.id(sceneTab.fileURL)
 					} else if !store.openScenes.isEmpty {
@@ -96,7 +99,8 @@ public struct ContentView: View {
 								configuration: ViewportConfiguration(showGrid: true, showAxes: true),
 								onCameraStateChanged: { transform in
 									store.send(.sceneCameraChanged(firstScene.fileURL, transform))
-								}
+								},
+								initialCameraTransform: firstScene.cameraTransform
 							)
 							.id(firstScene.fileURL)
 						}

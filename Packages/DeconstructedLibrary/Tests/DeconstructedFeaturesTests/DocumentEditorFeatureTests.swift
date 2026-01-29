@@ -215,6 +215,80 @@ struct DocumentEditorFeatureTests {
 			#expect(FileManager.default.fileExists(atPath: pluginFile.path))
 		}
 	}
+
+	@Test
+	func restoreWorkspace_opensScenes_selectsTab_andRestoresCamera() async throws {
+		let tempRoot = try makeTempDirectory()
+		defer { try? FileManager.default.removeItem(at: tempRoot) }
+
+		let documentURL = tempRoot.appendingPathComponent("Project.realitycomposerpro")
+		try createDirectory(documentURL)
+		try createDirectory(documentURL.appendingPathComponent("WorkspaceData"))
+		try createDirectory(documentURL.appendingPathComponent("ProjectData"))
+
+		let sourcesURL = tempRoot.appendingPathComponent("Sources/MyProject/MyProject.rkassets")
+		try createDirectory(sourcesURL)
+
+		let sceneURL = sourcesURL.appendingPathComponent("Scene.usda")
+		FileManager.default.createFile(atPath: sceneURL.path, contents: Data())
+
+		let sceneUUID = UUID().uuidString
+		let pathKey = "Sources/MyProject/MyProject.rkassets/Scene.usda"
+		let projectData = RCPProjectData(
+			pathsToIds: [pathKey: sceneUUID],
+			projectID: 1,
+			uuidToIntID: [sceneUUID: 2]
+		)
+		let encoder = JSONEncoder()
+		encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+		let mainData = try encoder.encode(projectData)
+		try mainData.write(
+			to: documentURL.appendingPathComponent("ProjectData/main.json"),
+			options: .atomic
+		)
+
+		let transform = Array(repeating: Float(2.0), count: 16)
+		let userDataURL = documentURL
+			.appendingPathComponent("WorkspaceData")
+			.appendingPathComponent("tester.rcuserdata")
+		let userData: [String: Any] = [
+			"openSceneRelativePaths": ["Scene.usda"],
+			"selectedSceneRelativePath": "Scene.usda",
+			"sceneCameraHistory": [
+				sceneUUID: [
+					[
+						"date": Date().timeIntervalSinceReferenceDate,
+						"title": "Scene",
+						"transform": transform
+					]
+				]
+			]
+		]
+		try writeJSON(userData, to: userDataURL)
+
+		var state = DocumentEditorFeature.State()
+		state.projectBrowser.documentURL = documentURL
+
+		let store = TestStore(initialState: state) {
+			DocumentEditorFeature()
+		}
+
+		store.exhaustivity = .off
+		await store.send(.documentOpened(documentURL))
+		await store.receive(\.workspaceRestored)
+
+		#expect(store.state.openScenes.count == 1)
+		let tab = store.state.openScenes.first
+		#expect(tab?.fileURL == sceneURL.standardizedFileURL)
+		#expect(tab?.cameraTransform == transform)
+		if let selected = store.state.selectedTab {
+			if case .scene(let id) = selected {
+				#expect(store.state.openScenes[id: id]?.fileURL == sceneURL.standardizedFileURL)
+			}
+		} else {
+			#expect(Bool(false))
+		}
+	}
 }
 
 private func makeTempDirectory() throws -> URL {
