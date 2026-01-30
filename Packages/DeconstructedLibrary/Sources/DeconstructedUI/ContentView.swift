@@ -20,7 +20,7 @@ public struct ContentView: View {
 	}
 
 	public var body: some View {
-		VStack(spacing: 0) {
+		VSplitView {
 			// Top: Viewport (if a scene is open)
 			viewportArea
 			
@@ -151,6 +151,7 @@ public struct ContentView: View {
 								systemImage: DeconstructedConstants.SFSymbol.cubeTransparent,
 								description: Text("Double-click a .usda file in the Project Browser to open it.")
 							)
+							.frame(maxWidth: .infinity, maxHeight: .infinity)
 						}
 				}
 			}
@@ -206,10 +207,12 @@ public struct ContentView: View {
 						store.send(.sceneOpened(url))
 					}
 				)
+				.frame(maxWidth: .infinity, maxHeight: .infinity)
 				.frame(minHeight: 200, idealHeight: 300)
 				
 			case .debug:
 				DebugFileStructureView(document: document)
+				.frame(maxWidth: .infinity, maxHeight: .infinity)
 				.frame(minHeight: 200, idealHeight: 300)
 				
 			case .shaderGraph, .timeline, .audio, .statistics:
@@ -218,10 +221,11 @@ public struct ContentView: View {
 					systemImage: store.selectedBottomTab.icon,
 					description: Text("This editor is not yet implemented.")
 				)
+				.frame(maxWidth: .infinity, maxHeight: .infinity)
 				.frame(minHeight: 200, idealHeight: 300)
 			}
 			}
-			.frame(maxHeight: .infinity, alignment: .bottom)
+			.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
 		}
 	}
 }

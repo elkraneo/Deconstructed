@@ -12,13 +12,12 @@ public struct SceneNavigatorView: View {
 
 	public var body: some View {
 		VStack(spacing: 0) {
-			header
-			Divider()
+			// header
+			// Divider()
 			content
 			Divider()
 			footer
 		}
-		.background(.ultraThinMaterial)
 	}
 
 	private var header: some View {
@@ -48,7 +47,7 @@ public struct SceneNavigatorView: View {
 					SceneNavigatorRow(node: node)
 				}
 			}
-			.listStyle(.sidebar)
+			.listStyle(.inset)
 
 			if store.isLoading && store.nodes.isEmpty {
 				ProgressView("Loading Scene...")
@@ -67,7 +66,8 @@ public struct SceneNavigatorView: View {
 
 	private var footer: some View {
 		HStack(spacing: 8) {
-			Button {} label: {
+			Button {
+			} label: {
 				Image(systemName: "plus")
 			}
 			.buttonStyle(.borderless)
@@ -96,6 +96,7 @@ private struct SceneNavigatorRow: View {
 			}
 		}
 		.padding(.vertical, 2)
+		.listRowSeparator(.hidden)
 	}
 
 	private func iconName(for node: SceneNode) -> String {
@@ -110,7 +111,9 @@ private struct SceneNavigatorRow: View {
 	}
 }
 
-private func filteredNodes(_ nodes: [SceneNode], filterText: String) -> [SceneNode] {
+private func filteredNodes(_ nodes: [SceneNode], filterText: String)
+	-> [SceneNode]
+{
 	let trimmed = filterText.trimmingCharacters(in: .whitespacesAndNewlines)
 	guard !trimmed.isEmpty else { return nodes }
 	let query = trimmed.lowercased()
@@ -132,8 +135,8 @@ private func filteredNodes(_ nodes: [SceneNode], filterText: String) -> [SceneNo
 	}
 }
 
-private extension SceneNode {
-	var childrenOptional: [SceneNode]? {
+extension SceneNode {
+	fileprivate var childrenOptional: [SceneNode]? {
 		children.isEmpty ? nil : children
 	}
 }
