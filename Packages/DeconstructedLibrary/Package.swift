@@ -78,6 +78,10 @@ let package = Package(
 			name: "SceneGraphUI",
 			targets: ["SceneGraphUI"]
 		),
+		.library(
+			name: "DeconstructedUSDInterop",
+			targets: ["DeconstructedUSDInterop"]
+		),
 	],
 	dependencies: [
 		.package(
@@ -85,6 +89,7 @@ let package = Package(
 			from: "1.23.1"
 		),
 		.package(url: "https://github.com/elkraneo/USDInterop", branch: "main"),
+		.package(url: "https://github.com/apple/SwiftUsd.git", from: "5.2.0"),
 	],
 	targets: [
 		// Targets are the basic building blocks of a package, defining a module or a test suite.
@@ -225,6 +230,20 @@ let package = Package(
 			dependencies: [
 				"SceneGraphFeature",
 				"SceneGraphModels",
+			]
+		),
+		.target(
+			name: "DeconstructedUSDInterop",
+			dependencies: [
+				.product(name: "OpenUSD", package: "SwiftUsd"),
+				.product(name: "CxxStdlib", package: "SwiftUsd"),
+			],
+			swiftSettings: [
+				.interoperabilityMode(.Cxx),
+				.unsafeFlags(
+					["-Xfrontend", "-disable-cmo"],
+					.when(configuration: .release)
+				),
 			]
 		),
 		.testTarget(
