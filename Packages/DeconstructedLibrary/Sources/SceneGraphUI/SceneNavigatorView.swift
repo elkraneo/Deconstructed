@@ -87,6 +87,7 @@ private struct SceneNavigatorRow: View {
 		HStack(spacing: 6) {
 			Image(systemName: iconName(for: node))
 				.font(.caption)
+				.foregroundStyle(iconColor(for: node))
 			Text(node.displayName)
 				.lineLimit(1)
 			if let typeName = node.typeName {
@@ -101,13 +102,35 @@ private struct SceneNavigatorRow: View {
 
 	private func iconName(for node: SceneNode) -> String {
 		if let type = node.typeName?.lowercased() {
+			if type.contains("xform") { return "move.3d" }
+			if type.contains("mesh") { return "view.3d" }
+			if type.contains("scope") { return "folder" }
 			if type.contains("material") { return "paintbrush" }
-			if type.contains("shader") { return "lines.measurement.horizontal" }
+			if type.contains("shader") { return "waveform" }
 			if type.contains("light") { return "lightbulb" }
 			if type.contains("camera") { return "camera" }
 			if type.contains("sphere") { return "circle" }
+			if type.contains("cube") { return "cube" }
+			if type.contains("plane") { return "rectangle" }
+			if type.contains("cylinder") { return "cylinder" }
+			if type.contains("cone") { return "cone" }
+			if type.contains("capsule") { return "capsule" }
+			if type.contains("torus") { return "torus" }
 		}
 		return "cube"
+	}
+
+	private func iconColor(for node: SceneNode) -> Color {
+		if let type = node.typeName?.lowercased() {
+			if type.contains("xform") { return .blue }
+			if type.contains("mesh") || type.contains("sphere") || type.contains("cube") || 
+			   type.contains("plane") || type.contains("cylinder") || type.contains("cone") ||
+			   type.contains("capsule") || type.contains("torus") { return .green }
+			if type.contains("light") { return .yellow }
+			if type.contains("camera") { return .purple }
+			if type.contains("material") || type.contains("shader") { return .orange }
+		}
+		return .secondary
 	}
 }
 

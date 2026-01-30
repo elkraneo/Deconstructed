@@ -1,5 +1,5 @@
 {
-  "originHash" : "890368811f121458350035fc34218253d5725f8e8096369b5f447d954b15e155",
+  "originHash" : "c3e61edf1d3becf7038b40b28fe173547ec436c6dc4c8c0655b37d238086f455",
   "pins" : [
     {
       "identity" : "combine-schedulers",
@@ -114,8 +114,26 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/swiftlang/swift-syntax",
       "state" : {
-        "revision" : "4799286537280063c85a32f09884cfbca301b1a1",
-        "version" : "602.0.0"
+        "revision" : "f99ae8aa18f0cf0d53481901f88a0991dc3bd4a2",
+        "version" : "601.0.1"
+      }
+    },
+    {
+      "identity" : "swiftusd",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/SwiftUsd.git",
+      "state" : {
+        "revision" : "0cc1c65b7832695e89608c915c35621222db62b9",
+        "version" : "5.2.0"
+      }
+    },
+    {
+      "identity" : "usdinterop",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/elkraneo/USDInterop",
+      "state" : {
+        "branch" : "main",
+        "revision" : "8c2e5edd89d063e3a33d2784492269588512fac5"
       }
     },
     {
