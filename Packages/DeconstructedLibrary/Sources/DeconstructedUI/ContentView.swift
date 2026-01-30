@@ -6,6 +6,7 @@ import Foundation
 import ProjectBrowserFeature
 import ProjectBrowserUI
 import RCPDocument
+import SceneGraphUI
 import SwiftUI
 import ViewportUI
 import ViewportModels
@@ -87,37 +88,61 @@ public struct ContentView: View {
 				Group {
 					if case .scene(let id) = store.selectedTab,
 					   let sceneTab = store.openScenes[id: id] {
-						ViewportView(
-							modelURL: sceneTab.fileURL,
-							configuration: ViewportConfiguration(
-								showGrid: store.viewportShowGrid,
-								showAxes: true
-							),
-							onCameraStateChanged: { transform in
-								store.send(.sceneCameraChanged(sceneTab.fileURL, transform))
-							},
-							cameraTransform: sceneTab.cameraTransform,
-							cameraTransformRequestID: sceneTab.cameraTransformRequestID,
-							frameRequestID: sceneTab.frameRequestID
-						)
-						.id(sceneTab.fileURL)
-					} else if !store.openScenes.isEmpty {
-						// Show first scene if none selected but some are open
-						if let firstScene = store.openScenes.first {
+						HStack(spacing: 0) {
+							SceneNavigatorView(
+								store: store.scope(
+									state: \.sceneNavigator,
+									action: \.sceneNavigator
+								)
+							)
+							.frame(minWidth: 220, idealWidth: 260, maxWidth: 320)
+
+							Divider()
+
 							ViewportView(
-								modelURL: firstScene.fileURL,
+								modelURL: sceneTab.fileURL,
 								configuration: ViewportConfiguration(
 									showGrid: store.viewportShowGrid,
 									showAxes: true
 								),
 								onCameraStateChanged: { transform in
-									store.send(.sceneCameraChanged(firstScene.fileURL, transform))
+									store.send(.sceneCameraChanged(sceneTab.fileURL, transform))
 								},
-								cameraTransform: firstScene.cameraTransform,
-								cameraTransformRequestID: firstScene.cameraTransformRequestID,
-								frameRequestID: firstScene.frameRequestID
+								cameraTransform: sceneTab.cameraTransform,
+								cameraTransformRequestID: sceneTab.cameraTransformRequestID,
+								frameRequestID: sceneTab.frameRequestID
 							)
-							.id(firstScene.fileURL)
+							.id(sceneTab.fileURL)
+						}
+					} else if !store.openScenes.isEmpty {
+						// Show first scene if none selected but some are open
+						if let firstScene = store.openScenes.first {
+							HStack(spacing: 0) {
+								SceneNavigatorView(
+									store: store.scope(
+										state: \.sceneNavigator,
+										action: \.sceneNavigator
+									)
+								)
+								.frame(minWidth: 220, idealWidth: 260, maxWidth: 320)
+
+								Divider()
+
+								ViewportView(
+									modelURL: firstScene.fileURL,
+									configuration: ViewportConfiguration(
+										showGrid: store.viewportShowGrid,
+										showAxes: true
+									),
+									onCameraStateChanged: { transform in
+										store.send(.sceneCameraChanged(firstScene.fileURL, transform))
+									},
+									cameraTransform: firstScene.cameraTransform,
+									cameraTransformRequestID: firstScene.cameraTransformRequestID,
+									frameRequestID: firstScene.frameRequestID
+								)
+								.id(firstScene.fileURL)
+							}
 						}
 						} else {
 							// No scene open - show placeholder

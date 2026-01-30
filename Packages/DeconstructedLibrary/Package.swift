@@ -61,13 +61,30 @@ let package = Package(
 		.library(
 			name: "ViewportUI",
 			targets: ["ViewportUI"]
-		)
+		),
+		.library(
+			name: "SceneGraphModels",
+			targets: ["SceneGraphModels"]
+		),
+		.library(
+			name: "SceneGraphClients",
+			targets: ["SceneGraphClients"]
+		),
+		.library(
+			name: "SceneGraphFeature",
+			targets: ["SceneGraphFeature"]
+		),
+		.library(
+			name: "SceneGraphUI",
+			targets: ["SceneGraphUI"]
+		),
 	],
 	dependencies: [
 		.package(
 			url: "https://github.com/pointfreeco/swift-composable-architecture",
 			from: "1.23.1"
-		)
+		),
+		.package(url: "https://github.com/elkraneo/USDInterop", branch: "main"),
 	],
 	targets: [
 		// Targets are the basic building blocks of a package, defining a module or a test suite.
@@ -85,7 +102,7 @@ let package = Package(
 			name: "RCPDocument",
 			dependencies: [
 				"RCPPackage",
-				"DeconstructedModels"
+				"DeconstructedModels",
 			]
 		),
 		.target(
@@ -102,7 +119,7 @@ let package = Package(
 				.product(
 					name: "ComposableArchitecture",
 					package: "swift-composable-architecture"
-				)
+				),
 			]
 		),
 		.target(
@@ -111,13 +128,14 @@ let package = Package(
 				"RCPDocument",
 				"ProjectBrowserUI",
 				"ProjectBrowserFeature",
+				"SceneGraphUI",
 				"DeconstructedFeatures",
 				"ViewportUI",
 				"ViewportModels",
 				.product(
 					name: "ComposableArchitecture",
 					package: "swift-composable-architecture"
-				)
+				),
 			]
 		),
 		.target(
@@ -126,11 +144,12 @@ let package = Package(
 				"DeconstructedClients",
 				"RCPDocument",
 				"ProjectBrowserFeature",
+				"SceneGraphFeature",
 				"ViewportModels",
 				.product(
 					name: "ComposableArchitecture",
 					package: "swift-composable-architecture"
-				)
+				),
 			]
 		),
 		.target(
@@ -147,7 +166,7 @@ let package = Package(
 				.product(
 					name: "ComposableArchitecture",
 					package: "swift-composable-architecture"
-				)
+				),
 			]
 		),
 		.target(
@@ -158,14 +177,14 @@ let package = Package(
 				.product(
 					name: "ComposableArchitecture",
 					package: "swift-composable-architecture"
-				)
+				),
 			]
 		),
 		.target(
 			name: "ProjectBrowserUI",
 			dependencies: [
 				"ProjectBrowserFeature",
-				"ProjectBrowserModels"
+				"ProjectBrowserModels",
 			]
 		),
 		.target(
@@ -175,6 +194,37 @@ let package = Package(
 			name: "ViewportUI",
 			dependencies: [
 				"ViewportModels"
+			]
+		),
+		.target(
+			name: "SceneGraphModels"
+		),
+		.target(
+			name: "SceneGraphClients",
+			dependencies: [
+				"SceneGraphModels",
+				.product(
+					name: "USDInterop",
+					package: "USDInterop"
+				),
+			]
+		),
+		.target(
+			name: "SceneGraphFeature",
+			dependencies: [
+				"SceneGraphClients",
+				"SceneGraphModels",
+				.product(
+					name: "ComposableArchitecture",
+					package: "swift-composable-architecture"
+				),
+			]
+		),
+		.target(
+			name: "SceneGraphUI",
+			dependencies: [
+				"SceneGraphFeature",
+				"SceneGraphModels",
 			]
 		),
 		.testTarget(
@@ -190,7 +240,7 @@ let package = Package(
 			dependencies: [
 				"DeconstructedFeatures",
 				"ProjectBrowserFeature",
-				"DeconstructedModels"
+				"DeconstructedModels",
 			]
 		),
 	]

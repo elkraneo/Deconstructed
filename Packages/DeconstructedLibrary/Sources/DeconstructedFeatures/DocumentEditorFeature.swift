@@ -3,6 +3,7 @@ import DeconstructedModels
 import DeconstructedModels
 import Foundation
 import ProjectBrowserFeature
+import SceneGraphFeature
 import ViewportModels
 
 /// Represents an open scene tab with its viewport state
@@ -86,6 +87,7 @@ public struct DocumentEditorFeature {
         public var selectedBottomTab: BottomTab
         public var openScenes: IdentifiedArrayOf<SceneTab>
         public var projectBrowser: ProjectBrowserFeature.State
+		public var sceneNavigator: SceneGraphFeature.State
 		public var viewportShowGrid: Bool
 		public var cameraHistory: [CameraHistoryItem]
 		public var pendingCameraHistory: PendingCameraHistory?
@@ -95,6 +97,7 @@ public struct DocumentEditorFeature {
             selectedBottomTab: BottomTab = .projectBrowser,
             openScenes: IdentifiedArrayOf<SceneTab> = [],
             projectBrowser: ProjectBrowserFeature.State = ProjectBrowserFeature.State(),
+			sceneNavigator: SceneGraphFeature.State = SceneGraphFeature.State(),
 			viewportShowGrid: Bool = true,
 			cameraHistory: [CameraHistoryItem] = [],
 			pendingCameraHistory: PendingCameraHistory? = nil
@@ -103,6 +106,7 @@ public struct DocumentEditorFeature {
             self.selectedBottomTab = selectedBottomTab
             self.openScenes = openScenes
             self.projectBrowser = projectBrowser
+			self.sceneNavigator = sceneNavigator
 			self.viewportShowGrid = viewportShowGrid
 			self.cameraHistory = cameraHistory
 			self.pendingCameraHistory = pendingCameraHistory
@@ -123,8 +127,9 @@ public struct DocumentEditorFeature {
 		case frameSceneRequested
 		case frameSelectedRequested
 		case toggleGridRequested
-		case cameraHistorySelected(CameraHistoryItem.ID)
+        case cameraHistorySelected(CameraHistoryItem.ID)
         case projectBrowser(ProjectBrowserFeature.Action)
+		case sceneNavigator(SceneGraphFeature.Action)
     }
     
     public init() {}
@@ -135,6 +140,10 @@ public struct DocumentEditorFeature {
         Scope(state: \.projectBrowser, action: \.projectBrowser) {
             ProjectBrowserFeature()
         }
+
+		Scope(state: \.sceneNavigator, action: \.sceneNavigator) {
+			SceneGraphFeature()
+		}
         
         Reduce { state, action in
             switch action {
@@ -164,12 +173,17 @@ public struct DocumentEditorFeature {
 				} else {
 					state.selectedTab = nil
 				}
+				let selectedScene = selectedSceneURL(state: state)
+				state.sceneNavigator.sceneURL = selectedScene
 				guard let documentURL = state.projectBrowser.documentURL,
-				      let selectedURL = selectedSceneURL(state: state) else {
+				      let selectedURL = selectedScene else {
 					state.cameraHistory = []
-					return .none
+					return .send(.sceneNavigator(.sceneURLChanged(nil)))
 				}
-				return loadCameraHistoryEffect(documentURL: documentURL, sceneURL: selectedURL)
+				return .merge(
+					loadCameraHistoryEffect(documentURL: documentURL, sceneURL: selectedURL),
+					.send(.sceneNavigator(.sceneURLChanged(selectedURL)))
+				)
 
 			case let .cameraHistoryLoaded(items):
 				state.cameraHistory = items
@@ -185,11 +199,15 @@ public struct DocumentEditorFeature {
 				   let selectedURL = selectedSceneURL(state: state) {
 					return .merge(
 						updateUserDataEffect(state: state),
-						loadCameraHistoryEffect(documentURL: documentURL, sceneURL: selectedURL)
+						loadCameraHistoryEffect(documentURL: documentURL, sceneURL: selectedURL),
+						.send(.sceneNavigator(.sceneURLChanged(selectedURL)))
 					)
 				}
 				state.cameraHistory = []
-				return updateUserDataEffect(state: state)
+				return .merge(
+					updateUserDataEffect(state: state),
+					.send(.sceneNavigator(.sceneURLChanged(nil)))
+				)
                 
             case let .bottomTabSelected(tab):
                 state.selectedBottomTab = tab
@@ -205,10 +223,14 @@ public struct DocumentEditorFeature {
 					if let documentURL = state.projectBrowser.documentURL {
 						return .merge(
 							updateUserDataEffect(state: state),
-							loadCameraHistoryEffect(documentURL: documentURL, sceneURL: normalizedURL)
+							loadCameraHistoryEffect(documentURL: documentURL, sceneURL: normalizedURL),
+							.send(.sceneNavigator(.sceneURLChanged(normalizedURL)))
 						)
 					}
-					return updateUserDataEffect(state: state)
+					return .merge(
+						updateUserDataEffect(state: state),
+						.send(.sceneNavigator(.sceneURLChanged(normalizedURL)))
+					)
 				}
 				
 				// Open new scene
@@ -220,10 +242,14 @@ public struct DocumentEditorFeature {
 				if let documentURL = state.projectBrowser.documentURL {
 					return .merge(
 						updateUserDataEffect(state: state),
-						loadCameraHistoryEffect(documentURL: documentURL, sceneURL: normalizedURL)
+						loadCameraHistoryEffect(documentURL: documentURL, sceneURL: normalizedURL),
+						.send(.sceneNavigator(.sceneURLChanged(normalizedURL)))
 					)
 				}
-				return updateUserDataEffect(state: state)
+				return .merge(
+					updateUserDataEffect(state: state),
+					.send(.sceneNavigator(.sceneURLChanged(normalizedURL)))
+				)
                 
             case let .sceneClosed(id):
                 state.openScenes.remove(id: id)
@@ -238,11 +264,15 @@ public struct DocumentEditorFeature {
 				   let selectedURL = selectedSceneURL(state: state) {
 					return .merge(
 						updateUserDataEffect(state: state),
-						loadCameraHistoryEffect(documentURL: documentURL, sceneURL: selectedURL)
+						loadCameraHistoryEffect(documentURL: documentURL, sceneURL: selectedURL),
+						.send(.sceneNavigator(.sceneURLChanged(selectedURL)))
 					)
 				}
 				state.cameraHistory = []
-                return updateUserDataEffect(state: state)
+                return .merge(
+					updateUserDataEffect(state: state),
+					.send(.sceneNavigator(.sceneURLChanged(nil)))
+				)
 
 			case let .sceneCameraChanged(url, transform):
 				guard let documentURL = state.projectBrowser.documentURL else {
@@ -326,6 +356,9 @@ public struct DocumentEditorFeature {
                 
             case .projectBrowser:
                 return .none
+
+			case .sceneNavigator:
+				return .none
             }
         }
     }
