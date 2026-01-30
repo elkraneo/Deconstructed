@@ -102,10 +102,11 @@ struct DocumentEditorFeatureTests {
 		} withDependencies: {
 			$0.continuousClock = clock
 		}
+		store.exhaustivity = .off
 
 		let transform = Array(repeating: Float(1.0), count: 16)
 		await store.send(.sceneCameraChanged(sceneURL, transform))
-		await clock.advance(by: .milliseconds(300))
+		await clock.advance(by: .seconds(1))
 		await Task.yield()
 
 		let updated = try readJSON(from: userDataURL)

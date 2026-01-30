@@ -10,14 +10,23 @@ public struct SceneTab: Equatable, Identifiable {
     public let id: UUID
     public let fileURL: URL
     public let displayName: String
-	public let cameraTransform: [Float]?
+	public var cameraTransform: [Float]?
+	public var cameraTransformRequestID: UUID?
+	public var frameRequestID: UUID?
     
-    public init(fileURL: URL, cameraTransform: [Float]? = nil) {
+    public init(
+		fileURL: URL,
+		cameraTransform: [Float]? = nil,
+		cameraTransformRequestID: UUID? = nil,
+		frameRequestID: UUID? = nil
+	) {
         self.id = UUID()
         let normalized = normalizedSceneURL(fileURL)
         self.fileURL = normalized
         self.displayName = normalized.lastPathComponent
 		self.cameraTransform = cameraTransform
+		self.cameraTransformRequestID = cameraTransformRequestID
+		self.frameRequestID = frameRequestID
     }
 }
 
@@ -77,28 +86,44 @@ public struct DocumentEditorFeature {
         public var selectedBottomTab: BottomTab
         public var openScenes: IdentifiedArrayOf<SceneTab>
         public var projectBrowser: ProjectBrowserFeature.State
+		public var viewportShowGrid: Bool
+		public var cameraHistory: [CameraHistoryItem]
+		public var pendingCameraHistory: PendingCameraHistory?
         
         public init(
             selectedTab: EditorTab? = nil,
             selectedBottomTab: BottomTab = .projectBrowser,
             openScenes: IdentifiedArrayOf<SceneTab> = [],
-            projectBrowser: ProjectBrowserFeature.State = ProjectBrowserFeature.State()
+            projectBrowser: ProjectBrowserFeature.State = ProjectBrowserFeature.State(),
+			viewportShowGrid: Bool = true,
+			cameraHistory: [CameraHistoryItem] = [],
+			pendingCameraHistory: PendingCameraHistory? = nil
         ) {
             self.selectedTab = selectedTab
             self.selectedBottomTab = selectedBottomTab
             self.openScenes = openScenes
             self.projectBrowser = projectBrowser
+			self.viewportShowGrid = viewportShowGrid
+			self.cameraHistory = cameraHistory
+			self.pendingCameraHistory = pendingCameraHistory
         }
     }
     
     public enum Action {
 		case documentOpened(URL)
 		case workspaceRestored(WorkspaceRestore)
+		case cameraHistoryLoaded([CameraHistoryItem])
+		case gridVisibilityLoaded(Bool)
         case tabSelected(EditorTab?)
         case bottomTabSelected(BottomTab)
         case sceneOpened(URL)
         case sceneClosed(UUID)
 		case sceneCameraChanged(URL, [Float])
+		case cameraHistoryCommit(URL, [Float])
+		case frameSceneRequested
+		case frameSelectedRequested
+		case toggleGridRequested
+		case cameraHistorySelected(CameraHistoryItem.ID)
         case projectBrowser(ProjectBrowserFeature.Action)
     }
     
@@ -118,12 +143,19 @@ public struct DocumentEditorFeature {
 					if let restored = loadWorkspaceRestore(documentURL: documentURL) {
 						await send(.workspaceRestored(restored))
 					}
+					if let gridVisible = loadSettingsGridVisible(documentURL: documentURL) {
+						await send(.gridVisibilityLoaded(gridVisible))
+					}
 				}
 
 			case let .workspaceRestored(restored):
 				state.openScenes = IdentifiedArray(
 					uniqueElements: restored.openSceneURLs.map { url in
-						SceneTab(fileURL: url, cameraTransform: restored.cameraTransforms[url])
+						SceneTab(
+							fileURL: url,
+							cameraTransform: restored.cameraTransforms[url],
+							cameraTransformRequestID: restored.cameraTransforms[url] == nil ? nil : UUID()
+						)
 					}
 				)
 				if let selected = restored.selectedSceneURL,
@@ -132,10 +164,31 @@ public struct DocumentEditorFeature {
 				} else {
 					state.selectedTab = nil
 				}
+				guard let documentURL = state.projectBrowser.documentURL,
+				      let selectedURL = selectedSceneURL(state: state) else {
+					state.cameraHistory = []
+					return .none
+				}
+				return loadCameraHistoryEffect(documentURL: documentURL, sceneURL: selectedURL)
+
+			case let .cameraHistoryLoaded(items):
+				state.cameraHistory = items
+				return .none
+
+			case let .gridVisibilityLoaded(isVisible):
+				state.viewportShowGrid = isVisible
 				return .none
 
             case let .tabSelected(tab):
                 state.selectedTab = tab
+				if let documentURL = state.projectBrowser.documentURL,
+				   let selectedURL = selectedSceneURL(state: state) {
+					return .merge(
+						updateUserDataEffect(state: state),
+						loadCameraHistoryEffect(documentURL: documentURL, sceneURL: selectedURL)
+					)
+				}
+				state.cameraHistory = []
 				return updateUserDataEffect(state: state)
                 
             case let .bottomTabSelected(tab):
@@ -149,6 +202,12 @@ public struct DocumentEditorFeature {
 				if let existing = state.openScenes.first(where: { $0.fileURL == normalizedURL }) {
 					print("[DocumentEditorFeature] Scene already open, switching to tab")
 					state.selectedTab = .scene(id: existing.id)
+					if let documentURL = state.projectBrowser.documentURL {
+						return .merge(
+							updateUserDataEffect(state: state),
+							loadCameraHistoryEffect(documentURL: documentURL, sceneURL: normalizedURL)
+						)
+					}
 					return updateUserDataEffect(state: state)
 				}
 				
@@ -158,6 +217,12 @@ public struct DocumentEditorFeature {
 				state.openScenes.append(newTab)
 				state.selectedTab = .scene(id: newTab.id)
 				print("[DocumentEditorFeature] Total open scenes: \(state.openScenes.count)")
+				if let documentURL = state.projectBrowser.documentURL {
+					return .merge(
+						updateUserDataEffect(state: state),
+						loadCameraHistoryEffect(documentURL: documentURL, sceneURL: normalizedURL)
+					)
+				}
 				return updateUserDataEffect(state: state)
                 
             case let .sceneClosed(id):
@@ -169,6 +234,14 @@ public struct DocumentEditorFeature {
                         state.selectedTab = nil
                     }
                 }
+				if let documentURL = state.projectBrowser.documentURL,
+				   let selectedURL = selectedSceneURL(state: state) {
+					return .merge(
+						updateUserDataEffect(state: state),
+						loadCameraHistoryEffect(documentURL: documentURL, sceneURL: selectedURL)
+					)
+				}
+				state.cameraHistory = []
                 return updateUserDataEffect(state: state)
 
 			case let .sceneCameraChanged(url, transform):
@@ -177,8 +250,42 @@ public struct DocumentEditorFeature {
 				}
 				let title = url.deletingPathExtension().lastPathComponent
 				let clock = self.clock
+				if case .scene(let id) = state.selectedTab,
+				   var tab = state.openScenes[id: id],
+				   tab.fileURL == url {
+					tab.cameraTransform = transform
+					state.openScenes[id: id] = tab
+				}
+				state.pendingCameraHistory = PendingCameraHistory(
+					documentURL: documentURL,
+					sceneURL: url,
+					title: title,
+					transform: transform
+				)
+				return .run { send in
+					try await clock.sleep(for: cameraHistoryDebounceInterval)
+					await send(.cameraHistoryCommit(url, transform))
+				}
+				.cancellable(id: CameraHistoryDebounceId.write, cancelInFlight: true)
+
+			case let .cameraHistoryCommit(url, transform):
+				guard let documentURL = state.projectBrowser.documentURL else {
+					return .none
+				}
+				let title = url.deletingPathExtension().lastPathComponent
+				let entry = CameraHistoryItem(
+					date: Date(),
+					title: title,
+					transform: transform
+				)
+				if shouldAppendCameraHistory(entry, to: state.cameraHistory) {
+					state.cameraHistory.append(entry)
+					if state.cameraHistory.count > cameraHistoryMaxEntries {
+						state.cameraHistory.removeFirst(state.cameraHistory.count - cameraHistoryMaxEntries)
+					}
+				}
+				state.pendingCameraHistory = nil
 				return .run { _ in
-					try await clock.sleep(for: .milliseconds(300))
 					try? updateSceneCameraHistory(
 						documentURL: documentURL,
 						sceneURL: url,
@@ -186,7 +293,36 @@ public struct DocumentEditorFeature {
 						transform: transform
 					)
 				}
-				.cancellable(id: CameraHistoryDebounceId.write, cancelInFlight: true)
+
+			case .frameSceneRequested, .frameSelectedRequested:
+				guard case .scene(let id) = state.selectedTab,
+				      var tab = state.openScenes[id: id] else {
+					return .none
+				}
+				tab.frameRequestID = UUID()
+				state.openScenes[id: id] = tab
+				return .none
+
+			case .toggleGridRequested:
+				state.viewportShowGrid.toggle()
+				guard let documentURL = state.projectBrowser.documentURL else {
+					return .none
+				}
+				let isVisible = state.viewportShowGrid
+				return .run { _ in
+					try? updateSettingsGridVisible(documentURL: documentURL, isVisible: isVisible)
+				}
+
+			case let .cameraHistorySelected(id):
+				guard case .scene(let selectedId) = state.selectedTab,
+				      var tab = state.openScenes[id: selectedId],
+				      let item = state.cameraHistory.first(where: { $0.id == id }) else {
+					return .none
+				}
+				tab.cameraTransform = item.transform
+				tab.cameraTransformRequestID = UUID()
+				state.openScenes[id: selectedId] = tab
+				return .none
                 
             case .projectBrowser:
                 return .none
@@ -203,6 +339,34 @@ public struct WorkspaceRestore: Sendable, Equatable {
 	let openSceneURLs: [URL]
 	let selectedSceneURL: URL?
 	let cameraTransforms: [URL: [Float]]
+}
+
+public struct CameraHistoryItem: Equatable, Identifiable, Sendable {
+	public let id: UUID
+	public let date: Date
+	public let title: String
+	public let transform: [Float]
+
+	public init(date: Date, title: String, transform: [Float]) {
+		self.id = UUID()
+		self.date = date
+		self.title = title
+		self.transform = transform
+	}
+
+	public var displayName: String {
+		let formatter = DateFormatter()
+		formatter.dateStyle = .none
+		formatter.timeStyle = .short
+		return "\(title) — \(formatter.string(from: date))"
+	}
+}
+
+public struct PendingCameraHistory: Equatable, Sendable {
+	public let documentURL: URL
+	public let sceneURL: URL
+	public let title: String
+	public let transform: [Float]
 }
 
 private func updateUserDataEffect(state: DocumentEditorFeature.State) -> Effect<DocumentEditorFeature.Action> {
@@ -224,6 +388,54 @@ private func updateUserDataEffect(state: DocumentEditorFeature.State) -> Effect<
 			selectedSceneURL: selectedURL
 		)
 	}
+}
+
+private func selectedSceneURL(state: DocumentEditorFeature.State) -> URL? {
+	if case .scene(let id) = state.selectedTab,
+	   let tab = state.openScenes[id: id] {
+		return tab.fileURL
+	}
+	return nil
+}
+
+private func loadCameraHistoryEffect(
+	documentURL: URL,
+	sceneURL: URL
+) -> Effect<DocumentEditorFeature.Action> {
+	.run { send in
+		let items = loadCameraHistory(documentURL: documentURL, sceneURL: sceneURL)
+		await send(.cameraHistoryLoaded(items))
+	}
+}
+
+private func loadCameraHistory(documentURL: URL, sceneURL: URL) -> [CameraHistoryItem] {
+	guard let sceneUUID = sceneUUIDForURL(documentURL: documentURL, sceneURL: sceneURL) else {
+		return []
+	}
+	let workspaceURL = documentURL.appendingPathComponent("WorkspaceData")
+	guard let userDataURL = findUserDataURL(in: workspaceURL),
+	      let rootObject = loadJSONDictionary(url: userDataURL),
+	      let historyByScene = rootObject["sceneCameraHistory"] as? [String: Any] else {
+		return []
+	}
+
+	let entries: [[String: Any]] = (historyByScene[sceneUUID] as? [[String: Any]]) ?? []
+	let items: [CameraHistoryItem] = entries.compactMap { entry in
+		guard let dateValue = entry["date"] as? TimeInterval,
+		      let title = entry["title"] as? String,
+		      let transformArray = entry["transform"] as? [NSNumber],
+		      transformArray.count == 16 else {
+			return nil
+		}
+		let date = Date(timeIntervalSinceReferenceDate: dateValue)
+		let transform = transformArray.map { $0.floatValue }
+		return CameraHistoryItem(date: date, title: title, transform: transform)
+	}
+	.sorted { $0.date < $1.date }
+	if items.count <= cameraHistoryMaxEntries {
+		return items
+	}
+	return Array(items.suffix(cameraHistoryMaxEntries))
 }
 
 private func updateUserData(
@@ -314,6 +526,58 @@ private func updateSceneCameraHistory(
 	rootObject[RCUserDataKeys.sceneCameraHistory] = historyByScene
 
 	try writeJSONDictionary(rootObject, to: userDataURL)
+}
+
+private func shouldAppendCameraHistory(
+	_ entry: CameraHistoryItem,
+	to history: [CameraHistoryItem]
+) -> Bool {
+	guard let last = history.last else { return true }
+	let delta = maxAbsDelta(entry.transform, last.transform)
+	let timeDelta = entry.date.timeIntervalSince(last.date)
+	return delta >= cameraHistoryTransformThreshold || timeDelta >= cameraHistoryMinInterval
+}
+
+private func maxAbsDelta(_ lhs: [Float], _ rhs: [Float]) -> Float {
+	guard lhs.count == rhs.count else { return .infinity }
+	var maxDelta: Float = 0
+	for (a, b) in zip(lhs, rhs) {
+		let delta = abs(a - b)
+		if delta > maxDelta {
+			maxDelta = delta
+		}
+	}
+	return maxDelta
+}
+
+private let cameraHistoryDebounceInterval: Duration = .seconds(1)
+private let cameraHistoryMinInterval: TimeInterval = 2
+private let cameraHistoryTransformThreshold: Float = 0.001
+private let cameraHistoryMaxEntries: Int = 20
+
+private func loadSettingsGridVisible(documentURL: URL) -> Bool? {
+	let settingsURL = documentURL.appendingPathComponent("WorkspaceData/Settings.rcprojectdata")
+	guard let data = try? Data(contentsOf: settingsURL),
+	      let settings = try? JSONDecoder().decode(RCPSettings.self, from: data) else {
+		return nil
+	}
+	return settings.secondaryToolbarData.isGridVisible
+}
+
+private func updateSettingsGridVisible(documentURL: URL, isVisible: Bool) throws {
+	let settingsURL = documentURL.appendingPathComponent("WorkspaceData/Settings.rcprojectdata")
+	var settings: RCPSettings
+	if let data = try? Data(contentsOf: settingsURL),
+	   let decoded = try? JSONDecoder().decode(RCPSettings.self, from: data) {
+		settings = decoded
+	} else {
+		settings = RCPSettings.initial()
+	}
+	settings.secondaryToolbarData.isGridVisible = isVisible
+	let encoder = JSONEncoder()
+	encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+	let data = try encoder.encode(settings)
+	try data.write(to: settingsURL, options: .atomic)
 }
 
 private func resolveUserDataURL(in workspaceURL: URL) -> URL {

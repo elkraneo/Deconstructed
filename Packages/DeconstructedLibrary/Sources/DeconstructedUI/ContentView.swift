@@ -45,6 +45,10 @@ public struct ContentView: View {
 				store.send(.documentOpened(url))
 			}
 		}
+		.focusedSceneValue(
+			\.viewportMenuContext,
+			store.map { viewportMenuContext(store: $0) }
+		)
 	}
 	
 	// MARK: - Viewport Area (Top)
@@ -85,11 +89,16 @@ public struct ContentView: View {
 					   let sceneTab = store.openScenes[id: id] {
 						ViewportView(
 							modelURL: sceneTab.fileURL,
-							configuration: ViewportConfiguration(showGrid: true, showAxes: true),
+							configuration: ViewportConfiguration(
+								showGrid: store.viewportShowGrid,
+								showAxes: true
+							),
 							onCameraStateChanged: { transform in
 								store.send(.sceneCameraChanged(sceneTab.fileURL, transform))
 							},
-							initialCameraTransform: sceneTab.cameraTransform
+							cameraTransform: sceneTab.cameraTransform,
+							cameraTransformRequestID: sceneTab.cameraTransformRequestID,
+							frameRequestID: sceneTab.frameRequestID
 						)
 						.id(sceneTab.fileURL)
 					} else if !store.openScenes.isEmpty {
@@ -97,11 +106,16 @@ public struct ContentView: View {
 						if let firstScene = store.openScenes.first {
 							ViewportView(
 								modelURL: firstScene.fileURL,
-								configuration: ViewportConfiguration(showGrid: true, showAxes: true),
+								configuration: ViewportConfiguration(
+									showGrid: store.viewportShowGrid,
+									showAxes: true
+								),
 								onCameraStateChanged: { transform in
 									store.send(.sceneCameraChanged(firstScene.fileURL, transform))
 								},
-								initialCameraTransform: firstScene.cameraTransform
+								cameraTransform: firstScene.cameraTransform,
+								cameraTransformRequestID: firstScene.cameraTransformRequestID,
+								frameRequestID: firstScene.frameRequestID
 							)
 							.id(firstScene.fileURL)
 						}
@@ -185,6 +199,20 @@ public struct ContentView: View {
 			.frame(maxHeight: .infinity, alignment: .bottom)
 		}
 	}
+}
+
+@MainActor
+private func viewportMenuContext(store: StoreOf<DocumentEditorFeature>) -> ViewportMenuContext {
+	ViewportMenuContext(
+		canFrameScene: store.selectedTab != nil,
+		canFrameSelected: store.selectedTab != nil,
+		isGridVisible: store.viewportShowGrid,
+		cameraHistory: store.cameraHistory,
+		frameScene: { store.send(.frameSceneRequested) },
+		frameSelected: { store.send(.frameSelectedRequested) },
+		toggleGrid: { store.send(.toggleGridRequested) },
+		selectCameraHistory: { id in store.send(.cameraHistorySelected(id)) }
+	)
 }
 
 // MARK: - Tab Button

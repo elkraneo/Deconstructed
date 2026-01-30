@@ -11,25 +11,32 @@ public struct ViewportView: View {
 	/// Optional URL to load a model from
 	let modelURL: URL?
 	let onCameraStateChanged: (([Float]) -> Void)?
-	let initialCameraTransform: [Float]?
+	let cameraTransform: [Float]?
+	let cameraTransformRequestID: UUID?
+	let frameRequestID: UUID?
 
 	// Internal state
 	@State private var rootEntity: Entity?
 	@State private var cameraState = ArcballCameraState()
 	@State private var sceneBounds = SceneBounds()
 	@State private var isZUp = false
-	@State private var appliedInitialTransform = false
+	@State private var appliedCameraTransformRequestID: UUID?
+	@State private var gridEntity: Entity?
 
 	public init(
 		modelURL: URL? = nil,
 		configuration: ViewportConfiguration = ViewportConfiguration(),
 		onCameraStateChanged: (([Float]) -> Void)? = nil,
-		initialCameraTransform: [Float]? = nil
+		cameraTransform: [Float]? = nil,
+		cameraTransformRequestID: UUID? = nil,
+		frameRequestID: UUID? = nil
 	) {
 		self.modelURL = modelURL
 		self.configuration = configuration
 		self.onCameraStateChanged = onCameraStateChanged
-		self.initialCameraTransform = initialCameraTransform
+		self.cameraTransform = cameraTransform
+		self.cameraTransformRequestID = cameraTransformRequestID
+		self.frameRequestID = frameRequestID
 	}
 
 	public var body: some View {
@@ -54,6 +61,15 @@ public struct ViewportView: View {
 		)
 		.onChange(of: cameraState) { _, newState in
 			onCameraStateChanged?(matrixToArray(newState.transform))
+		}
+		.onChange(of: cameraTransformRequestID) { _, newID in
+			_ = applyCameraTransformIfNeeded(requestID: newID)
+		}
+		.onChange(of: frameRequestID) { _, _ in
+			frameScene()
+		}
+		.onChange(of: configuration.showGrid) { _, isVisible in
+			gridEntity?.isEnabled = isVisible
 		}
 	}
 
@@ -84,15 +100,16 @@ public struct ViewportView: View {
 		root.addChild(fillLight)
 
 		// Grid
-		if configuration.showGrid {
-			let grid = RealityKitGrid.createGridEntity(
-				metersPerUnit: configuration.metersPerUnit,
-				worldExtent: Double(sceneBounds.maxExtent)
-					* configuration.metersPerUnit,
-				isZUp: isZUp
-			)
-			root.addChild(grid)
-		}
+		let grid = RealityKitGrid.createGridEntity(
+			metersPerUnit: configuration.metersPerUnit,
+			worldExtent: Double(sceneBounds.maxExtent)
+				* configuration.metersPerUnit,
+			isZUp: isZUp
+		)
+		grid.isEnabled = configuration.showGrid
+		grid.name = "Grid"
+		root.addChild(grid)
+		gridEntity = grid
 
 		// Camera
 		let camera = PerspectiveCamera()
@@ -128,32 +145,11 @@ public struct ViewportView: View {
 				let bounds = entity.visualBounds(relativeTo: nil)
 				sceneBounds = SceneBounds(min: bounds.min, max: bounds.max)
 
-				if !appliedInitialTransform,
-					let initialCameraTransform,
-					let matrix = matrixFromArray(initialCameraTransform),
-					let restoredState = cameraStateFromTransform(
-						matrix,
-						focus: bounds.center
-					)
-				{
-					cameraState = restoredState
-					appliedInitialTransform = true
-				} else {
-					// Dynamic Camera Framing
-					let extents = bounds.extents
-					let center = bounds.center
-					let maxDim = max(extents.x, max(extents.y, extents.z))
-
-					let fov: Float = 60.0 * .pi / 180.0
-					let tanFov = tan(fov / 2.0)
-					let distance = maxDim / (2.0 * tanFov)
-					let clampedDistance = max(distance, 0.05)
-
-					var newState = ArcballCameraState()
-					newState.focus = center
-					newState.distance = clampedDistance * 1.5
-					newState.rotation = SIMD3<Float>(-20 * .pi / 180, 0, 0)
-					cameraState = newState
+				if applyCameraTransformIfNeeded(
+					requestID: cameraTransformRequestID,
+					focus: bounds.center
+				) == false {
+					frameScene(bounds: bounds)
 				}
 			}
 		} catch {
@@ -171,6 +167,53 @@ public struct ViewportView: View {
 			return
 		}
 		camera.transform.matrix = state.transform
+	}
+}
+
+private extension ViewportView {
+	@MainActor
+	func applyCameraTransformIfNeeded(
+		requestID: UUID?,
+		focus: SIMD3<Float>? = nil
+	) -> Bool {
+		guard let requestID,
+		      appliedCameraTransformRequestID != requestID,
+		      let cameraTransform,
+		      let matrix = matrixFromArray(cameraTransform) else {
+			return false
+		}
+		let focusPoint = focus ?? sceneBounds.center
+		guard let restoredState = cameraStateFromTransform(matrix, focus: focusPoint) else {
+			return false
+		}
+		cameraState = restoredState
+		appliedCameraTransformRequestID = requestID
+		return true
+	}
+
+	@MainActor
+	func frameScene(bounds: BoundingBox? = nil) {
+		let bounds = bounds ?? BoundingBox(min: sceneBounds.min, max: sceneBounds.max)
+		frameScene(bounds: bounds)
+	}
+
+	@MainActor
+	func frameScene(bounds: BoundingBox) {
+		let extents = bounds.extents
+		let center = bounds.center
+		let maxDim = max(extents.x, max(extents.y, extents.z))
+		guard maxDim > 0 else { return }
+
+		let fov: Float = 60.0 * .pi / 180.0
+		let tanFov = tan(fov / 2.0)
+		let distance = maxDim / (2.0 * tanFov)
+		let clampedDistance = max(distance, 0.05)
+
+		var newState = ArcballCameraState()
+		newState.focus = center
+		newState.distance = clampedDistance * 1.5
+		newState.rotation = SIMD3<Float>(-20 * .pi / 180, 0, 0)
+		cameraState = newState
 	}
 }
 

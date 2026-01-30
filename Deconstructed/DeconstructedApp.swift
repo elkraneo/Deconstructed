@@ -37,6 +37,9 @@ struct DeconstructedApp: App {
 				}
 				.keyboardShortcut("n", modifiers: .command)
 			}
+			CommandMenu("Viewport") {
+				ViewportMenuItems()
+			}
 		}
 
 		Window("Welcome to Deconstructed", id: "welcome") {
