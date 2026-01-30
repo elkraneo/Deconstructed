@@ -179,7 +179,8 @@ public struct ProjectBrowserFeature {
 				state.selectedItems = [id]
 				return .none
 
-			case .itemDoubleClicked:
+			case let .itemDoubleClicked(id):
+				state.selectedItems = [id]
 				return .none
 
 			case .selectionCleared:

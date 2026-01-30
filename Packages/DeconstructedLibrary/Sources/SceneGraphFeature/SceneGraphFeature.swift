@@ -34,8 +34,8 @@ public struct SceneGraphFeature {
 	public enum Action: Equatable, BindableAction {
 		case binding(BindingAction<State>)
 		case sceneURLChanged(URL?)
-		case sceneGraphLoaded([SceneNode])
-		case loadingFailed(String)
+		case sceneGraphLoaded(URL, [SceneNode])
+		case loadingFailed(URL, String)
 		case selectionChanged(SceneNode.ID?)
 		case refreshRequested
 	}
@@ -66,18 +66,25 @@ public struct SceneGraphFeature {
 				return .run { send in
 					do {
 						let nodes = try await sceneGraphClient.loadSceneGraph(url)
-						await send(.sceneGraphLoaded(nodes))
+						await send(.sceneGraphLoaded(url, nodes))
 					} catch {
-						await send(.loadingFailed(error.localizedDescription))
+						await send(.loadingFailed(url, error.localizedDescription))
 					}
 				}
+				.cancellable(id: SceneGraphLoadCancellationID.load, cancelInFlight: true)
 
-			case let .sceneGraphLoaded(nodes):
+			case let .sceneGraphLoaded(url, nodes):
+				guard state.sceneURL == url else {
+					return .none
+				}
 				state.nodes = nodes
 				state.isLoading = false
 				return .none
 
-			case let .loadingFailed(message):
+			case let .loadingFailed(url, message):
+				guard state.sceneURL == url else {
+					return .none
+				}
 				state.errorMessage = message
 				state.isLoading = false
 				return .none
@@ -95,12 +102,17 @@ public struct SceneGraphFeature {
 				return .run { send in
 					do {
 						let nodes = try await sceneGraphClient.loadSceneGraph(url)
-						await send(.sceneGraphLoaded(nodes))
+						await send(.sceneGraphLoaded(url, nodes))
 					} catch {
-						await send(.loadingFailed(error.localizedDescription))
+						await send(.loadingFailed(url, error.localizedDescription))
 					}
 				}
+				.cancellable(id: SceneGraphLoadCancellationID.load, cancelInFlight: true)
 			}
 		}
 	}
+}
+
+private enum SceneGraphLoadCancellationID {
+	case load
 }
