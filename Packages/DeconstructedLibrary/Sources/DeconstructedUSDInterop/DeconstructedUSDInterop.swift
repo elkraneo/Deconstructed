@@ -65,17 +65,17 @@ public enum DeconstructedUSDInterop {
 	public static func applySchema(url: URL, primPath: String, schema: SchemaSpec) throws {
 		let stage = try openStage(url)
 		let prim = try resolvePrim(stage: stage, primPath: primPath)
-		let schemaToken = pxr.TfToken(std.string(schema.identifier))
+		let schemaToken = TfToken(std.string(schema.identifier))
 		let applied: Bool
 		switch schema.kind {
 		case .api:
 			applied = prim.ApplyAPI(schemaToken)
 		case let .multipleApplyAPI(instanceName):
-			let instanceToken = pxr.TfToken(std.string(instanceName))
+			let instanceToken = TfToken(std.string(instanceName))
 			applied = prim.ApplyAPI(schemaToken, instanceToken)
 		case .typed:
 			prim.SetTypeName(schemaToken)
-			applied = true
+			applied = prim.GetTypeName() == schemaToken
 		}
 		guard applied else {
 			throw DeconstructedUSDInteropError.applySchemaFailed(schema: schema.identifier, primPath: primPath)
@@ -90,28 +90,29 @@ public enum DeconstructedUSDInterop {
 		throw DeconstructedUSDInteropError.notImplemented
 	}
 
-	private static func openStage(_ url: URL) throws -> pxr.UsdStage {
-		let stageRef = pxr.UsdStage.Open(std.string(url.path))
-		guard let stage = Overlay.DereferenceOrNil(stageRef) else {
+	private static func openStage(_ url: URL) throws -> UsdStage {
+		let stageRef = UsdStage.Open(std.string(url.path), UsdStage.InitialLoadSet.LoadAll)
+		guard stageRef._isNonnull() else {
 			throw DeconstructedUSDInteropError.stageOpenFailed(url)
 		}
-		return stage
+		return OpenUSD.Overlay.Dereference(stageRef)
 	}
 
-	private static func resolvePrim(stage: pxr.UsdStage, primPath: String) throws -> pxr.UsdPrim {
-		let path = pxr.SdfPath(std.string(primPath))
+	private static func resolvePrim(stage: UsdStage, primPath: String) throws -> UsdPrim {
+		let path = SdfPath(std.string(primPath))
 		let prim = stage.GetPrimAtPath(path)
-		guard Bool(prim) else {
+		guard prim.IsValid() else {
 			throw DeconstructedUSDInteropError.primNotFound(primPath)
 		}
 		return prim
 	}
 
-	private static func save(stage: pxr.UsdStage, url: URL) throws {
-		let rootLayerHandle = stage.GetRootLayer()
-		guard let rootLayer = Overlay.DereferenceOrNil(rootLayerHandle) else {
+	private static func save(stage: UsdStage, url: URL) throws {
+		let rootLayerHandle: SdfLayerHandle = stage.GetRootLayer()
+		guard rootLayerHandle._isNonnull() else {
 			throw DeconstructedUSDInteropError.rootLayerMissing(url)
 		}
+		let rootLayer = OpenUSD.Overlay.Dereference(rootLayerHandle)
 		guard rootLayer.Save() else {
 			throw DeconstructedUSDInteropError.saveFailed(url)
 		}

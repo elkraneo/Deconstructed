@@ -236,12 +236,11 @@ let package = Package(
 			name: "DeconstructedUSDInterop",
 			dependencies: [
 				.product(name: "OpenUSD", package: "SwiftUsd"),
-				.product(name: "CxxStdlib", package: "SwiftUsd"),
 			],
 			swiftSettings: [
 				.interoperabilityMode(.Cxx),
 				.unsafeFlags(
-					["-Xfrontend", "-disable-cmo"],
+					["-disable-cmo"],
 					.when(configuration: .release)
 				),
 			]
