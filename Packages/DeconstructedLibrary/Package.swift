@@ -217,6 +217,10 @@ let package = Package(
 					name: "USDInterop",
 					package: "USDInterop"
 				),
+				.product(
+					name: "ComposableArchitecture",
+					package: "swift-composable-architecture"
+				),
 			]
 		),
 		.target(
