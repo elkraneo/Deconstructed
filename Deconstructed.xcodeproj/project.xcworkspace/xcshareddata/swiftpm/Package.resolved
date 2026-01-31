@@ -69,8 +69,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/swift-custom-dump",
       "state" : {
-        "revision" : "93a8aa4937030b606de42f44b17870249f49af0b",
-        "version" : "1.3.4"
+        "revision" : "2a2a938798236b8fa0bc57c453ee9de9f9ec3ab0",
+        "version" : "1.4.1"
       }
     },
     {
@@ -142,7 +142,7 @@
       "location" : "https://github.com/elkraneo/USDInterop",
       "state" : {
         "branch" : "main",
-        "revision" : "e4a400059c10119a501e0b020fcff56a9601e2f5"
+        "revision" : "c4e24a65afb38b956267c6d961b4b46d89f2e22b"
       }
     },
     {
