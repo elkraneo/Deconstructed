@@ -11,7 +11,6 @@
 		6C27E524610F4C0B8B20D3E6 /* RCPDocument in Frameworks */ = {isa = PBXBuildFile; productRef = B0EBBEFCE3604A0A933EC5BE /* RCPDocument */; };
 		9991B6348A2042B7BDCA5674 /* DeconstructedFeatures in Frameworks */ = {isa = PBXBuildFile; productRef = 5F6C1ACCAF07417D86212E58 /* DeconstructedFeatures */; };
 		A4BC991C920D4E4F8F5A464A /* DeconstructedClients in Frameworks */ = {isa = PBXBuildFile; productRef = 4C624E32E7E6488699328A16 /* DeconstructedClients */; };
-		AEE948E12F2CF42E00902A36 /* USDInterop in Frameworks */ = {isa = PBXBuildFile; productRef = AEE948E02F2CF42E00902A36 /* USDInterop */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -49,7 +48,6 @@
 				6C27E524610F4C0B8B20D3E6 /* RCPDocument in Frameworks */,
 				9991B6348A2042B7BDCA5674 /* DeconstructedFeatures in Frameworks */,
 				A4BC991C920D4E4F8F5A464A /* DeconstructedClients in Frameworks */,
-				AEE948E12F2CF42E00902A36 /* USDInterop in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -113,7 +111,6 @@
 				B0EBBEFCE3604A0A933EC5BE /* RCPDocument */,
 				5F6C1ACCAF07417D86212E58 /* DeconstructedFeatures */,
 				4C624E32E7E6488699328A16 /* DeconstructedClients */,
-				AEE948E02F2CF42E00902A36 /* USDInterop */,
 			);
 			productName = Deconstructed;
 			productReference = AE746AF72F278AE90087A28B /* Deconstructed.app */;
@@ -144,7 +141,6 @@
 			mainGroup = AE746AEE2F278AE90087A28B;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				AEE948DF2F2CF42E00902A36 /* XCLocalSwiftPackageReference "../../../USDInterop" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = AE746AF82F278AE90087A28B /* Products */;
@@ -412,13 +408,6 @@
 		};
 /* End XCConfigurationList section */
 
-/* Begin XCLocalSwiftPackageReference section */
-		AEE948DF2F2CF42E00902A36 /* XCLocalSwiftPackageReference "../../../USDInterop" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = ../../../USDInterop;
-		};
-/* End XCLocalSwiftPackageReference section */
-
 /* Begin XCSwiftPackageProductDependency section */
 		48ECA5A5964B403CB25F24F7 /* DeconstructedUI */ = {
 			isa = XCSwiftPackageProductDependency;
@@ -431,10 +420,6 @@
 		5F6C1ACCAF07417D86212E58 /* DeconstructedFeatures */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = DeconstructedFeatures;
-		};
-		AEE948E02F2CF42E00902A36 /* USDInterop */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = USDInterop;
 		};
 		B0EBBEFCE3604A0A933EC5BE /* RCPDocument */ = {
 			isa = XCSwiftPackageProductDependency;
