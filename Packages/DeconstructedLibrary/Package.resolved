@@ -1,6 +1,15 @@
 {
-  "originHash" : "c3e61edf1d3becf7038b40b28fe173547ec436c6dc4c8c0655b37d238086f455",
+  "originHash" : "43e6122470eaec15123bbdff95e7e6ba01aaf22a3c77751b637c1859520238cd",
   "pins" : [
+    {
+      "identity" : "appleusdschemas",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/StepIntoVision/AppleUSDSchemas",
+      "state" : {
+        "branch" : "main",
+        "revision" : "1449bfae27990c2694ae4aecd85e9f786a88019b"
+      }
+    },
     {
       "identity" : "combine-schedulers",
       "kind" : "remoteSourceControl",
@@ -133,7 +142,16 @@
       "location" : "https://github.com/elkraneo/USDInterop",
       "state" : {
         "branch" : "main",
-        "revision" : "8c2e5edd89d063e3a33d2784492269588512fac5"
+        "revision" : "c4e24a65afb38b956267c6d961b4b46d89f2e22b"
+      }
+    },
+    {
+      "identity" : "usdinteropadvanced",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/elkraneo/USDInteropAdvanced",
+      "state" : {
+        "branch" : "main",
+        "revision" : "c3ebf285fa20014e12b9d972088b44bcd1067e99"
       }
     },
     {
