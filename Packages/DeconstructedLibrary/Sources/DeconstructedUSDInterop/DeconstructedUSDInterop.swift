@@ -1,6 +1,7 @@
-import CxxStdlib
 import Foundation
-import OpenUSD
+import USDInterfaces
+import USDInterop
+import USDInteropAdvanced
 
 public enum DeconstructedUSDInteropError: Error, LocalizedError, Sendable {
 	case stageOpenFailed(URL)
@@ -52,35 +53,23 @@ public struct EditOp: Sendable, Hashable {
 }
 
 public enum DeconstructedUSDInterop {
+	private static let advancedClient = USDAdvancedClient()
+
 	public static func setDefaultPrim(url: URL, primPath: String) throws {
-		let stage = try openStage(url)
-		let prim = try resolvePrim(stage: stage, primPath: primPath)
-		let didSet = stage.SetDefaultPrim(prim)
-		guard didSet else {
-			throw DeconstructedUSDInteropError.setDefaultPrimFailed(primPath)
+		do {
+			try advancedClient.setDefaultPrim(url: url, primPath: primPath)
+		} catch {
+			throw mapAdvancedError(error, url: url, primPath: primPath, schema: nil)
 		}
-		try save(stage: stage, url: url)
 	}
 
 	public static func applySchema(url: URL, primPath: String, schema: SchemaSpec) throws {
-		let stage = try openStage(url)
-		let prim = try resolvePrim(stage: stage, primPath: primPath)
-		let schemaToken = TfToken(std.string(schema.identifier))
-		let applied: Bool
-		switch schema.kind {
-		case .api:
-			applied = prim.ApplyAPI(schemaToken)
-		case let .multipleApplyAPI(instanceName):
-			let instanceToken = TfToken(std.string(instanceName))
-			applied = prim.ApplyAPI(schemaToken, instanceToken)
-		case .typed:
-			prim.SetTypeName(schemaToken)
-			applied = prim.GetTypeName() == schemaToken
+		let spec = USDSchemaSpec(identifier: schema.identifier, kind: mapSchemaKind(schema.kind))
+		do {
+			try advancedClient.applySchema(url: url, primPath: primPath, schema: spec)
+		} catch {
+			throw mapAdvancedError(error, url: url, primPath: primPath, schema: schema.identifier)
 		}
-		guard applied else {
-			throw DeconstructedUSDInteropError.applySchemaFailed(schema: schema.identifier, primPath: primPath)
-		}
-		try save(stage: stage, url: url)
 	}
 
 	public static func editHierarchy(url: URL, edits: [EditOp]) throws {
@@ -90,31 +79,53 @@ public enum DeconstructedUSDInterop {
 		throw DeconstructedUSDInteropError.notImplemented
 	}
 
-	private static func openStage(_ url: URL) throws -> UsdStage {
-		let stageRef = UsdStage.Open(std.string(url.path), UsdStage.InitialLoadSet.LoadAll)
-		guard stageRef._isNonnull() else {
-			throw DeconstructedUSDInteropError.stageOpenFailed(url)
+	/// Compute scene bounds by iterating mesh points.
+	/// Returns (min, max, center, maxExtent) for camera framing.
+	public static func getSceneBounds(url: URL) throws -> (
+		min: SIMD3<Float>, max: SIMD3<Float>, center: SIMD3<Float>, maxExtent: Float
+	) {
+		if let bounds = USDInteropStage.sceneBounds(url: url) {
+			return (min: bounds.min, max: bounds.max, center: bounds.center, maxExtent: bounds.maxExtent)
 		}
-		return OpenUSD.Overlay.Dereference(stageRef)
+		return (min: .zero, max: .zero, center: .zero, maxExtent: 0)
 	}
 
-	private static func resolvePrim(stage: UsdStage, primPath: String) throws -> UsdPrim {
-		let path = SdfPath(std.string(primPath))
-		let prim = stage.GetPrimAtPath(path)
-		guard prim.IsValid() else {
-			throw DeconstructedUSDInteropError.primNotFound(primPath)
+	private static func mapSchemaKind(_ kind: SchemaSpec.Kind) -> USDSchemaSpec.Kind {
+		switch kind {
+		case .api:
+			return .api
+		case let .multipleApplyAPI(instanceName):
+			return .multipleApplyAPI(instanceName: instanceName)
+		case .typed:
+			return .typed
 		}
-		return prim
 	}
 
-	private static func save(stage: UsdStage, url: URL) throws {
-		let rootLayerHandle: SdfLayerHandle = stage.GetRootLayer()
-		guard rootLayerHandle._isNonnull() else {
-			throw DeconstructedUSDInteropError.rootLayerMissing(url)
+	private static func mapAdvancedError(
+		_ error: Error,
+		url: URL,
+		primPath: String,
+		schema: String?
+	) -> Error {
+		if let advancedError = error as? USDAdvancedError {
+			switch advancedError {
+			case .stageOpenFailed:
+				return DeconstructedUSDInteropError.stageOpenFailed(url)
+			case .primNotFound:
+				return DeconstructedUSDInteropError.primNotFound(primPath)
+			case .rootLayerMissing:
+				return DeconstructedUSDInteropError.rootLayerMissing(url)
+			case .saveFailed:
+				return DeconstructedUSDInteropError.saveFailed(url)
+			case .applySchemaFailed:
+				return DeconstructedUSDInteropError.applySchemaFailed(
+					schema: schema ?? "Unknown",
+					primPath: primPath
+				)
+			case .invalidScope, .variantSetNotFound:
+				return error
+			}
 		}
-		let rootLayer = OpenUSD.Overlay.Dereference(rootLayerHandle)
-		guard rootLayer.Save() else {
-			throw DeconstructedUSDInteropError.saveFailed(url)
-		}
+		return error
 	}
 }

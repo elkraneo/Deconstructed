@@ -89,7 +89,7 @@ let package = Package(
 			from: "1.23.1"
 		),
 		.package(url: "https://github.com/elkraneo/USDInterop", branch: "main"),
-		.package(url: "https://github.com/apple/SwiftUsd.git", from: "5.2.0"),
+		.package(url: "https://github.com/elkraneo/USDInteropAdvanced", branch: "main"),
 	],
 	targets: [
 		// Targets are the basic building blocks of a package, defining a module or a test suite.
@@ -169,6 +169,10 @@ let package = Package(
 				"ProjectBrowserModels",
 				"DeconstructedModels",
 				.product(
+					name: "USDInterop",
+					package: "USDInterop"
+				),
+				.product(
 					name: "ComposableArchitecture",
 					package: "swift-composable-architecture"
 				),
@@ -236,15 +240,11 @@ let package = Package(
 		.target(
 			name: "DeconstructedUSDInterop",
 			dependencies: [
-				.product(name: "OpenUSD", package: "SwiftUsd"),
+				.product(name: "USDInterfaces", package: "USDInterop"),
+				.product(name: "USDInterop", package: "USDInterop"),
+				.product(name: "USDInteropAdvanced", package: "USDInteropAdvanced"),
 			],
-			swiftSettings: [
-				.interoperabilityMode(.Cxx),
-				.unsafeFlags(
-					["-disable-cmo"],
-					.when(configuration: .release)
-				),
-			]
+			swiftSettings: []
 		),
 		.testTarget(
 			name: "DeconstructedCoreTests",
