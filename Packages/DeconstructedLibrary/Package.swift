@@ -188,6 +188,7 @@ let package = Package(
 		.target(
 			name: "ProjectBrowserUI",
 			dependencies: [
+				"ProjectBrowserClients",
 				"ProjectBrowserFeature",
 				"ProjectBrowserModels",
 			]

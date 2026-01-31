@@ -1,6 +1,7 @@
-import Foundation
 import AppKit
 import ComposableArchitecture
+import CryptoKit
+import Foundation
 
 @DependencyClient
 public struct ThumbnailClient: Sendable {
@@ -22,15 +23,21 @@ extension ThumbnailClient: DependencyKey {
 public actor ThumbnailGenerator {
 	private let cacheDirectory: URL
 	private var inFlightTasks: [URL: Task<NSImage?, Never>] = [:]
+	private let renderSize: CGFloat = 512
 
 	public init() {
-		self.cacheDirectory = FileManager.default.temporaryDirectory
-			.appendingPathComponent("DeconstructedThumbnails", isDirectory: true)
+		let bundleID = Bundle.main.bundleIdentifier ?? "com.stepintovision.Deconstructed"
+		self.cacheDirectory = FileManager.default
+			.urls(for: .cachesDirectory, in: .userDomainMask)
+			.first?
+			.appendingPathComponent(bundleID, isDirectory: true)
+			.appendingPathComponent("Thumbnails", isDirectory: true)
+			?? FileManager.default.temporaryDirectory.appendingPathComponent("DeconstructedThumbnails", isDirectory: true)
 		try? FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
 	}
 
 	public func thumbnail(for url: URL, size: CGFloat = 256) async -> NSImage? {
-		let cacheKey = url.path.data(using: .utf8)!.base64EncodedString()
+		let cacheKey = cacheKeyBase(for: url)
 		let cachedPath = cacheDirectory.appendingPathComponent("\(cacheKey).png")
 
 		if FileManager.default.fileExists(atPath: cachedPath.path) {
@@ -42,7 +49,7 @@ public actor ThumbnailGenerator {
 		}
 
 		let task = Task<NSImage?, Never> {
-			return await generateThumbnail(url: url, output: cachedPath, size: size)
+			return await generateThumbnail(url: url, output: cachedPath, size: renderSize)
 		}
 		inFlightTasks[url] = task
 		let result = await task.value
@@ -76,8 +83,19 @@ public actor ThumbnailGenerator {
 	}
 
 	public func invalidateCache(for url: URL) {
-		let cacheKey = url.path.data(using: .utf8)!.base64EncodedString()
+		let cacheKey = cacheKeyBase(for: url)
 		let cachedPath = cacheDirectory.appendingPathComponent("\(cacheKey).png")
 		try? FileManager.default.removeItem(at: cachedPath)
+	}
+
+	private func cacheKeyBase(for url: URL) -> String {
+		let digest = Insecure.MD5.hash(data: Data(hashInput(for: url).utf8))
+		return digest.map { String(format: "%02x", $0) }.joined()
+	}
+
+	private func hashInput(for url: URL) -> String {
+		// Mirrors RCP shape (MD5 hex filename) with an easily swappable input source.
+		// Replace this when we discover RCP's internal hashing input.
+		url.standardizedFileURL.absoluteString
 	}
 }
