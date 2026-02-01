@@ -14,13 +14,13 @@ extension ThumbnailClient: DependencyKey {
 	public static let liveValue: Self = {
 		let generator = ThumbnailGenerator()
 		return Self(
-			generate: { url, size in await generator.thumbnail(for: url, size: size) },
-			invalidate: { url in await generator.invalidateCache(for: url) }
+			generate: { @Sendable url, size in await generator.thumbnail(for: url, size: size) },
+			invalidate: { @Sendable url in await generator.invalidateCache(for: url) }
 		)
 	}()
 }
 
-public final class ThumbnailGenerator: @unchecked Sendable {
+public actor ThumbnailGenerator {
 	private let cacheDirectory: URL
 	private let renderSize: CGFloat = 512
 
@@ -39,11 +39,15 @@ public final class ThumbnailGenerator: @unchecked Sendable {
 		let cacheKey = cacheKeyBase(for: url)
 		let cachedPath = cacheDirectory.appendingPathComponent("\(cacheKey).png")
 
+		// Check for cached thumbnail - use Data-based loading for reliability
 		if FileManager.default.fileExists(atPath: cachedPath.path) {
-			if let cachedImage = NSImage(contentsOf: cachedPath),
+			if let imageData = try? Data(contentsOf: cachedPath),
+			   let cachedImage = NSImage(data: imageData),
 			   cachedImage.size.width > 0, cachedImage.size.height > 0 {
+				print("[ThumbnailGenerator] Using cached thumbnail for: \(url.lastPathComponent)")
 				return cachedImage
 			} else {
+				print("[ThumbnailGenerator] Invalid cache entry, removing: \(url.lastPathComponent)")
 				try? FileManager.default.removeItem(at: cachedPath)
 			}
 		}
@@ -64,46 +68,71 @@ public final class ThumbnailGenerator: @unchecked Sendable {
 	}
 
 	private func generateThumbnailWithBounds(url: URL, output: URL, size: CGFloat, bounds: USDInteropStage.SceneBounds) async -> NSImage? {
+		// Default camera is at (0, 0, 10) looking at origin
+		// We want to position camera based on scene bounds
 		let fov: Float = 60.0 * .pi / 180.0
-		let distance = bounds.maxExtent / (2.0 * tan(fov / 2.0)) * 1.5
+		let distance = bounds.maxExtent / (2.0 * tan(fov / 2.0)) * 2.0 // 2x for safety margin
 
+		// Position camera at isometric angle
 		let yawDeg: Float = 45.0
-		let pitchDeg: Float = 20.0
+		let pitchDeg: Float = 30.0
 		let yaw = yawDeg * .pi / 180.0
 		let pitch = pitchDeg * .pi / 180.0
 
-		let cameraPos = bounds.center + SIMD3<Float>(
+		// Calculate camera position relative to scene center
+		let offset = SIMD3<Float>(
 			distance * sin(yaw) * cos(pitch),
 			distance * sin(pitch),
 			distance * cos(yaw) * cos(pitch)
 		)
+		let cameraPos = bounds.center + offset
 
-		let dir = bounds.center - cameraPos
-		let horizontalDist = sqrt(dir.x * dir.x + dir.z * dir.z)
-		let rotateY = atan2(dir.x, dir.z) * 180.0 / .pi
-		let rotateX = -atan2(dir.y, horizontalDist) * 180.0 / .pi
+		// Camera rotation uses the same yaw/pitch angles used for positioning.
+		// The camera looks DOWN at the scene, so pitch is negated.
+		// rotateY (yaw) rotates the camera to face the scene.
+		let rotateX = -pitchDeg  // Negative pitch to look down at the scene
+		let rotateY = yawDeg     // Same yaw angle used for camera position
 
+		print("[ThumbnailGenerator] Camera position: (\(cameraPos.x), \(cameraPos.y), \(cameraPos.z))")
+		print("[ThumbnailGenerator] Camera rotation: (\(rotateX), \(rotateY), 0)")
+		print("[ThumbnailGenerator] Scene bounds center: (\(bounds.center.x), \(bounds.center.y), \(bounds.center.z))")
+		print("[ThumbnailGenerator] Scene maxExtent: \(bounds.maxExtent)")
+
+			// Position camera and rotate it to look at the scene.
+		// xformOpOrder applies left-to-right: translate to position, then rotate in place.
+		
 		let sessionLayer = """
 		#usda 1.0
 		(
 		    doc = "Deconstructed thumbnail session layer"
+		    metersPerUnit = 1
+		    upAxis = "Y"
 		)
 
-		def Camera "ThumbnailCamera"
+		def Xform "CameraXform"
 		{
-		    float focalLength = 35
-		    float horizontalAperture = 36
-		    float verticalAperture = 24
-		    float2 clippingRange = (0.01, 100000)
 		    float3 xformOp:translate = (\(cameraPos.x), \(cameraPos.y), \(cameraPos.z))
 		    float3 xformOp:rotateXYZ = (\(rotateX), \(rotateY), 0)
 		    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ"]
+
+		    def Camera "ThumbnailCamera"
+		    {
+		        float focalLength = 50
+		        float horizontalAperture = 36
+		        float verticalAperture = 24
+		        float2 clippingRange = (0.001, 10000)
+		        token projection = "perspective"
+		    }
 		}
 		"""
 
 		let sessionURL = FileManager.default.temporaryDirectory.appendingPathComponent("thumb_\(UUID().uuidString).usda")
 		do {
 			try sessionLayer.write(to: sessionURL, atomically: true, encoding: .utf8)
+			// Debug: print the session layer
+			if let content = try? String(contentsOf: sessionURL, encoding: .utf8) {
+				print("[ThumbnailGenerator] Session layer contents:\n\(content)")
+			}
 		} catch {
 			print("[ThumbnailGenerator] Failed to write session layer: \(error)")
 			return nil
@@ -111,7 +140,7 @@ public final class ThumbnailGenerator: @unchecked Sendable {
 
 		defer { try? FileManager.default.removeItem(at: sessionURL) }
 
-		return await runUsdrecord(url: url, output: output, size: size, sessionLayer: sessionURL, cameraName: "ThumbnailCamera")
+		return await runUsdrecord(url: url, output: output, size: size, sessionLayer: sessionURL, cameraName: "/CameraXform/ThumbnailCamera")
 	}
 
 	private func generateThumbnailWithDefaultCamera(url: URL, output: URL, size: CGFloat) async -> NSImage? {
@@ -141,15 +170,47 @@ public final class ThumbnailGenerator: @unchecked Sendable {
 			arguments.append(output.path)
 
 			process.arguments = arguments
+			
+			print("[ThumbnailGenerator] Running usdrecord for: \(url.lastPathComponent)")
+			print("[ThumbnailGenerator] Output path: \(output.path)")
 
 			do {
 				try process.run()
 				process.waitUntilExit()
 
 				if process.terminationStatus == 0 {
-					continuation.resume(returning: NSImage(contentsOf: output))
+					// Check if file exists and has content
+					let fileManager = FileManager.default
+					if fileManager.fileExists(atPath: output.path) {
+						if let attrs = try? fileManager.attributesOfItem(atPath: output.path),
+						   let fileSize = attrs[.size] as? UInt64 {
+							print("[ThumbnailGenerator] Output file exists, size: \(fileSize) bytes")
+							
+						if fileSize > 0 {
+							// Small delay to ensure file is fully written and flushed
+							Thread.sleep(forTimeInterval: 0.05) // 50ms
+							
+							// Load image using Data for better compatibility
+							if let imageData = try? Data(contentsOf: output),
+							   let image = NSImage(data: imageData) {
+								print("[ThumbnailGenerator] Successfully loaded image: \(image.size.width)x\(image.size.height)")
+								continuation.resume(returning: image)
+								return
+							} else {
+								print("[ThumbnailGenerator] Failed to load NSImage from output file")
+							}
+						} else {
+								print("[ThumbnailGenerator] Output file is empty")
+							}
+						} else {
+							print("[ThumbnailGenerator] Could not get file attributes")
+						}
+					} else {
+						print("[ThumbnailGenerator] Output file does not exist: \(output.path)")
+					}
+					continuation.resume(returning: nil)
 				} else {
-					print("[ThumbnailGenerator] usdrecord failed: \(process.terminationStatus)")
+					print("[ThumbnailGenerator] usdrecord failed with exit code: \(process.terminationStatus)")
 					continuation.resume(returning: nil)
 				}
 			} catch {

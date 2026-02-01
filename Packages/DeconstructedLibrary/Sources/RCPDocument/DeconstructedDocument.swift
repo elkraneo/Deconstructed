@@ -36,7 +36,53 @@ public struct DeconstructedDocument: FileDocument {
 	}
 
 	public func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
+		// If we have a document URL, rebuild the FileWrapper from disk
+		// to avoid lazy-loading issues with stale file references
+		if let docURL = documentURL {
+			return try createFileWrapperFromDisk(at: docURL)
+		}
+		// Otherwise return the in-memory bundle (for new documents)
 		return package.bundle
+	}
+
+	/// Creates a fresh FileWrapper by reading all contents from disk.
+	/// This avoids lazy-loading issues that occur when FileWrappers reference
+	/// files that have been moved or deleted.
+	private func createFileWrapperFromDisk(at url: URL) throws -> FileWrapper {
+		let fileManager = FileManager.default
+		let keys: [URLResourceKey] = [.isDirectoryKey, .nameKey]
+
+		// Check if this is a file or directory
+		let resourceValues = try url.resourceValues(forKeys: Set(keys))
+		let isDirectory = resourceValues.isDirectory ?? false
+		let name = resourceValues.name ?? url.lastPathComponent
+
+		if !isDirectory {
+			// Regular file - read contents
+			let data = try Data(contentsOf: url)
+			let wrapper = FileWrapper(regularFileWithContents: data)
+			wrapper.preferredFilename = name
+			return wrapper
+		}
+
+		// Directory - recurse into contents
+		let contents = try fileManager.contentsOfDirectory(
+			at: url,
+			includingPropertiesForKeys: keys,
+			options: .skipsHiddenFiles
+		)
+
+		var wrappers: [String: FileWrapper] = [:]
+		for itemURL in contents {
+			let childWrapper = try createFileWrapperFromDisk(at: itemURL)
+			if let childName = childWrapper.preferredFilename {
+				wrappers[childName] = childWrapper
+			}
+		}
+
+		let wrapper = FileWrapper(directoryWithFileWrappers: wrappers)
+		wrapper.preferredFilename = name
+		return wrapper
 	}
 
 	// MARK: - Parsed Data

@@ -8,6 +8,7 @@ struct AssetThumbnail: View {
 	let item: AssetItem
 	let size: CGFloat
 	@State private var thumbnail: NSImage?
+	@State private var refreshID = UUID()
 
 	private static let thumbnailGenerator = ThumbnailGenerator()
 
@@ -26,7 +27,8 @@ struct AssetThumbnail: View {
 			}
 		}
 		.frame(width: size, height: size)
-		.task {
+		.id(refreshID) // Force redraw when thumbnail loads
+		.task(id: item.id) {
 			await loadThumbnail()
 		}
 	}
@@ -81,6 +83,18 @@ struct AssetThumbnail: View {
 			thumbnail = nil
 			return
 		}
-		thumbnail = await Self.thumbnailGenerator.thumbnail(for: item.url, size: size)
+		
+		print("[AssetThumbnail] Loading thumbnail for: \(item.url.lastPathComponent)")
+		let loadedThumbnail = await Self.thumbnailGenerator.thumbnail(for: item.url, size: size)
+		
+		await MainActor.run {
+			if let loadedThumbnail {
+				print("[AssetThumbnail] Got thumbnail: \(loadedThumbnail.size.width)x\(loadedThumbnail.size.height) for \(item.url.lastPathComponent)")
+				self.thumbnail = loadedThumbnail
+				self.refreshID = UUID() // Force view refresh
+			} else {
+				print("[AssetThumbnail] No thumbnail returned for: \(item.url.lastPathComponent)")
+			}
+		}
 	}
 }
