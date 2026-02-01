@@ -121,7 +121,7 @@ public struct ContentView: View {
 								)
 								.id(sceneTab.fileURL)
 
-								ViewportFloatingToolbar()
+								ViewportFloatingToolbar(context: viewportMenuContext(store: store))
 									.padding(12)
 							}
 						}
@@ -161,7 +161,7 @@ public struct ContentView: View {
 									)
 									.id(firstScene.fileURL)
 
-									ViewportFloatingToolbar()
+									ViewportFloatingToolbar(context: viewportMenuContext(store: store))
 										.padding(12)
 								}
 							}

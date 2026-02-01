@@ -2,6 +2,8 @@ import DeconstructedFeatures
 import DeconstructedUI
 import DeconstructedUSDInterop
 import SwiftUI
+import ViewportModels
+import ViewportUI
 
 struct ViewportMenuItems: View {
 	@FocusedValue(\.viewportMenuContext) private var context
@@ -45,6 +47,56 @@ struct ViewportMenuItems: View {
 			}
 		}
 		.disabled(context == nil)
+
+		Divider()
+
+		Menu("Environment") {
+			EnvironmentMenuItems()
+		}
+		.disabled(context == nil)
+	}
+}
+
+struct EnvironmentMenuItems: View {
+	@FocusedValue(\.viewportMenuContext) private var context
+
+	var body: some View {
+		if let context {
+			let envNames = [
+				"Arquicklook Ibl",
+				"Beach Sunset",
+				"Downtown Night",
+				"Neighborhood Overcast",
+				"Rooftop Sunny",
+				"Warehouse Diffuse",
+				"Arql Legacy",
+			]
+
+			Button("None (Default Lighting)") {
+				context.setEnvironmentPath(nil)
+			}
+
+			Divider()
+
+			ForEach(envNames, id: \.self) { name in
+				Button(name) {
+					// Find matching environment path
+					let environments = ViewportUI.EnvironmentMaps.availableEnvironments()
+					if let path = environments.first(where: {
+						ViewportUI.EnvironmentMaps.displayName(for: $0) == name
+					}) {
+						context.setEnvironmentPath(path)
+					}
+				}
+			}
+
+			Divider()
+
+			Toggle("Show Background", isOn: Binding(
+				get: { context.environmentConfiguration.showBackground },
+				set: { context.setEnvironmentShowBackground($0) }
+			))
+		}
 	}
 }
 

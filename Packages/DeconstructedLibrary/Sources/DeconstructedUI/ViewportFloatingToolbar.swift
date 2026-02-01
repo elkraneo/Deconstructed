@@ -4,10 +4,12 @@ import ViewportUI
 
 /// Floating toolbar at the bottom of the viewport, matching RCP's style.
 public struct ViewportFloatingToolbar: View {
-	@FocusedValue(\.viewportMenuContext) private var context
+	let context: ViewportMenuContext?
 	@State private var showEnvironmentPanel = false
 
-	public init() {}
+	public init(context: ViewportMenuContext? = nil) {
+		self.context = context
+	}
 
 	public var body: some View {
 		HStack(spacing: 2) {
