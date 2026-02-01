@@ -66,7 +66,17 @@ public struct ViewportView: View {
 				}
 			}
 		} update: { content in
+			// Update camera every frame
 			updateCamera(state: cameraState)
+
+			// Update IBL rotation every frame for smooth slider response
+			updateIBLRotation(configuration.environment.rotation)
+
+			// Update grid visibility
+			gridEntity?.isEnabled = configuration.showGrid
+
+			// Update skybox visibility
+			skyboxEntity?.isEnabled = configuration.environment.showBackground
 		}
 		.arcballCameraControls(
 			state: $cameraState,
@@ -82,9 +92,6 @@ public struct ViewportView: View {
 		.onChange(of: frameRequestID) { _, _ in
 			frameScene()
 		}
-		.onChange(of: configuration.showGrid) { _, isVisible in
-			gridEntity?.isEnabled = isVisible
-		}
 		.onChange(of: configuration.environment.environmentPath) { _, newPath in
 			Task {
 				if let path = newPath {
@@ -96,13 +103,6 @@ public struct ViewportView: View {
 		}
 		.onChange(of: configuration.environment.exposure) { _, newExposure in
 			updateIBLExposure(newExposure)
-		}
-		.onChange(of: configuration.environment.rotation) { _, newRotation in
-			updateIBLRotation(newRotation)
-		}
-		.onChange(of: configuration.environment.showBackground) { _, showBackground in
-			skyboxEntity?.isEnabled = showBackground
-			updateBackgroundColor()
 		}
 		.onChange(of: configuration.environment.backgroundColor) { _, _ in
 			updateBackgroundColor()

@@ -53,11 +53,17 @@ public final class ThumbnailGenerator: @unchecked Sendable {
 
 	private func generateThumbnail(url: URL, output: URL, size: CGFloat) async -> NSImage? {
 		let bounds = USDInteropStage.sceneBounds(url: url)
-		guard let bounds, bounds.maxExtent > 0 else {
-			print("[ThumbnailGenerator] No bounds for: \(url.lastPathComponent)")
-			return nil
-		}
 
+		if let bounds, bounds.maxExtent > 0 {
+			print("[ThumbnailGenerator] Using bounds-based camera for: \(url.lastPathComponent)")
+			return await generateThumbnailWithBounds(url: url, output: output, size: size, bounds: bounds)
+		} else {
+			print("[ThumbnailGenerator] No bounds for: \(url.lastPathComponent), falling back to default camera")
+			return await generateThumbnailWithDefaultCamera(url: url, output: output, size: size)
+		}
+	}
+
+	private func generateThumbnailWithBounds(url: URL, output: URL, size: CGFloat, bounds: USDInteropStage.SceneBounds) async -> NSImage? {
 		let fov: Float = 60.0 * .pi / 180.0
 		let distance = bounds.maxExtent / (2.0 * tan(fov / 2.0)) * 1.5
 
@@ -105,16 +111,36 @@ public final class ThumbnailGenerator: @unchecked Sendable {
 
 		defer { try? FileManager.default.removeItem(at: sessionURL) }
 
-		return await withCheckedContinuation { continuation in
+		return await runUsdrecord(url: url, output: output, size: size, sessionLayer: sessionURL, cameraName: "ThumbnailCamera")
+	}
+
+	private func generateThumbnailWithDefaultCamera(url: URL, output: URL, size: CGFloat) async -> NSImage? {
+		return await runUsdrecord(url: url, output: output, size: size, sessionLayer: nil, cameraName: nil)
+	}
+
+	private func runUsdrecord(url: URL, output: URL, size: CGFloat, sessionLayer: URL?, cameraName: String?) async -> NSImage? {
+		await withCheckedContinuation { continuation in
 			let process = Process()
 			process.executableURL = URL(fileURLWithPath: "/usr/bin/usdrecord")
-			process.arguments = [
-				"-w", String(Int(size)),
-				"--sessionLayer", sessionURL.path,
-				"--camera", "ThumbnailCamera",
-				url.path,
-				output.path
+
+			var arguments: [String] = [
+				"-w", String(Int(size))
 			]
+
+			if let sessionLayer = sessionLayer {
+				arguments.append("--sessionLayer")
+				arguments.append(sessionLayer.path)
+			}
+
+			if let cameraName = cameraName {
+				arguments.append("--camera")
+				arguments.append(cameraName)
+			}
+
+			arguments.append(url.path)
+			arguments.append(output.path)
+
+			process.arguments = arguments
 
 			do {
 				try process.run()
