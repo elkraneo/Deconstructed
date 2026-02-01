@@ -23,6 +23,7 @@ public struct EnvironmentPanel: View {
 			Divider()
 
 			Toggle("Show Grid", isOn: $showGrid)
+			Toggle("Show Background", isOn: $configuration.showBackground)
 
 			HStack {
 				Text("Background")
