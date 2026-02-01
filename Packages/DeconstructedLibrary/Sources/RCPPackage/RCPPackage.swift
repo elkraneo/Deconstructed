@@ -1,5 +1,4 @@
 import DeconstructedModels
-import DeconstructedModels
 import Foundation
 
 public struct RCPPackage {
@@ -9,7 +8,9 @@ public struct RCPPackage {
 		self.bundle = bundle
 	}
 
-	/// Parses ProjectData/main.json
+	/// Parses ProjectData/main.json from the in-memory FileWrapper.
+	/// Note: This can become stale if files are modified on disk.
+	/// Prefer `projectData(documentURL:)` when a document URL is available.
 	public var projectData: RCPProjectData? {
 		guard let projectDataFolder = bundle.fileWrappers?[DeconstructedConstants.DirectoryName.projectData],
 		      let mainJsonWrapper = projectDataFolder.fileWrappers?[DeconstructedConstants.FileName.mainJson],
@@ -20,12 +21,38 @@ public struct RCPPackage {
 		return try? JSONDecoder().decode(RCPProjectData.self, from: data)
 	}
 
-	/// Parses WorkspaceData/Settings.rcprojectdata
+	/// Parses ProjectData/main.json directly from disk.
+	/// Use this method when the document URL is available to ensure fresh data.
+	public func projectData(documentURL: URL) -> RCPProjectData? {
+		let mainJsonURL = documentURL
+			.appendingPathComponent(DeconstructedConstants.DirectoryName.projectData)
+			.appendingPathComponent(DeconstructedConstants.FileName.mainJson)
+		guard let data = try? Data(contentsOf: mainJsonURL) else {
+			return nil
+		}
+		return try? JSONDecoder().decode(RCPProjectData.self, from: data)
+	}
+
+	/// Parses WorkspaceData/Settings.rcprojectdata from the in-memory FileWrapper.
+	/// Note: This can become stale if files are modified on disk.
+	/// Prefer `settings(documentURL:)` when a document URL is available.
 	public var settings: RCPSettings? {
 		guard let workspaceFolder = bundle.fileWrappers?[DeconstructedConstants.DirectoryName.workspaceData],
 		      let settingsWrapper = workspaceFolder.fileWrappers?[DeconstructedConstants.FileName.settings],
 		      let data = settingsWrapper.regularFileContents
 		else {
+			return nil
+		}
+		return try? JSONDecoder().decode(RCPSettings.self, from: data)
+	}
+
+	/// Parses WorkspaceData/Settings.rcprojectdata directly from disk.
+	/// Use this method when the document URL is available to ensure fresh data.
+	public func settings(documentURL: URL) -> RCPSettings? {
+		let settingsURL = documentURL
+			.appendingPathComponent(DeconstructedConstants.DirectoryName.workspaceData)
+			.appendingPathComponent(DeconstructedConstants.FileName.settings)
+		guard let data = try? Data(contentsOf: settingsURL) else {
 			return nil
 		}
 		return try? JSONDecoder().decode(RCPSettings.self, from: data)

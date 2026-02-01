@@ -7,11 +7,12 @@
 
 import AppKit
 import ComposableArchitecture
-import SwiftUI
 import DeconstructedClients
 import DeconstructedFeatures
 import DeconstructedUI
+import DeconstructedUSDInterop
 import RCPDocument
+import SwiftUI
 
 @main
 struct DeconstructedApp: App {
@@ -36,6 +37,9 @@ struct DeconstructedApp: App {
 					createNewProject()
 				}
 				.keyboardShortcut("n", modifiers: .command)
+			}
+			CommandMenu("Insert") {
+				InsertMenuItems()
 			}
 			CommandMenu("Viewport") {
 				ViewportMenuItems()

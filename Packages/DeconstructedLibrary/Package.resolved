@@ -1,10 +1,10 @@
 {
-  "originHash" : "43e6122470eaec15123bbdff95e7e6ba01aaf22a3c77751b637c1859520238cd",
+  "originHash" : "be8e66ff1b37ebff9d146ab46b503c1461d02d534a924d4b919af7b86b93d760",
   "pins" : [
     {
       "identity" : "appleusdschemas",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/StepIntoVision/AppleUSDSchemas",
+      "location" : "https://github.com/elkraneo/AppleUSDSchemas",
       "state" : {
         "branch" : "main",
         "revision" : "1449bfae27990c2694ae4aecd85e9f786a88019b"
@@ -134,24 +134,6 @@
       "state" : {
         "revision" : "0cc1c65b7832695e89608c915c35621222db62b9",
         "version" : "5.2.0"
-      }
-    },
-    {
-      "identity" : "usdinterop",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/elkraneo/USDInterop",
-      "state" : {
-        "branch" : "main",
-        "revision" : "c4e24a65afb38b956267c6d961b4b46d89f2e22b"
-      }
-    },
-    {
-      "identity" : "usdinteropadvanced",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/elkraneo/USDInteropAdvanced",
-      "state" : {
-        "branch" : "main",
-        "revision" : "c3ebf285fa20014e12b9d972088b44bcd1067e99"
       }
     },
     {

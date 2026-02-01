@@ -10,6 +10,7 @@ public enum DeconstructedUSDInteropError: Error, LocalizedError, Sendable {
 	case primNotFound(String)
 	case setDefaultPrimFailed(String)
 	case applySchemaFailed(schema: String, primPath: String)
+	case createPrimFailed(path: String, typeName: String)
 	case notImplemented
 
 	public var errorDescription: String? {
@@ -26,8 +27,61 @@ public enum DeconstructedUSDInteropError: Error, LocalizedError, Sendable {
 			return "Failed to set default prim at path \(path)."
 		case let .applySchemaFailed(schema, primPath):
 			return "Failed to apply schema \(schema) to prim \(primPath)."
+		case let .createPrimFailed(path, typeName):
+			return "Failed to create prim at \(path) with type \(typeName)."
 		case .notImplemented:
 			return "Operation is not implemented yet."
+		}
+	}
+}
+
+/// Primitive shape types that can be inserted into a USD scene.
+public enum USDPrimitiveType: String, CaseIterable, Sendable {
+	case capsule = "Capsule"
+	case cone = "Cone"
+	case cube = "Cube"
+	case cylinder = "Cylinder"
+	case sphere = "Sphere"
+
+	/// The USD type name for this primitive.
+	public var typeName: String { rawValue }
+
+	/// A human-readable display name.
+	public var displayName: String { rawValue }
+
+	/// The SF Symbol icon name for this primitive.
+	public var iconName: String {
+		switch self {
+		case .capsule: return "capsule"
+		case .cone: return "cone"
+		case .cube: return "cube"
+		case .cylinder: return "cylinder"
+		case .sphere: return "circle"
+		}
+	}
+}
+
+/// Structural prim types (grouping containers).
+public enum USDStructuralType: String, CaseIterable, Sendable {
+	case xform = "Xform"
+	case scope = "Scope"
+
+	/// The USD type name for this structural type.
+	public var typeName: String { rawValue }
+
+	/// A human-readable display name.
+	public var displayName: String {
+		switch self {
+		case .xform: return "Transform"
+		case .scope: return "Scope"
+		}
+	}
+
+	/// The SF Symbol icon name for this type.
+	public var iconName: String {
+		switch self {
+		case .xform: return "move.3d"
+		case .scope: return "folder"
 		}
 	}
 }
@@ -79,6 +133,94 @@ public enum DeconstructedUSDInterop {
 		throw DeconstructedUSDInteropError.notImplemented
 	}
 
+	/// Creates a primitive shape in the USD scene.
+	///
+	/// - Parameters:
+	///   - url: The USD file to modify.
+	///   - parentPath: The parent prim path (e.g., "/Root"). Pass "/" for root level.
+	///   - primitiveType: The type of primitive shape to create.
+	///   - name: Optional custom name. If nil, a unique name will be generated.
+	/// - Returns: The full path of the created prim.
+	public static func createPrimitive(
+		url: URL,
+		parentPath: String,
+		primitiveType: USDPrimitiveType,
+		name: String? = nil
+	) throws -> String {
+		let primName = try name ?? generateUniqueName(
+			url: url,
+			parentPath: parentPath,
+			baseName: primitiveType.displayName
+		)
+		do {
+			return try advancedClient.createPrim(
+				url: url,
+				parentPath: parentPath,
+				name: primName,
+				typeName: primitiveType.typeName
+			)
+		} catch {
+			throw mapAdvancedError(error, url: url, primPath: parentPath, schema: nil)
+		}
+	}
+
+	/// Creates a structural prim (Xform or Scope) in the USD scene.
+	///
+	/// - Parameters:
+	///   - url: The USD file to modify.
+	///   - parentPath: The parent prim path (e.g., "/Root"). Pass "/" for root level.
+	///   - structuralType: The type of structural prim to create.
+	///   - name: Optional custom name. If nil, a unique name will be generated.
+	/// - Returns: The full path of the created prim.
+	public static func createStructural(
+		url: URL,
+		parentPath: String,
+		structuralType: USDStructuralType,
+		name: String? = nil
+	) throws -> String {
+		let primName = try name ?? generateUniqueName(
+			url: url,
+			parentPath: parentPath,
+			baseName: structuralType.displayName
+		)
+		do {
+			return try advancedClient.createPrim(
+				url: url,
+				parentPath: parentPath,
+				name: primName,
+				typeName: structuralType.typeName
+			)
+		} catch {
+			throw mapAdvancedError(error, url: url, primPath: parentPath, schema: nil)
+		}
+	}
+
+	/// Generates a unique name for a new prim by appending a numeric suffix if needed.
+	private static func generateUniqueName(
+		url: URL,
+		parentPath: String,
+		baseName: String
+	) throws -> String {
+		let existingNames: Set<String>
+		do {
+			existingNames = Set(try advancedClient.existingPrimNames(url: url, parentPath: parentPath))
+		} catch {
+			// If we can't get existing names (e.g., parent doesn't exist), use base name
+			return baseName
+		}
+
+		if !existingNames.contains(baseName) {
+			return baseName
+		}
+
+		// Find the next available suffix
+		var suffix = 1
+		while existingNames.contains("\(baseName)_\(suffix)") {
+			suffix += 1
+		}
+		return "\(baseName)_\(suffix)"
+	}
+
 	/// Compute scene bounds by iterating mesh points.
 	/// Returns (min, max, center, maxExtent) for camera framing.
 	public static func getSceneBounds(url: URL) throws -> (
@@ -122,7 +264,7 @@ public enum DeconstructedUSDInterop {
 					schema: schema ?? "Unknown",
 					primPath: primPath
 				)
-			case .invalidScope, .variantSetNotFound:
+			default:
 				return error
 			}
 		}

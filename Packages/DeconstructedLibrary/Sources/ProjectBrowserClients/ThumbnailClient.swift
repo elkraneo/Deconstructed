@@ -21,14 +21,13 @@ extension ThumbnailClient: DependencyKey {
 }
 
 /// Generates thumbnails for USD files using Apple's usdrecord tool
-public actor ThumbnailGenerator {
+public final class ThumbnailGenerator: @unchecked Sendable {
 	private let cacheDirectory: URL
 	private let sessionLayerDirectory: URL
-	private var inFlightTasks: [URL: Task<NSImage?, Never>] = [:]
 	private let renderSize: CGFloat = 512
 
 	public init() {
-		let bundleID = Bundle.main.bundleIdentifier ?? "com.stepintovision.Deconstructed"
+		let bundleID = Bundle.main.bundleIdentifier ?? "edu.210x7.Deconstructed"
 		let cacheBase = FileManager.default
 			.urls(for: .cachesDirectory, in: .userDomainMask)
 			.first?
@@ -45,29 +44,33 @@ public actor ThumbnailGenerator {
 		let cacheKey = cacheKeyBase(for: url)
 		let cachedPath = cacheDirectory.appendingPathComponent("\(cacheKey).png")
 
+		// Check cache but verify the image is valid (not empty/corrupted from previous failed attempts)
 		if FileManager.default.fileExists(atPath: cachedPath.path) {
-			return NSImage(contentsOf: cachedPath)
+			if let cachedImage = NSImage(contentsOf: cachedPath),
+			   cachedImage.size.width > 0, cachedImage.size.height > 0 {
+				return cachedImage
+			} else {
+				// Invalid/corrupted cache entry, remove it
+				try? FileManager.default.removeItem(at: cachedPath)
+			}
 		}
 
-		if let existingTask = inFlightTasks[url] {
-			return await existingTask.value
-		}
-
-		let task = Task<NSImage?, Never> {
-			return await generateThumbnail(url: url, output: cachedPath, size: renderSize)
-		}
-		inFlightTasks[url] = task
-		let result = await task.value
-		inFlightTasks[url] = nil
-		return result
+		return await generateThumbnail(url: url, output: cachedPath, size: renderSize)
 	}
 
 	private func generateThumbnail(url: URL, output: URL, size: CGFloat) async -> NSImage? {
+		print("[ThumbnailGenerator] Generating thumbnail for: \(url.path)")
+
+		// Verify file exists and is readable
+		guard FileManager.default.fileExists(atPath: url.path) else {
+			print("[ThumbnailGenerator] File does not exist: \(url.path)")
+			return nil
+		}
+
 		// Generate session layer with positioned camera
 		let sessionLayerPath = sessionLayerDirectory.appendingPathComponent("\(cacheKeyBase(for: url))_session.usda")
-		print("[ThumbnailGenerator] Generating thumbnail for: \(url.lastPathComponent)")
 		let sessionLayerCreated = createSessionLayer(for: url, output: sessionLayerPath)
-		print("[ThumbnailGenerator] Session layer created: \(sessionLayerCreated) at \(sessionLayerPath.path)")
+		print("[ThumbnailGenerator] Session layer created: \(sessionLayerCreated)")
 
 		return await withCheckedContinuation { continuation in
 			let process = Process()
@@ -84,6 +87,14 @@ public actor ThumbnailGenerator {
 			args.append(contentsOf: [url.path, output.path])
 			process.arguments = args
 
+			// Capture stderr and stdout for debugging
+			let stderrPipe = Pipe()
+			let stdoutPipe = Pipe()
+			process.standardError = stderrPipe
+			process.standardOutput = stdoutPipe
+
+			print("[ThumbnailGenerator] Running: usdrecord \(args.joined(separator: " "))")
+
 			do {
 				try process.run()
 				process.waitUntilExit()
@@ -94,11 +105,28 @@ public actor ThumbnailGenerator {
 				}
 
 				if process.terminationStatus == 0 {
-					continuation.resume(returning: NSImage(contentsOf: output))
+					let image = NSImage(contentsOf: output)
+					if let image {
+						print("[ThumbnailGenerator] Success: \(image.size.width)x\(image.size.height)")
+					} else {
+						print("[ThumbnailGenerator] Failed to load image from: \(output.path)")
+					}
+					continuation.resume(returning: image)
 				} else {
+					let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+					let stdoutData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
+					
+					if let stderr = String(data: stderrData, encoding: .utf8), !stderr.isEmpty {
+						print("[ThumbnailGenerator] usdrecord stderr: \(stderr)")
+					}
+					if let stdout = String(data: stdoutData, encoding: .utf8), !stdout.isEmpty {
+						print("[ThumbnailGenerator] usdrecord stdout: \(stdout)")
+					}
+					print("[ThumbnailGenerator] usdrecord exit code: \(process.terminationStatus)")
 					continuation.resume(returning: nil)
 				}
 			} catch {
+				print("[ThumbnailGenerator] Failed to run usdrecord: \(error)")
 				continuation.resume(returning: nil)
 			}
 		}

@@ -88,8 +88,8 @@ let package = Package(
 			url: "https://github.com/pointfreeco/swift-composable-architecture",
 			from: "1.23.1"
 		),
-		.package(url: "https://github.com/elkraneo/USDInterop", branch: "main"),
-		.package(url: "https://github.com/elkraneo/USDInteropAdvanced", branch: "main"),
+		.package(path: "/Volumes/Plutonian/_Developer/USDInterop"),
+		.package(path: "/Volumes/Plutonian/_Developer/USDInteropAdvanced"),
 	],
 	targets: [
 		// Targets are the basic building blocks of a package, defining a module or a test suite.
@@ -135,12 +135,16 @@ let package = Package(
 				"ProjectBrowserFeature",
 				"SceneGraphUI",
 				"DeconstructedFeatures",
+				"DeconstructedUSDInterop",
 				"ViewportUI",
 				"ViewportModels",
 				.product(
 					name: "ComposableArchitecture",
 					package: "swift-composable-architecture"
 				),
+			],
+			swiftSettings: [
+				.interoperabilityMode(.Cxx)
 			]
 		),
 		.target(
@@ -155,6 +159,9 @@ let package = Package(
 					name: "ComposableArchitecture",
 					package: "swift-composable-architecture"
 				),
+			],
+			swiftSettings: [
+				.interoperabilityMode(.Cxx)
 			]
 		),
 		.target(
@@ -176,6 +183,9 @@ let package = Package(
 					name: "ComposableArchitecture",
 					package: "swift-composable-architecture"
 				),
+			],
+			swiftSettings: [
+				.interoperabilityMode(.Cxx)
 			]
 		),
 		.target(
@@ -187,6 +197,9 @@ let package = Package(
 					name: "ComposableArchitecture",
 					package: "swift-composable-architecture"
 				),
+			],
+			swiftSettings: [
+				.interoperabilityMode(.Cxx)
 			]
 		),
 		.target(
@@ -195,6 +208,9 @@ let package = Package(
 				"ProjectBrowserClients",
 				"ProjectBrowserFeature",
 				"ProjectBrowserModels",
+			],
+			swiftSettings: [
+				.interoperabilityMode(.Cxx)
 			]
 		),
 		.target(
@@ -213,6 +229,7 @@ let package = Package(
 			name: "SceneGraphClients",
 			dependencies: [
 				"SceneGraphModels",
+				"DeconstructedUSDInterop",
 				.product(
 					name: "USDInterop",
 					package: "USDInterop"
@@ -221,6 +238,9 @@ let package = Package(
 					name: "ComposableArchitecture",
 					package: "swift-composable-architecture"
 				),
+			],
+			swiftSettings: [
+				.interoperabilityMode(.Cxx)
 			]
 		),
 		.target(
@@ -228,10 +248,14 @@ let package = Package(
 			dependencies: [
 				"SceneGraphClients",
 				"SceneGraphModels",
+				"DeconstructedUSDInterop",
 				.product(
 					name: "ComposableArchitecture",
 					package: "swift-composable-architecture"
 				),
+			],
+			swiftSettings: [
+				.interoperabilityMode(.Cxx)
 			]
 		),
 		.target(
@@ -239,6 +263,10 @@ let package = Package(
 			dependencies: [
 				"SceneGraphFeature",
 				"SceneGraphModels",
+				"DeconstructedUSDInterop",
+			],
+			swiftSettings: [
+				.interoperabilityMode(.Cxx)
 			]
 		),
 		.target(
@@ -248,7 +276,10 @@ let package = Package(
 				.product(name: "USDInterop", package: "USDInterop"),
 				.product(name: "USDInteropAdvanced", package: "USDInteropAdvanced"),
 			],
-			swiftSettings: []
+			swiftSettings: [
+				.interoperabilityMode(.Cxx),
+				.unsafeFlags(["-disable-cmo"], .when(configuration: .release))
+			]
 		),
 		.testTarget(
 			name: "DeconstructedCoreTests",
@@ -256,7 +287,10 @@ let package = Package(
 		),
 		.testTarget(
 			name: "ProjectBrowserFeatureTests",
-			dependencies: ["ProjectBrowserFeature"]
+			dependencies: ["ProjectBrowserFeature"],
+			swiftSettings: [
+				.interoperabilityMode(.Cxx)
+			]
 		),
 		.testTarget(
 			name: "DeconstructedFeaturesTests",
@@ -264,7 +298,11 @@ let package = Package(
 				"DeconstructedFeatures",
 				"ProjectBrowserFeature",
 				"DeconstructedModels",
+			],
+			swiftSettings: [
+				.interoperabilityMode(.Cxx)
 			]
 		),
-	]
+	],
+	cxxLanguageStandard: .gnucxx17
 )

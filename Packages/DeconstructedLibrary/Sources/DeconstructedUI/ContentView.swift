@@ -99,20 +99,31 @@ public struct ContentView: View {
 
 							Divider()
 
-							ViewportView(
-								modelURL: sceneTab.fileURL,
-								configuration: ViewportConfiguration(
-									showGrid: store.viewportShowGrid,
-									showAxes: true
-								),
-								onCameraStateChanged: { transform in
-									store.send(.sceneCameraChanged(sceneTab.fileURL, transform))
-								},
-								cameraTransform: sceneTab.cameraTransform,
-								cameraTransformRequestID: sceneTab.cameraTransformRequestID,
-								frameRequestID: sceneTab.frameRequestID
-							)
-							.id(sceneTab.fileURL)
+							ZStack(alignment: .bottomLeading) {
+								ViewportView(
+									modelURL: sceneTab.fileURL,
+									configuration: ViewportConfiguration(
+										showGrid: store.viewportShowGrid,
+										showAxes: true,
+										environment: EnvironmentConfiguration(
+											environmentPath: store.environmentPath,
+											showBackground: store.environmentShowBackground,
+											rotation: store.environmentRotation,
+											exposure: store.environmentExposure
+										)
+									),
+									onCameraStateChanged: { transform in
+										store.send(.sceneCameraChanged(sceneTab.fileURL, transform))
+									},
+									cameraTransform: sceneTab.cameraTransform,
+									cameraTransformRequestID: sceneTab.cameraTransformRequestID,
+									frameRequestID: sceneTab.frameRequestID
+								)
+								.id(sceneTab.fileURL)
+
+								ViewportFloatingToolbar()
+									.padding(12)
+							}
 						}
 					} else if !store.openScenes.isEmpty {
 						// Show first scene if none selected but some are open
@@ -128,20 +139,31 @@ public struct ContentView: View {
 
 								Divider()
 
-								ViewportView(
-									modelURL: firstScene.fileURL,
-									configuration: ViewportConfiguration(
-										showGrid: store.viewportShowGrid,
-										showAxes: true
-									),
-									onCameraStateChanged: { transform in
-										store.send(.sceneCameraChanged(firstScene.fileURL, transform))
-									},
-									cameraTransform: firstScene.cameraTransform,
-									cameraTransformRequestID: firstScene.cameraTransformRequestID,
-									frameRequestID: firstScene.frameRequestID
-								)
-								.id(firstScene.fileURL)
+								ZStack(alignment: .bottomLeading) {
+									ViewportView(
+										modelURL: firstScene.fileURL,
+										configuration: ViewportConfiguration(
+											showGrid: store.viewportShowGrid,
+											showAxes: true,
+											environment: EnvironmentConfiguration(
+												environmentPath: store.environmentPath,
+												showBackground: store.environmentShowBackground,
+												rotation: store.environmentRotation,
+												exposure: store.environmentExposure
+											)
+										),
+										onCameraStateChanged: { transform in
+											store.send(.sceneCameraChanged(firstScene.fileURL, transform))
+										},
+										cameraTransform: firstScene.cameraTransform,
+										cameraTransformRequestID: firstScene.cameraTransformRequestID,
+										frameRequestID: firstScene.frameRequestID
+									)
+									.id(firstScene.fileURL)
+
+									ViewportFloatingToolbar()
+										.padding(12)
+								}
 							}
 						}
 						} else {
@@ -240,7 +262,20 @@ private func viewportMenuContext(store: StoreOf<DocumentEditorFeature>) -> Viewp
 		frameScene: { store.send(.frameSceneRequested) },
 		frameSelected: { store.send(.frameSelectedRequested) },
 		toggleGrid: { store.send(.toggleGridRequested) },
-		selectCameraHistory: { id in store.send(.cameraHistorySelected(id)) }
+		selectCameraHistory: { id in store.send(.cameraHistorySelected(id)) },
+		canInsert: store.sceneNavigator.sceneURL != nil,
+		insertPrimitive: { primitiveType in store.send(.sceneNavigator(.insertPrimitive(primitiveType))) },
+		insertStructural: { structuralType in store.send(.sceneNavigator(.insertStructural(structuralType))) },
+		environmentConfiguration: EnvironmentConfiguration(
+			environmentPath: store.environmentPath,
+			showBackground: store.environmentShowBackground,
+			rotation: store.environmentRotation,
+			exposure: store.environmentExposure
+		),
+		setEnvironmentPath: { path in store.send(.environmentPathChanged(path)) },
+		setEnvironmentShowBackground: { show in store.send(.environmentShowBackgroundChanged(show)) },
+		setEnvironmentRotation: { rotation in store.send(.environmentRotationChanged(rotation)) },
+		setEnvironmentExposure: { exposure in store.send(.environmentExposureChanged(exposure)) }
 	)
 }
 

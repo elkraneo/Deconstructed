@@ -42,12 +42,20 @@ public struct DeconstructedDocument: FileDocument {
 	// MARK: - Parsed Data
 
 	/// Parses ProjectData/main.json
+	/// Prefers disk-based reading when documentURL is available for fresh data.
 	public var parsedProjectData: RCPProjectData? {
-		package.projectData
+		if let documentURL {
+			return package.projectData(documentURL: documentURL)
+		}
+		return package.projectData
 	}
 
 	/// Parses WorkspaceData/Settings.rcprojectdata
+	/// Prefers disk-based reading when documentURL is available for fresh data.
 	public var parsedSettings: RCPSettings? {
-		package.settings
+		if let documentURL {
+			return package.settings(documentURL: documentURL)
+		}
+		return package.settings
 	}
 }

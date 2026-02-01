@@ -91,7 +91,13 @@ public struct DocumentEditorFeature {
 		public var viewportShowGrid: Bool
 		public var cameraHistory: [CameraHistoryItem]
 		public var pendingCameraHistory: PendingCameraHistory?
-        
+
+		// Environment
+		public var environmentPath: String?
+		public var environmentShowBackground: Bool
+		public var environmentRotation: Float
+		public var environmentExposure: Float
+
         public init(
             selectedTab: EditorTab? = nil,
             selectedBottomTab: BottomTab = .projectBrowser,
@@ -100,7 +106,11 @@ public struct DocumentEditorFeature {
 			sceneNavigator: SceneGraphFeature.State = SceneGraphFeature.State(),
 			viewportShowGrid: Bool = true,
 			cameraHistory: [CameraHistoryItem] = [],
-			pendingCameraHistory: PendingCameraHistory? = nil
+			pendingCameraHistory: PendingCameraHistory? = nil,
+			environmentPath: String? = nil,
+			environmentShowBackground: Bool = true,
+			environmentRotation: Float = 0,
+			environmentExposure: Float = 0
         ) {
             self.selectedTab = selectedTab
             self.selectedBottomTab = selectedBottomTab
@@ -110,6 +120,10 @@ public struct DocumentEditorFeature {
 			self.viewportShowGrid = viewportShowGrid
 			self.cameraHistory = cameraHistory
 			self.pendingCameraHistory = pendingCameraHistory
+			self.environmentPath = environmentPath
+			self.environmentShowBackground = environmentShowBackground
+			self.environmentRotation = environmentRotation
+			self.environmentExposure = environmentExposure
         }
     }
     
@@ -130,6 +144,12 @@ public struct DocumentEditorFeature {
         case cameraHistorySelected(CameraHistoryItem.ID)
         case projectBrowser(ProjectBrowserFeature.Action)
 		case sceneNavigator(SceneGraphFeature.Action)
+
+		// Environment
+		case environmentPathChanged(String?)
+		case environmentShowBackgroundChanged(Bool)
+		case environmentRotationChanged(Float)
+		case environmentExposureChanged(Float)
     }
     
     public init() {}
@@ -358,6 +378,22 @@ public struct DocumentEditorFeature {
                 return .none
 
 			case .sceneNavigator:
+				return .none
+
+			case let .environmentPathChanged(path):
+				state.environmentPath = path
+				return .none
+
+			case let .environmentShowBackgroundChanged(show):
+				state.environmentShowBackground = show
+				return .none
+
+			case let .environmentRotationChanged(rotation):
+				state.environmentRotation = rotation
+				return .none
+
+			case let .environmentExposureChanged(exposure):
+				state.environmentExposure = exposure
 				return .none
             }
         }

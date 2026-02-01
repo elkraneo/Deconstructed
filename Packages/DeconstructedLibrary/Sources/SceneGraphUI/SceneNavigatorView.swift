@@ -1,4 +1,5 @@
 import ComposableArchitecture
+import DeconstructedUSDInterop
 import SceneGraphFeature
 import SceneGraphModels
 import SwiftUI
@@ -66,12 +67,43 @@ public struct SceneNavigatorView: View {
 
 	private var footer: some View {
 		HStack(spacing: 8) {
-			Button {
+			Menu {
+				Section("Primitive Shape") {
+					ForEach(USDPrimitiveType.allCases, id: \.self) { primitive in
+						Button {
+							store.send(.insertPrimitive(primitive))
+						} label: {
+							Label(primitive.displayName, systemImage: primitive.iconName)
+						}
+					}
+				}
+
+				Divider()
+
+				Section {
+					ForEach(USDStructuralType.allCases, id: \.self) { structural in
+						Button {
+							store.send(.insertStructural(structural))
+						} label: {
+							Label(structural.displayName, systemImage: structural.iconName)
+						}
+					}
+				}
 			} label: {
 				Image(systemName: "plus")
 			}
-			.buttonStyle(.borderless)
-			.disabled(true)
+			.menuStyle(.borderlessButton)
+			.disabled(store.sceneURL == nil)
+
+			Menu {
+				Picker("Filter", selection: .constant("all")) {
+					Text("All Types").tag("all")
+				}
+			} label: {
+				Image(systemName: "line.3.horizontal.decrease.circle")
+			}
+			.menuStyle(.borderlessButton)
+			.frame(width: 20)
 
 			TextField("Filter", text: $store.filterText)
 				.textFieldStyle(.roundedBorder)

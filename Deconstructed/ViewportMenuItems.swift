@@ -1,6 +1,7 @@
-import SwiftUI
-import DeconstructedUI
 import DeconstructedFeatures
+import DeconstructedUI
+import DeconstructedUSDInterop
+import SwiftUI
 
 struct ViewportMenuItems: View {
 	@FocusedValue(\.viewportMenuContext) private var context
@@ -44,5 +45,33 @@ struct ViewportMenuItems: View {
 			}
 		}
 		.disabled(context == nil)
+	}
+}
+
+struct InsertMenuItems: View {
+	@FocusedValue(\.viewportMenuContext) private var context
+
+	var body: some View {
+		Menu("Primitive Shape") {
+			ForEach(USDPrimitiveType.allCases, id: \.self) { primitive in
+				Button {
+					context?.insertPrimitive(primitive)
+				} label: {
+					Label(primitive.displayName, systemImage: primitive.iconName)
+				}
+			}
+		}
+		.disabled(!(context?.canInsert ?? false))
+
+		Divider()
+
+		ForEach(USDStructuralType.allCases, id: \.self) { structural in
+			Button {
+				context?.insertStructural(structural)
+			} label: {
+				Label(structural.displayName, systemImage: structural.iconName)
+			}
+			.disabled(!(context?.canInsert ?? false))
+		}
 	}
 }

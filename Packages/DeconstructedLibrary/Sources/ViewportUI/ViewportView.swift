@@ -1,3 +1,5 @@
+import CoreGraphics
+import ImageIO
 import RealityKit
 import SwiftUI
 import ViewportModels
@@ -22,6 +24,11 @@ public struct ViewportView: View {
 	@State private var isZUp = false
 	@State private var appliedCameraTransformRequestID: UUID?
 	@State private var gridEntity: Entity?
+
+	// IBL state
+	@State private var iblEntity: Entity?
+	@State private var skyboxEntity: Entity?
+	@State private var loadedEnvironmentPath: String?
 
 	public init(
 		modelURL: URL? = nil,
@@ -51,6 +58,13 @@ public struct ViewportView: View {
 					await loadModel(from: url)
 				}
 			}
+
+			// Load initial environment if configured
+			if let envPath = configuration.environment.environmentPath {
+				Task {
+					await loadEnvironment(path: envPath)
+				}
+			}
 		} update: { content in
 			updateCamera(state: cameraState)
 		}
@@ -71,6 +85,28 @@ public struct ViewportView: View {
 		.onChange(of: configuration.showGrid) { _, isVisible in
 			gridEntity?.isEnabled = isVisible
 		}
+		.onChange(of: configuration.environment.environmentPath) { _, newPath in
+			Task {
+				if let path = newPath {
+					await loadEnvironment(path: path)
+				} else {
+					await clearEnvironment()
+				}
+			}
+		}
+		.onChange(of: configuration.environment.exposure) { _, newExposure in
+			updateIBLExposure(newExposure)
+		}
+		.onChange(of: configuration.environment.rotation) { _, newRotation in
+			updateIBLRotation(newRotation)
+		}
+		.onChange(of: configuration.environment.showBackground) { _, showBackground in
+			skyboxEntity?.isEnabled = showBackground
+			updateBackgroundColor()
+		}
+		.onChange(of: configuration.environment.backgroundColor) { _, _ in
+			updateBackgroundColor()
+		}
 	}
 
 	// MARK: - Scene Setup
@@ -85,7 +121,7 @@ public struct ViewportView: View {
 		modelAnchor.name = "ModelAnchor"
 		root.addChild(modelAnchor)
 
-		// Lights
+		// Lights (will be dimmed when IBL is active)
 		let light = DirectionalLight()
 		light.name = "KeyLight"
 		light.light.intensity = 2000
@@ -98,6 +134,19 @@ public struct ViewportView: View {
 		fillLight.light.intensity = 1000
 		fillLight.look(at: .zero, from: [-2, 2, -3], relativeTo: nil)
 		root.addChild(fillLight)
+
+		// IBL Entity (for ImageBasedLightComponent)
+		let ibl = Entity()
+		ibl.name = "ImageBasedLight"
+		root.addChild(ibl)
+		iblEntity = ibl
+
+		// Skybox Entity (inverted sphere for environment background)
+		let skybox = Entity()
+		skybox.name = "Skybox"
+		skybox.isEnabled = false
+		root.addChild(skybox)
+		skyboxEntity = skybox
 
 		// Grid
 		let grid = RealityKitGrid.createGridEntity(
@@ -167,6 +216,150 @@ public struct ViewportView: View {
 			return
 		}
 		camera.transform.matrix = state.transform
+	}
+
+	// MARK: - Environment / IBL
+
+	@MainActor
+	private func loadEnvironment(path: String) async {
+		guard let ibl = iblEntity,
+		      let root = rootEntity else {
+			return
+		}
+
+		// Skip if already loaded
+		if loadedEnvironmentPath == path { return }
+
+		let url = URL(fileURLWithPath: path)
+		guard let cgImage = loadHDRImage(from: url) else {
+			print("[ViewportView] Failed to load HDR image: \(path)")
+			return
+		}
+
+		do {
+			let resource = try await EnvironmentResource(
+				equirectangular: cgImage,
+				withName: url.lastPathComponent
+			)
+
+			var iblComp = ImageBasedLightComponent(source: .single(resource))
+			iblComp.intensityExponent = configuration.environment.realityKitIntensityExponent
+			iblComp.inheritsRotation = true
+			ibl.components.set(iblComp)
+
+			// Apply IBL rotation
+			updateIBLRotation(configuration.environment.rotation)
+
+			// Apply IBL receiver to model hierarchy
+			if let modelAnchor = root.findEntity(named: "ModelAnchor") {
+				applyIBLReceiver(to: modelAnchor, iblEntity: ibl)
+			}
+
+			// Update directional lights (dim when IBL active)
+			updateDirectionalLights(useIBL: true)
+
+			// Create skybox if showing background
+			await updateSkybox(path: path)
+
+			loadedEnvironmentPath = path
+			print("[ViewportView] Loaded environment: \(EnvironmentMaps.displayName(for: path))")
+		} catch {
+			print("[ViewportView] Failed to create environment resource: \(error)")
+		}
+	}
+
+	@MainActor
+	private func clearEnvironment() async {
+		iblEntity?.components.remove(ImageBasedLightComponent.self)
+		skyboxEntity?.components.remove(ModelComponent.self)
+		skyboxEntity?.isEnabled = false
+		updateDirectionalLights(useIBL: false)
+		loadedEnvironmentPath = nil
+	}
+
+	@MainActor
+	private func updateSkybox(path: String) async {
+		guard let skybox = skyboxEntity else { return }
+
+		// Use reference HDR for skybox if available, otherwise use IBL
+		let skyboxPath = EnvironmentMaps.referencePath(for: path) ?? path
+		let url = URL(fileURLWithPath: skyboxPath)
+
+		do {
+			let texture = try await TextureResource(contentsOf: url)
+			var material = UnlitMaterial()
+			material.color = .init(texture: .init(texture))
+
+			// Large inverted sphere for skybox
+			let radius: Float = 500.0
+			let mesh = MeshResource.generateSphere(radius: radius)
+			skybox.components.set(ModelComponent(mesh: mesh, materials: [material]))
+			skybox.scale = SIMD3<Float>(-1, 1, 1)  // Invert for interior view
+			skybox.isEnabled = configuration.environment.showBackground
+		} catch {
+			print("[ViewportView] Failed to create skybox: \(error)")
+		}
+	}
+
+	@MainActor
+	private func updateIBLExposure(_ exposure: Float) {
+		guard let ibl = iblEntity,
+		      var iblComp = ibl.components[ImageBasedLightComponent.self] else {
+			return
+		}
+		iblComp.intensityExponent = exposure
+		ibl.components.set(iblComp)
+	}
+
+	@MainActor
+	private func updateIBLRotation(_ degrees: Float) {
+		guard let ibl = iblEntity else { return }
+
+		let radians = degrees * .pi / 180.0
+		// Y-up rotation
+		let rotation = simd_quatf(angle: radians, axis: SIMD3<Float>(0, 1, 0))
+		ibl.transform.rotation = rotation
+
+		// Also rotate skybox
+		skyboxEntity?.transform.rotation = rotation
+	}
+
+	@MainActor
+	private func updateDirectionalLights(useIBL: Bool) {
+		guard let root = rootEntity else { return }
+
+		if let keyLight = root.findEntity(named: "KeyLight") as? DirectionalLight {
+			keyLight.light.intensity = useIBL ? 0 : 2000
+		}
+		if let fillLight = root.findEntity(named: "FillLight") as? DirectionalLight {
+			fillLight.light.intensity = useIBL ? 0 : 1000
+		}
+	}
+
+	@MainActor
+	private func updateBackgroundColor() {
+		// Background color is handled by RealityView's background
+		// For now, we toggle skybox visibility
+		skyboxEntity?.isEnabled = configuration.environment.showBackground
+	}
+
+	private func applyIBLReceiver(to entity: Entity, iblEntity: Entity) {
+		entity.components.set(ImageBasedLightReceiverComponent(imageBasedLight: iblEntity))
+		for child in entity.children {
+			applyIBLReceiver(to: child, iblEntity: iblEntity)
+		}
+	}
+
+	private func loadHDRImage(from url: URL) -> CGImage? {
+		let options: [String: Any] = [
+			kCGImageSourceShouldAllowFloat as String: true,
+			kCGImageSourceShouldCache as String: false,
+		]
+		guard let source = CGImageSourceCreateWithURL(url as CFURL, options as CFDictionary),
+		      let image = CGImageSourceCreateImageAtIndex(source, 0, options as CFDictionary) else {
+			return nil
+		}
+		return image
 	}
 }
 

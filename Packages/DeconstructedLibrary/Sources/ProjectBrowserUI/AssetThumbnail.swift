@@ -81,6 +81,9 @@ struct AssetThumbnail: View {
 			return
 		}
 		let image = await Self.thumbnailGenerator.thumbnail(for: item.url, size: size)
-		await MainActor.run { thumbnail = image }
+		await MainActor.run {
+			self.thumbnail = image
+			print("[AssetThumbnail] Set thumbnail for \(item.name): \(image != nil ? "YES" : "nil")")
+		}
 	}
 }
