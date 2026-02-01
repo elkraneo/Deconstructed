@@ -20,37 +20,30 @@ extension ThumbnailClient: DependencyKey {
 	}()
 }
 
-/// Generates thumbnails for USD files using Apple's usdrecord tool
 public final class ThumbnailGenerator: @unchecked Sendable {
 	private let cacheDirectory: URL
-	private let sessionLayerDirectory: URL
 	private let renderSize: CGFloat = 512
 
 	public init() {
 		let bundleID = Bundle.main.bundleIdentifier ?? "edu.210x7.Deconstructed"
-		let cacheBase = FileManager.default
+		self.cacheDirectory = FileManager.default
 			.urls(for: .cachesDirectory, in: .userDomainMask)
 			.first?
 			.appendingPathComponent(bundleID, isDirectory: true)
-			?? FileManager.default.temporaryDirectory.appendingPathComponent(bundleID, isDirectory: true)
-
-		self.cacheDirectory = cacheBase.appendingPathComponent("Thumbnails", isDirectory: true)
-		self.sessionLayerDirectory = cacheBase.appendingPathComponent("SessionLayers", isDirectory: true)
+			.appendingPathComponent("Thumbnails", isDirectory: true)
+			?? FileManager.default.temporaryDirectory.appendingPathComponent("DeconstructedThumbnails", isDirectory: true)
 		try? FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
-		try? FileManager.default.createDirectory(at: sessionLayerDirectory, withIntermediateDirectories: true)
 	}
 
 	public func thumbnail(for url: URL, size: CGFloat = 256) async -> NSImage? {
 		let cacheKey = cacheKeyBase(for: url)
 		let cachedPath = cacheDirectory.appendingPathComponent("\(cacheKey).png")
 
-		// Check cache but verify the image is valid (not empty/corrupted from previous failed attempts)
 		if FileManager.default.fileExists(atPath: cachedPath.path) {
 			if let cachedImage = NSImage(contentsOf: cachedPath),
 			   cachedImage.size.width > 0, cachedImage.size.height > 0 {
 				return cachedImage
 			} else {
-				// Invalid/corrupted cache entry, remove it
 				try? FileManager.default.removeItem(at: cachedPath)
 			}
 		}
@@ -59,120 +52,32 @@ public final class ThumbnailGenerator: @unchecked Sendable {
 	}
 
 	private func generateThumbnail(url: URL, output: URL, size: CGFloat) async -> NSImage? {
-		print("[ThumbnailGenerator] Generating thumbnail for: \(url.path)")
-
-		// Verify file exists and is readable
-		guard FileManager.default.fileExists(atPath: url.path) else {
-			print("[ThumbnailGenerator] File does not exist: \(url.path)")
+		let bounds = USDInteropStage.sceneBounds(url: url)
+		guard let bounds, bounds.maxExtent > 0 else {
+			print("[ThumbnailGenerator] No bounds for: \(url.lastPathComponent)")
 			return nil
 		}
 
-		// Generate session layer with positioned camera
-		let sessionLayerPath = sessionLayerDirectory.appendingPathComponent("\(cacheKeyBase(for: url))_session.usda")
-		let sessionLayerCreated = createSessionLayer(for: url, output: sessionLayerPath)
-		print("[ThumbnailGenerator] Session layer created: \(sessionLayerCreated)")
-
-		return await withCheckedContinuation { continuation in
-			let process = Process()
-			process.executableURL = URL(fileURLWithPath: "/usr/bin/usdrecord")
-
-			var args = ["-w", String(Int(size))]
-
-			// Add session layer and camera if we successfully created one
-			if sessionLayerCreated {
-				args.append(contentsOf: ["--sessionLayer", sessionLayerPath.path])
-				args.append(contentsOf: ["--camera", "ThumbnailCamera"])
-			}
-
-			args.append(contentsOf: [url.path, output.path])
-			process.arguments = args
-
-			// Capture stderr and stdout for debugging
-			let stderrPipe = Pipe()
-			let stdoutPipe = Pipe()
-			process.standardError = stderrPipe
-			process.standardOutput = stdoutPipe
-
-			print("[ThumbnailGenerator] Running: usdrecord \(args.joined(separator: " "))")
-
-			do {
-				try process.run()
-				process.waitUntilExit()
-
-				// Clean up session layer
-				if sessionLayerCreated {
-					try? FileManager.default.removeItem(at: sessionLayerPath)
-				}
-
-				if process.terminationStatus == 0 {
-					let image = NSImage(contentsOf: output)
-					if let image {
-						print("[ThumbnailGenerator] Success: \(image.size.width)x\(image.size.height)")
-					} else {
-						print("[ThumbnailGenerator] Failed to load image from: \(output.path)")
-					}
-					continuation.resume(returning: image)
-				} else {
-					let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
-					let stdoutData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
-					
-					if let stderr = String(data: stderrData, encoding: .utf8), !stderr.isEmpty {
-						print("[ThumbnailGenerator] usdrecord stderr: \(stderr)")
-					}
-					if let stdout = String(data: stdoutData, encoding: .utf8), !stdout.isEmpty {
-						print("[ThumbnailGenerator] usdrecord stdout: \(stdout)")
-					}
-					print("[ThumbnailGenerator] usdrecord exit code: \(process.terminationStatus)")
-					continuation.resume(returning: nil)
-				}
-			} catch {
-				print("[ThumbnailGenerator] Failed to run usdrecord: \(error)")
-				continuation.resume(returning: nil)
-			}
-		}
-	}
-
-	/// Creates a session layer with a camera positioned to frame the scene.
-	private func createSessionLayer(for url: URL, output: URL) -> Bool {
-		let bounds = USDInteropStage.sceneBounds(url: url)
-		print("[ThumbnailGenerator] Bounds for \(url.lastPathComponent): \(String(describing: bounds))")
-		guard let bounds, bounds.maxExtent > 0 else {
-			print("[ThumbnailGenerator] No valid bounds for \(url.lastPathComponent)")
-			return false
-		}
-
-		// Camera positioning math (matches ViewportView.frameScene)
 		let fov: Float = 60.0 * .pi / 180.0
 		let distance = bounds.maxExtent / (2.0 * tan(fov / 2.0)) * 1.5
 
-		// Position camera at an angle (slightly above and to the side)
-		// Spherical coordinates: yaw around Y axis, pitch down from horizontal
 		let yawDeg: Float = 45.0
-		let pitchDeg: Float = 20.0  // Positive = looking down
+		let pitchDeg: Float = 20.0
 		let yaw = yawDeg * .pi / 180.0
 		let pitch = pitchDeg * .pi / 180.0
 
-		// Camera position in world space (center + spherical offset)
 		let cameraPos = bounds.center + SIMD3<Float>(
 			distance * sin(yaw) * cos(pitch),
 			distance * sin(pitch),
 			distance * cos(yaw) * cos(pitch)
 		)
 
-		// Compute Euler angles to look at center
-		// Direction from camera to center (where we want to look)
 		let dir = bounds.center - cameraPos
 		let horizontalDist = sqrt(dir.x * dir.x + dir.z * dir.z)
-
-		// rotateY = atan2(x, z) - rotation around Y axis in degrees
-		// rotateX = -atan2(y, horiz) - negative because looking down needs positive X rotation
 		let rotateY = atan2(dir.x, dir.z) * 180.0 / .pi
 		let rotateX = -atan2(dir.y, horizontalDist) * 180.0 / .pi
 
-		print("[ThumbnailGenerator] Camera pos: \(cameraPos), rotateXYZ: (\(rotateX), \(rotateY), 0)")
-
-		// Generate USDA session layer
-		let usda = """
+		let sessionLayer = """
 		#usda 1.0
 		(
 		    doc = "Deconstructed thumbnail session layer"
@@ -183,19 +88,48 @@ public final class ThumbnailGenerator: @unchecked Sendable {
 		    float focalLength = 35
 		    float horizontalAperture = 36
 		    float verticalAperture = 24
-		    float2 clippingRange = (0.001, 1000)
+		    float2 clippingRange = (0.01, 100000)
 		    float3 xformOp:translate = (\(cameraPos.x), \(cameraPos.y), \(cameraPos.z))
 		    float3 xformOp:rotateXYZ = (\(rotateX), \(rotateY), 0)
 		    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ"]
 		}
 		"""
 
+		let sessionURL = FileManager.default.temporaryDirectory.appendingPathComponent("thumb_\(UUID().uuidString).usda")
 		do {
-			try usda.write(to: output, atomically: true, encoding: .utf8)
-			return true
+			try sessionLayer.write(to: sessionURL, atomically: true, encoding: .utf8)
 		} catch {
-			print("[ThumbnailGenerator] Failed to create session layer: \(error)")
-			return false
+			print("[ThumbnailGenerator] Failed to write session layer: \(error)")
+			return nil
+		}
+
+		defer { try? FileManager.default.removeItem(at: sessionURL) }
+
+		return await withCheckedContinuation { continuation in
+			let process = Process()
+			process.executableURL = URL(fileURLWithPath: "/usr/bin/usdrecord")
+			process.arguments = [
+				"-w", String(Int(size)),
+				"--sessionLayer", sessionURL.path,
+				"--camera", "ThumbnailCamera",
+				url.path,
+				output.path
+			]
+
+			do {
+				try process.run()
+				process.waitUntilExit()
+
+				if process.terminationStatus == 0 {
+					continuation.resume(returning: NSImage(contentsOf: output))
+				} else {
+					print("[ThumbnailGenerator] usdrecord failed: \(process.terminationStatus)")
+					continuation.resume(returning: nil)
+				}
+			} catch {
+				print("[ThumbnailGenerator] Process error: \(error)")
+				continuation.resume(returning: nil)
+			}
 		}
 	}
 
