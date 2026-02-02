@@ -88,8 +88,11 @@ let package = Package(
 			url: "https://github.com/pointfreeco/swift-composable-architecture",
 			from: "1.23.1"
 		),
-		.package(path: "/Volumes/Plutonian/_Developer/USDInterop"),
-		.package(path: "/Volumes/Plutonian/_Developer/USDInteropAdvanced"),
+		.package(url: "https://github.com/elkraneo/USDInterop", branch: "main"),
+		.package(
+			url: "https://github.com/elkraneo/USDInteropAdvanced",
+			branch: "main"
+		),
 	],
 	targets: [
 		// Targets are the basic building blocks of a package, defining a module or a test suite.
@@ -278,7 +281,7 @@ let package = Package(
 			],
 			swiftSettings: [
 				.interoperabilityMode(.Cxx),
-				.unsafeFlags(["-disable-cmo"], .when(configuration: .release))
+				.unsafeFlags(["-disable-cmo"], .when(configuration: .release)),
 			]
 		),
 		.testTarget(
