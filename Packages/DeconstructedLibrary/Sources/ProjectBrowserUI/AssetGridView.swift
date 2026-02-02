@@ -49,12 +49,14 @@ struct AssetGridView: View {
 	private func gridItemView(for item: AssetItem) -> some View {
 		let isSelected = store.selectedItems.contains(item.id)
 		let isRenaming = store.renamingItemId == item.id
+		let thumbnailVersion = store.thumbnailVersions[item.url]
 		
 		AssetGridItem(
 			item: item,
 			iconSize: store.iconSize,
 			isSelected: isSelected,
 			isRenaming: isRenaming,
+			thumbnailVersion: thumbnailVersion,
 			onRenameCommit: { newName in
 				store.send(.renameItemCommitted(item.id, newName))
 			},

@@ -7,6 +7,8 @@ import ProjectBrowserModels
 struct AssetThumbnail: View {
 	let item: AssetItem
 	let size: CGFloat
+	/// Optional version ID that changes when thumbnail should be reloaded
+	let thumbnailVersion: UUID?
 	@State private var thumbnail: NSImage?
 	@State private var refreshID = UUID()
 
@@ -28,8 +30,19 @@ struct AssetThumbnail: View {
 		}
 		.frame(width: size, height: size)
 		.id(refreshID) // Force redraw when thumbnail loads
-		.task(id: item.id) {
+		.task(id: TaskID(item: item, version: thumbnailVersion)) {
 			await loadThumbnail()
+		}
+	}
+
+	/// Composite task ID that includes both item ID and thumbnail version
+	private struct TaskID: Hashable {
+		let itemID: AssetItem.ID
+		let version: UUID?
+
+		init(item: AssetItem, version: UUID?) {
+			self.itemID = item.id
+			self.version = version
 		}
 	}
 

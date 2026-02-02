@@ -15,4 +15,9 @@ public extension DependencyValues {
 		get { self[FileWatcherClient.self] }
 		set { self[FileWatcherClient.self] = newValue }
 	}
+
+	var thumbnailClient: ThumbnailClient {
+		get { self[ThumbnailClient.self] }
+		set { self[ThumbnailClient.self] = newValue }
+	}
 }

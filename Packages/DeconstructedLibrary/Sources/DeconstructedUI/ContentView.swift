@@ -119,7 +119,7 @@ public struct ContentView: View {
 									cameraTransformRequestID: sceneTab.cameraTransformRequestID,
 									frameRequestID: sceneTab.frameRequestID
 								)
-								.id(sceneTab.fileURL)
+								.id("\(sceneTab.fileURL.path)-\(sceneTab.reloadTrigger?.uuidString ?? "initial")")
 
 								ViewportFloatingToolbar(context: viewportMenuContext(store: store))
 									.padding(12)
@@ -159,7 +159,7 @@ public struct ContentView: View {
 										cameraTransformRequestID: firstScene.cameraTransformRequestID,
 										frameRequestID: firstScene.frameRequestID
 									)
-									.id(firstScene.fileURL)
+									.id("\(firstScene.fileURL.path)-\(firstScene.reloadTrigger?.uuidString ?? "initial")")
 
 									ViewportFloatingToolbar(context: viewportMenuContext(store: store))
 										.padding(12)

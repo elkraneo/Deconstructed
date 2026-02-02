@@ -37,6 +37,10 @@ public struct ProjectBrowserFeature {
 		// Editing
 		public var renamingItemId: AssetItem.ID? = nil
 
+		// Thumbnail invalidation tracking - maps scene URL to a version UUID
+		// When a scene is modified, its version changes, triggering thumbnail reload
+		public var thumbnailVersions: [URL: UUID] = [:]
+
 		public init() {}
 	}
 
@@ -88,11 +92,16 @@ public struct ProjectBrowserFeature {
 		// Responses
 		case fileOperationCompleted
 		case fileOperationFailed(String)
+
+		// Thumbnail invalidation
+		case sceneModified(URL)
+		case thumbnailInvalidated(URL)
 	}
 
 	@Dependency(\.assetDiscoveryClient) var assetDiscovery
 	@Dependency(\.fileOperationsClient) var fileOperations
 	@Dependency(\.fileWatcherClient) var fileWatcher
+	@Dependency(\.thumbnailClient) var thumbnailClient
 	@Dependency(\.continuousClock) var clock
 
 	public init() {}
@@ -438,7 +447,22 @@ public struct ProjectBrowserFeature {
 			return .run { send in
 				await send(.loadAssets(documentURL: documentURL))
 			}
+
+		case let .sceneModified(url):
+			// Increment thumbnail version to trigger reload
+			state.thumbnailVersions[url] = UUID()
+			// Invalidate the cache
+			let thumbnailClient = self.thumbnailClient
+			return .run { _ in
+				await thumbnailClient.invalidate(url)
 			}
+
+		case let .thumbnailInvalidated(url):
+			// Thumbnail has been invalidated, version already updated in sceneModified
+			// This action can be used for any post-invalidation logic if needed
+			print("[ProjectBrowserFeature] Thumbnail invalidated for: \(url.lastPathComponent)")
+			return .none
+		}
 		}
 	}
 }

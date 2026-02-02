@@ -6,6 +6,7 @@ struct AssetGridItem: View {
 	let iconSize: CGFloat
 	let isSelected: Bool
 	let isRenaming: Bool
+	let thumbnailVersion: UUID?
 	let onRenameCommit: (String) -> Void
 	let onRenameCancel: () -> Void
 	@State private var editingName: String = ""
@@ -13,7 +14,7 @@ struct AssetGridItem: View {
 	var body: some View {
 		VStack(spacing: 8) {
 			// Icon / Thumbnail
-			AssetThumbnail(item: item, size: iconSize)
+			AssetThumbnail(item: item, size: iconSize, thumbnailVersion: thumbnailVersion)
 				.overlay {
 					if isSelected {
 						RoundedRectangle(cornerRadius: 8)

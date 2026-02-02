@@ -14,12 +14,15 @@ public struct SceneTab: Equatable, Identifiable {
 	public var cameraTransform: [Float]?
 	public var cameraTransformRequestID: UUID?
 	public var frameRequestID: UUID?
+	/// Trigger to force viewport reload when scene is modified
+	public var reloadTrigger: UUID?
     
     public init(
 		fileURL: URL,
 		cameraTransform: [Float]? = nil,
 		cameraTransformRequestID: UUID? = nil,
-		frameRequestID: UUID? = nil
+		frameRequestID: UUID? = nil,
+		reloadTrigger: UUID? = nil
 	) {
         self.id = UUID()
         let normalized = normalizedSceneURL(fileURL)
@@ -28,6 +31,7 @@ public struct SceneTab: Equatable, Identifiable {
 		self.cameraTransform = cameraTransform
 		self.cameraTransformRequestID = cameraTransformRequestID
 		self.frameRequestID = frameRequestID
+		self.reloadTrigger = reloadTrigger
     }
 }
 
@@ -128,28 +132,30 @@ public struct DocumentEditorFeature {
     }
     
     public enum Action {
-		case documentOpened(URL)
-		case workspaceRestored(WorkspaceRestore)
-		case cameraHistoryLoaded([CameraHistoryItem])
-		case gridVisibilityLoaded(Bool)
+  case documentOpened(URL)
+  case workspaceRestored(WorkspaceRestore)
+  case cameraHistoryLoaded([CameraHistoryItem])
+  case gridVisibilityLoaded(Bool)
         case tabSelected(EditorTab?)
         case bottomTabSelected(BottomTab)
         case sceneOpened(URL)
         case sceneClosed(UUID)
-		case sceneCameraChanged(URL, [Float])
-		case cameraHistoryCommit(URL, [Float])
-		case frameSceneRequested
-		case frameSelectedRequested
-		case toggleGridRequested
+  case sceneCameraChanged(URL, [Float])
+  case cameraHistoryCommit(URL, [Float])
+  case frameSceneRequested
+  case frameSelectedRequested
+  case toggleGridRequested
         case cameraHistorySelected(CameraHistoryItem.ID)
         case projectBrowser(ProjectBrowserFeature.Action)
-		case sceneNavigator(SceneGraphFeature.Action)
+  case sceneNavigator(SceneGraphFeature.Action)
+  /// Triggered when scene is modified (e.g., prim added) to force viewport reload
+  case sceneModified(UUID)
 
-		// Environment
-		case environmentPathChanged(String?)
-		case environmentShowBackgroundChanged(Bool)
-		case environmentRotationChanged(Float)
-		case environmentExposureChanged(Float)
+  // Environment
+  case environmentPathChanged(String?)
+  case environmentShowBackgroundChanged(Bool)
+  case environmentRotationChanged(Float)
+  case environmentExposureChanged(Float)
     }
     
     public init() {}
@@ -375,10 +381,26 @@ public struct DocumentEditorFeature {
 				return .none
                 
             case .projectBrowser:
-                return .none
-
-			case .sceneNavigator:
-				return .none
+                          return .none
+          
+            case .sceneNavigator(let sceneAction):
+            	// Detect when scene is modified (prim created) to trigger viewport reload
+            	if case .primCreated = sceneAction,
+            	   case .scene(let tabID) = state.selectedTab,
+            	   var tab = state.openScenes[id: tabID] {
+            		tab.reloadTrigger = UUID()
+            		state.openScenes[id: tabID] = tab
+    // Also invalidate thumbnail for this scene via ProjectBrowserFeature
+    return .send(.projectBrowser(.sceneModified(tab.fileURL)))
+            	}
+            	return .none
+          
+            case let .sceneModified(tabID):
+            	if var tab = state.openScenes[id: tabID] {
+            		tab.reloadTrigger = UUID()
+            		state.openScenes[id: tabID] = tab
+            	}
+            	return .none
 
 			case let .environmentPathChanged(path):
 				state.environmentPath = path
