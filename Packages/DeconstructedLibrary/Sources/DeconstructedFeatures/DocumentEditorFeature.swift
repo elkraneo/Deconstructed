@@ -1,7 +1,7 @@
 import ComposableArchitecture
 import DeconstructedModels
-import DeconstructedModels
 import Foundation
+import InspectorFeature
 import ProjectBrowserFeature
 import SceneGraphFeature
 import ViewportModels
@@ -91,43 +91,46 @@ public struct DocumentEditorFeature {
         public var selectedBottomTab: BottomTab
         public var openScenes: IdentifiedArrayOf<SceneTab>
         public var projectBrowser: ProjectBrowserFeature.State
-		public var sceneNavigator: SceneGraphFeature.State
-		public var viewportShowGrid: Bool
-		public var cameraHistory: [CameraHistoryItem]
-		public var pendingCameraHistory: PendingCameraHistory?
+        public var sceneNavigator: SceneGraphFeature.State
+        public var inspector: InspectorFeature.State
+        public var viewportShowGrid: Bool
+        public var cameraHistory: [CameraHistoryItem]
+        public var pendingCameraHistory: PendingCameraHistory?
 
-		// Environment
-		public var environmentPath: String?
-		public var environmentShowBackground: Bool
-		public var environmentRotation: Float
-		public var environmentExposure: Float
+        // Environment
+        public var environmentPath: String?
+        public var environmentShowBackground: Bool
+        public var environmentRotation: Float
+        public var environmentExposure: Float
 
         public init(
             selectedTab: EditorTab? = nil,
             selectedBottomTab: BottomTab = .projectBrowser,
             openScenes: IdentifiedArrayOf<SceneTab> = [],
             projectBrowser: ProjectBrowserFeature.State = ProjectBrowserFeature.State(),
-			sceneNavigator: SceneGraphFeature.State = SceneGraphFeature.State(),
-			viewportShowGrid: Bool = true,
-			cameraHistory: [CameraHistoryItem] = [],
-			pendingCameraHistory: PendingCameraHistory? = nil,
-			environmentPath: String? = nil,
-			environmentShowBackground: Bool = true,
-			environmentRotation: Float = 0,
-			environmentExposure: Float = 0
+            sceneNavigator: SceneGraphFeature.State = SceneGraphFeature.State(),
+            inspector: InspectorFeature.State = InspectorFeature.State(),
+            viewportShowGrid: Bool = true,
+            cameraHistory: [CameraHistoryItem] = [],
+            pendingCameraHistory: PendingCameraHistory? = nil,
+            environmentPath: String? = nil,
+            environmentShowBackground: Bool = true,
+            environmentRotation: Float = 0,
+            environmentExposure: Float = 0
         ) {
             self.selectedTab = selectedTab
             self.selectedBottomTab = selectedBottomTab
             self.openScenes = openScenes
             self.projectBrowser = projectBrowser
-			self.sceneNavigator = sceneNavigator
-			self.viewportShowGrid = viewportShowGrid
-			self.cameraHistory = cameraHistory
-			self.pendingCameraHistory = pendingCameraHistory
-			self.environmentPath = environmentPath
-			self.environmentShowBackground = environmentShowBackground
-			self.environmentRotation = environmentRotation
-			self.environmentExposure = environmentExposure
+            self.sceneNavigator = sceneNavigator
+            self.inspector = inspector
+            self.viewportShowGrid = viewportShowGrid
+            self.cameraHistory = cameraHistory
+            self.pendingCameraHistory = pendingCameraHistory
+            self.environmentPath = environmentPath
+            self.environmentShowBackground = environmentShowBackground
+            self.environmentRotation = environmentRotation
+            self.environmentExposure = environmentExposure
         }
     }
     
@@ -147,9 +150,10 @@ public struct DocumentEditorFeature {
   case toggleGridRequested
         case cameraHistorySelected(CameraHistoryItem.ID)
         case projectBrowser(ProjectBrowserFeature.Action)
-  case sceneNavigator(SceneGraphFeature.Action)
-  /// Triggered when scene is modified (e.g., prim added) to force viewport reload
-  case sceneModified(UUID)
+        case sceneNavigator(SceneGraphFeature.Action)
+        case inspector(InspectorFeature.Action)
+        /// Triggered when scene is modified (e.g., prim added) to force viewport reload
+        case sceneModified(UUID)
 
   // Environment
   case environmentPathChanged(String?)
@@ -166,11 +170,13 @@ public struct DocumentEditorFeature {
         Scope(state: \.projectBrowser, action: \.projectBrowser) {
             ProjectBrowserFeature()
         }
+        Scope(state: \.sceneNavigator, action: \.sceneNavigator) {
+            SceneGraphFeature()
+        }
+        Scope(state: \.inspector, action: \.inspector) {
+            InspectorFeature()
+        }
 
-		Scope(state: \.sceneNavigator, action: \.sceneNavigator) {
-			SceneGraphFeature()
-		}
-        
         Reduce { state, action in
             switch action {
 			case let .documentOpened(documentURL):
@@ -204,11 +210,17 @@ public struct DocumentEditorFeature {
 				guard let documentURL = state.projectBrowser.documentURL,
 				      let selectedURL = selectedScene else {
 					state.cameraHistory = []
-					return .send(.sceneNavigator(.sceneURLChanged(nil)))
+					return .merge(
+						.send(.sceneNavigator(.sceneURLChanged(nil))),
+						.send(.inspector(.sceneURLChanged(nil))),
+						.send(.inspector(.selectionChanged(nil)))
+					)
 				}
 				return .merge(
 					loadCameraHistoryEffect(documentURL: documentURL, sceneURL: selectedURL),
-					.send(.sceneNavigator(.sceneURLChanged(selectedURL)))
+					.send(.sceneNavigator(.sceneURLChanged(selectedURL))),
+					.send(.inspector(.sceneURLChanged(selectedURL))),
+					.send(.inspector(.selectionChanged(nil)))
 				)
 
 			case let .cameraHistoryLoaded(items):
@@ -226,13 +238,16 @@ public struct DocumentEditorFeature {
 					return .merge(
 						updateUserDataEffect(state: state),
 						loadCameraHistoryEffect(documentURL: documentURL, sceneURL: selectedURL),
-						.send(.sceneNavigator(.sceneURLChanged(selectedURL)))
+						.send(.sceneNavigator(.sceneURLChanged(selectedURL))),
+						.send(.inspector(.sceneURLChanged(selectedURL))),
+						.send(.inspector(.selectionChanged(nil)))
 					)
 				}
 				state.cameraHistory = []
 				return .merge(
 					updateUserDataEffect(state: state),
-					.send(.sceneNavigator(.sceneURLChanged(nil)))
+					.send(.sceneNavigator(.sceneURLChanged(nil))),
+					.send(.inspector(.sceneURLChanged(nil)))
 				)
                 
             case let .bottomTabSelected(tab):
@@ -246,38 +261,46 @@ public struct DocumentEditorFeature {
 				if let existing = state.openScenes.first(where: { $0.fileURL == normalizedURL }) {
 					print("[DocumentEditorFeature] Scene already open, switching to tab")
 					state.selectedTab = .scene(id: existing.id)
-					if let documentURL = state.projectBrowser.documentURL {
-						return .merge(
-							updateUserDataEffect(state: state),
-							loadCameraHistoryEffect(documentURL: documentURL, sceneURL: normalizedURL),
-							.send(.sceneNavigator(.sceneURLChanged(normalizedURL)))
-						)
-					}
-					return .merge(
-						updateUserDataEffect(state: state),
-						.send(.sceneNavigator(.sceneURLChanged(normalizedURL)))
-					)
-				}
-				
-				// Open new scene
-				let newTab = SceneTab(fileURL: normalizedURL)
-				print("[DocumentEditorFeature] Created new tab: \(newTab.id)")
-				state.openScenes.append(newTab)
-				state.selectedTab = .scene(id: newTab.id)
-				print("[DocumentEditorFeature] Total open scenes: \(state.openScenes.count)")
 				if let documentURL = state.projectBrowser.documentURL {
 					return .merge(
 						updateUserDataEffect(state: state),
 						loadCameraHistoryEffect(documentURL: documentURL, sceneURL: normalizedURL),
-						.send(.sceneNavigator(.sceneURLChanged(normalizedURL)))
+						.send(.sceneNavigator(.sceneURLChanged(normalizedURL))),
+						.send(.inspector(.sceneURLChanged(normalizedURL))),
+						.send(.inspector(.selectionChanged(nil)))
 					)
 				}
 				return .merge(
 					updateUserDataEffect(state: state),
-					.send(.sceneNavigator(.sceneURLChanged(normalizedURL)))
+					.send(.sceneNavigator(.sceneURLChanged(normalizedURL))),
+					.send(.inspector(.sceneURLChanged(normalizedURL))),
+					.send(.inspector(.selectionChanged(nil)))
 				)
+			}
+			
+			// Open new scene
+			let newTab = SceneTab(fileURL: normalizedURL)
+			print("[DocumentEditorFeature] Created new tab: \(newTab.id)")
+			state.openScenes.append(newTab)
+			state.selectedTab = .scene(id: newTab.id)
+			print("[DocumentEditorFeature] Total open scenes: \(state.openScenes.count)")
+			if let documentURL = state.projectBrowser.documentURL {
+				return .merge(
+					updateUserDataEffect(state: state),
+					loadCameraHistoryEffect(documentURL: documentURL, sceneURL: normalizedURL),
+					.send(.sceneNavigator(.sceneURLChanged(normalizedURL))),
+					.send(.inspector(.sceneURLChanged(normalizedURL))),
+					.send(.inspector(.selectionChanged(nil)))
+				)
+			}
+			return .merge(
+				updateUserDataEffect(state: state),
+				.send(.sceneNavigator(.sceneURLChanged(normalizedURL))),
+				.send(.inspector(.sceneURLChanged(normalizedURL))),
+				.send(.inspector(.selectionChanged(nil)))
+			)
                 
-            case let .sceneClosed(id):
+			case let .sceneClosed(id):
                 state.openScenes.remove(id: id)
                 if case .scene(let selectedId) = state.selectedTab, selectedId == id {
                     if let next = state.openScenes.first {
@@ -291,13 +314,17 @@ public struct DocumentEditorFeature {
 					return .merge(
 						updateUserDataEffect(state: state),
 						loadCameraHistoryEffect(documentURL: documentURL, sceneURL: selectedURL),
-						.send(.sceneNavigator(.sceneURLChanged(selectedURL)))
+						.send(.sceneNavigator(.sceneURLChanged(selectedURL))),
+						.send(.inspector(.sceneURLChanged(selectedURL))),
+						.send(.inspector(.selectionChanged(nil)))
 					)
 				}
 				state.cameraHistory = []
                 return .merge(
 					updateUserDataEffect(state: state),
-					.send(.sceneNavigator(.sceneURLChanged(nil)))
+					.send(.sceneNavigator(.sceneURLChanged(nil))),
+					.send(.inspector(.sceneURLChanged(nil))),
+					.send(.inspector(.selectionChanged(nil)))
 				)
 
 			case let .sceneCameraChanged(url, transform):
@@ -384,16 +411,32 @@ public struct DocumentEditorFeature {
                           return .none
           
             case .sceneNavigator(let sceneAction):
-            	// Detect when scene is modified (prim created) to trigger viewport reload
-            	if case .primCreated = sceneAction,
-            	   case .scene(let tabID) = state.selectedTab,
-            	   var tab = state.openScenes[id: tabID] {
-            		tab.reloadTrigger = UUID()
-            		state.openScenes[id: tabID] = tab
-    // Also invalidate thumbnail for this scene via ProjectBrowserFeature
-    return .send(.projectBrowser(.sceneModified(tab.fileURL)))
-            	}
-            	return .none
+				var effects: [Effect<Action>] = []
+				
+				// Detect when scene is modified (prim created) to trigger viewport reload
+				if case .primCreated = sceneAction,
+				   case .scene(let tabID) = state.selectedTab,
+				   var tab = state.openScenes[id: tabID] {
+					tab.reloadTrigger = UUID()
+					state.openScenes[id: tabID] = tab
+					// Also invalidate thumbnail for this scene via ProjectBrowserFeature
+					effects.append(.send(.projectBrowser(.sceneModified(tab.fileURL))))
+				}
+				
+				// Forward selection changes to inspector
+				if case .selectionChanged(let nodeID) = sceneAction {
+					effects.append(.send(.inspector(.selectionChanged(nodeID))))
+				}
+				
+				// Forward scene graph loaded to inspector for available prims
+				if case .sceneGraphLoaded(_, let nodes) = sceneAction {
+					effects.append(.send(.inspector(.sceneGraphUpdated(nodes))))
+				}
+				
+				return effects.isEmpty ? .none : .merge(effects)
+
+			case .inspector:
+				return .none
           
             case let .sceneModified(tabID):
             	if var tab = state.openScenes[id: tabID] {

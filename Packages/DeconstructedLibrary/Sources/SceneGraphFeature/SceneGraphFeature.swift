@@ -57,7 +57,10 @@ public struct SceneGraphFeature {
 
 		Reduce { state, action in
 			switch action {
-			case .binding:
+			case let .binding(bindingAction):
+				if bindingAction.keyPath == \.selectedNodeID {
+					return .send(.selectionChanged(state.selectedNodeID))
+				}
 				return .none
 
 			case let .sceneURLChanged(url):
@@ -167,7 +170,10 @@ public struct SceneGraphFeature {
 			case let .primCreated(path):
 				// Select the newly created prim and refresh
 				state.selectedNodeID = path
-				return .send(.refreshRequested)
+				return .merge(
+					.send(.selectionChanged(path)),
+					.send(.refreshRequested)
+				)
 
 			case let .primCreationFailed(message):
 				state.errorMessage = message
