@@ -12,33 +12,48 @@ public struct InspectorFeature {
 		public var sceneURL: URL?
 		public var selectedNodeID: SceneNode.ID?
 		public var layerData: SceneLayerData?
+		public var playbackData: ScenePlaybackData?
 		public var primAttributes: USDPrimAttributes?
 		public var sceneNodes: [SceneNode]
 		public var isLoading: Bool
 		public var errorMessage: String?
 		public var primIsLoading: Bool
 		public var primErrorMessage: String?
+		public var playbackIsPlaying: Bool
+		public var playbackCurrentTime: Double
+		public var playbackSpeed: Double
+		public var playbackIsScrubbing: Bool
 
 		public init(
 			sceneURL: URL? = nil,
 			selectedNodeID: SceneNode.ID? = nil,
 			layerData: SceneLayerData? = nil,
+			playbackData: ScenePlaybackData? = nil,
 			primAttributes: USDPrimAttributes? = nil,
 			sceneNodes: [SceneNode] = [],
 			isLoading: Bool = false,
 			errorMessage: String? = nil,
 			primIsLoading: Bool = false,
-			primErrorMessage: String? = nil
+			primErrorMessage: String? = nil,
+			playbackIsPlaying: Bool = false,
+			playbackCurrentTime: Double = 0,
+			playbackSpeed: Double = 1.0,
+			playbackIsScrubbing: Bool = false
 		) {
 			self.sceneURL = sceneURL
 			self.selectedNodeID = selectedNodeID
 			self.layerData = layerData
+			self.playbackData = playbackData
 			self.primAttributes = primAttributes
 			self.sceneNodes = sceneNodes
 			self.isLoading = isLoading
 			self.errorMessage = errorMessage
 			self.primIsLoading = primIsLoading
 			self.primErrorMessage = primErrorMessage
+			self.playbackIsPlaying = playbackIsPlaying
+			self.playbackCurrentTime = playbackCurrentTime
+			self.playbackSpeed = playbackSpeed
+			self.playbackIsScrubbing = playbackIsScrubbing
 		}
 
 		public var currentTarget: InspectorTarget {
@@ -61,8 +76,8 @@ public struct InspectorFeature {
 		case sceneURLChanged(URL?)
 		case selectionChanged(SceneNode.ID?)
 		case sceneGraphUpdated([SceneNode])
-		case layerDataLoaded(SceneLayerData)
-		case layerDataLoadFailed(String)
+		case sceneMetadataLoaded(SceneLayerData, ScenePlaybackData)
+		case sceneMetadataLoadFailed(String)
 		case primAttributesLoaded(USDPrimAttributes)
 		case primAttributesLoadFailed(String)
 		case refreshLayerData
@@ -74,7 +89,14 @@ public struct InspectorFeature {
 
 		case layerDataUpdateSucceeded
 		case layerDataUpdateFailed(String)
+
+		case playbackPlayPauseTapped
+		case playbackStopTapped
+		case playbackScrubbed(Double, isEditing: Bool)
+		case playbackTick
 	}
+
+	@Dependency(\.continuousClock) var clock
 
 	public init() {}
 
@@ -92,18 +114,25 @@ public struct InspectorFeature {
 				state.selectedNodeID = nil
 				state.errorMessage = nil
 				state.layerData = nil
+				state.playbackData = nil
 				state.primAttributes = nil
 				state.primIsLoading = false
 				state.primErrorMessage = nil
 				state.sceneNodes = []
+				state.playbackIsPlaying = false
+				state.playbackCurrentTime = 0
+				state.playbackIsScrubbing = false
 				guard let url else {
 					state.isLoading = false
-					return .none
+					return .cancel(id: PlaybackTimerID.playback)
 				}
 				state.isLoading = true
-				return .run { send in
-					await loadLayerData(url: url, send: send)
-				}
+				return .merge(
+					.run { send in
+						await loadLayerData(url: url, send: send)
+					},
+					.cancel(id: PlaybackTimerID.playback)
+				)
 
 			case let .selectionChanged(nodeID):
 				state.selectedNodeID = nodeID
@@ -142,20 +171,27 @@ public struct InspectorFeature {
 				}
 				return .none
 
-			case let .layerDataLoaded(data):
-				print("[InspectorFeature] layerDataLoaded: defaultPrim=\(data.defaultPrim ?? "nil"), mpu=\(data.metersPerUnit), upAxis=\(data.upAxis)")
-				var layerData = data
+			case let .sceneMetadataLoaded(layerData, playbackData):
+				print("[InspectorFeature] layerDataLoaded: defaultPrim=\(layerData.defaultPrim ?? "nil"), mpu=\(layerData.metersPerUnit), upAxis=\(layerData.upAxis)")
+				var updatedLayerData = layerData
 				// If we have scene nodes, use them to populate availablePrims
 				if !state.sceneNodes.isEmpty {
-					layerData.availablePrims = extractAvailablePrims(from: state.sceneNodes)
-					print("[InspectorFeature] Applied \(layerData.availablePrims.count) prims from scene nodes")
+					updatedLayerData.availablePrims = extractAvailablePrims(from: state.sceneNodes)
+					print("[InspectorFeature] Applied \(updatedLayerData.availablePrims.count) prims from scene nodes")
 				}
-				state.layerData = layerData
+				state.layerData = updatedLayerData
+				state.playbackData = playbackData
 				state.isLoading = false
 				state.errorMessage = nil
+				state.playbackCurrentTime = playbackData.startTimeCode
+				state.playbackIsPlaying = (playbackData.autoPlay ?? false) && playbackData.hasTimeline
+				state.playbackIsScrubbing = false
+				if state.playbackIsPlaying {
+					return startPlaybackTimer(state: state, clock: clock)
+				}
 				return .none
 
-			case let .layerDataLoadFailed(message):
+			case let .sceneMetadataLoadFailed(message):
 				state.errorMessage = message
 				state.isLoading = false
 				return .none
@@ -241,6 +277,60 @@ public struct InspectorFeature {
 			case let .layerDataUpdateFailed(message):
 				state.errorMessage = message
 				return .none
+
+			case .playbackPlayPauseTapped:
+				guard let playbackData = state.playbackData,
+				      playbackData.hasTimeline else {
+					return .none
+				}
+				state.playbackIsPlaying.toggle()
+				state.playbackIsScrubbing = false
+				if state.playbackIsPlaying {
+					return startPlaybackTimer(state: state, clock: clock)
+				}
+				return .cancel(id: PlaybackTimerID.playback)
+
+			case .playbackStopTapped:
+				state.playbackIsPlaying = false
+				state.playbackIsScrubbing = false
+				if let playbackData = state.playbackData {
+					state.playbackCurrentTime = playbackData.startTimeCode
+				} else {
+					state.playbackCurrentTime = 0
+				}
+				return .cancel(id: PlaybackTimerID.playback)
+
+			case let .playbackScrubbed(value, isEditing):
+				state.playbackCurrentTime = value
+				state.playbackIsScrubbing = isEditing
+				if isEditing {
+					state.playbackIsPlaying = false
+					return .cancel(id: PlaybackTimerID.playback)
+				}
+				return .none
+
+			case .playbackTick:
+				guard let playbackData = state.playbackData,
+				      playbackData.hasTimeline,
+				      state.playbackIsPlaying else {
+					return .cancel(id: PlaybackTimerID.playback)
+				}
+				let fps = playbackData.timeCodesPerSecond > 0
+					? playbackData.timeCodesPerSecond
+					: 24.0
+				let delta = (1.0 / fps) * state.playbackSpeed
+				let nextTime = state.playbackCurrentTime + delta
+				if nextTime >= playbackData.endTimeCode {
+					if shouldLoop(playbackData.playbackMode) {
+						state.playbackCurrentTime = playbackData.startTimeCode
+						return .none
+					}
+					state.playbackCurrentTime = playbackData.endTimeCode
+					state.playbackIsPlaying = false
+					return .cancel(id: PlaybackTimerID.playback)
+				}
+				state.playbackCurrentTime = nextTime
+				return .none
 			}
 		}
 	}
@@ -266,8 +356,17 @@ private func loadLayerData(url: URL, send: Send<InspectorFeature.Action>) async 
 		availablePrims: metadata.defaultPrimName.map { [$0] } ?? []
 	)
 
-	print("[InspectorFeature] Sending layerDataLoaded")
-	await send(.layerDataLoaded(layerData))
+	let playbackData = ScenePlaybackData(
+		startTimeCode: metadata.startTimeCode ?? 0,
+		endTimeCode: metadata.endTimeCode ?? 0,
+		timeCodesPerSecond: metadata.timeCodesPerSecond ?? 24,
+		autoPlay: metadata.autoPlay,
+		playbackMode: metadata.playbackMode,
+		animationTracks: metadata.animationTracks
+	)
+
+	print("[InspectorFeature] Sending sceneMetadataLoaded")
+	await send(.sceneMetadataLoaded(layerData, playbackData))
 }
 
 private func extractAvailablePrims(from nodes: [SceneNode]) -> [String] {
@@ -303,4 +402,28 @@ private func findNode(id: SceneNode.ID, in nodes: [SceneNode]) -> SceneNode? {
 
 private enum PrimAttributesLoadCancellationID {
 	case load
+}
+
+private enum PlaybackTimerID {
+	case playback
+}
+
+private func startPlaybackTimer(
+	state: InspectorFeature.State,
+	clock: some Clock<Duration>
+) -> Effect<InspectorFeature.Action> {
+	let fps = max(state.playbackData?.timeCodesPerSecond ?? 24.0, 1.0)
+	let interval = Duration.seconds(1.0 / fps)
+	return .run { send in
+		while true {
+			try await clock.sleep(for: interval)
+			await send(.playbackTick)
+		}
+	}
+	.cancellable(id: PlaybackTimerID.playback, cancelInFlight: true)
+}
+
+private func shouldLoop(_ playbackMode: String?) -> Bool {
+	let mode = playbackMode?.lowercased() ?? ""
+	return mode.contains("loop") || mode.contains("repeat")
 }

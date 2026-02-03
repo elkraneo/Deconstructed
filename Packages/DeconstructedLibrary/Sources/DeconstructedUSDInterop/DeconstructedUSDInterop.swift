@@ -1,4 +1,6 @@
+import CxxStdlib
 import Foundation
+import OpenUSD
 import USDInterfaces
 import USDInterop
 import USDInteropAdvanced
@@ -9,6 +11,8 @@ public enum DeconstructedUSDInteropError: Error, LocalizedError, Sendable {
 	case saveFailed(URL)
 	case primNotFound(String)
 	case setDefaultPrimFailed(String)
+	case setMetersPerUnitFailed(Double)
+	case setUpAxisFailed(String)
 	case applySchemaFailed(schema: String, primPath: String)
 	case createPrimFailed(path: String, typeName: String)
 	case notImplemented
@@ -25,6 +29,10 @@ public enum DeconstructedUSDInteropError: Error, LocalizedError, Sendable {
 			return "No prim found at path \(path)."
 		case let .setDefaultPrimFailed(path):
 			return "Failed to set default prim at path \(path)."
+		case let .setMetersPerUnitFailed(value):
+			return "Failed to set metersPerUnit to \(value)."
+		case let .setUpAxisFailed(axis):
+			return "Failed to set upAxis to \(axis)."
 		case let .applySchemaFailed(schema, primPath):
 			return "Failed to apply schema \(schema) to prim \(primPath)."
 		case let .createPrimFailed(path, typeName):
@@ -248,14 +256,17 @@ public enum DeconstructedUSDInterop {
 
 	/// Sets the metersPerUnit metadata for the stage.
 	public static func setMetersPerUnit(url: URL, value: Double) throws {
-		// TODO: Implement via USDInteropAdvanced once API is available
-		throw DeconstructedUSDInteropError.notImplemented
+		let stage = try openStage(url: url)
+		stage.SetMetadata(TfToken("metersPerUnit"), VtValue(Double(value)))
+		try saveRootLayer(stage: stage, url: url)
 	}
 
 	/// Sets the upAxis metadata for the stage.
 	public static func setUpAxis(url: URL, axis: String) throws {
-		// TODO: Implement via USDInteropAdvanced once API is available
-		throw DeconstructedUSDInteropError.notImplemented
+		let stage = try openStage(url: url)
+		let token = TfToken(std.string(axis))
+		stage.SetMetadata(TfToken("upAxis"), VtValue(token))
+		try saveRootLayer(stage: stage, url: url)
 	}
 
 	private static func mapSchemaKind(_ kind: SchemaSpec.Kind) -> USDSchemaSpec.Kind {
@@ -295,5 +306,24 @@ public enum DeconstructedUSDInterop {
 			}
 		}
 		return error
+	}
+
+	private static func openStage(url: URL) throws -> UsdStage {
+		let stagePtr = UsdStage.Open(std.string(url.path), UsdStage.InitialLoadSet.LoadAll)
+		guard stagePtr._isNonnull() else {
+			throw DeconstructedUSDInteropError.stageOpenFailed(url)
+		}
+		return OpenUSD.Overlay.Dereference(stagePtr)
+	}
+
+	private static func saveRootLayer(stage: UsdStage, url: URL) throws {
+		let rootLayerHandle = stage.GetRootLayer()
+		guard Bool(rootLayerHandle) else {
+			throw DeconstructedUSDInteropError.rootLayerMissing(url)
+		}
+		let rootLayer = OpenUSD.Overlay.Dereference(rootLayerHandle)
+		guard rootLayer.Save() else {
+			throw DeconstructedUSDInteropError.saveFailed(url)
+		}
 	}
 }

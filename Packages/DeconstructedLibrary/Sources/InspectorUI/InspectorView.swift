@@ -31,21 +31,35 @@ public struct InspectorView: View {
 						switch store.currentTarget {
 						case .sceneLayer:
 							if let layerData = store.layerData {
-								LayerDataSection(
-									layerData: layerData,
-									onDefaultPrimChanged: { primPath in
-										store.send(.defaultPrimChanged(primPath))
-									},
-									onMetersPerUnitChanged: { value in
-										store.send(.metersPerUnitChanged(value))
-									},
-									onUpAxisChanged: { axis in
-										store.send(.upAxisChanged(axis))
-									},
-									onConvertVariantsTapped: {
-										store.send(.convertVariantsToConfigurationsTapped)
-									}
-								)
+								VStack(alignment: .leading, spacing: 16) {
+									ScenePlaybackSection(
+										playbackData: store.playbackData,
+										isPlaying: store.playbackIsPlaying,
+										currentTime: store.playbackCurrentTime,
+										speed: store.playbackSpeed,
+										onPlayPause: { store.send(.playbackPlayPauseTapped) },
+										onStop: { store.send(.playbackStopTapped) },
+										onScrub: { value, isEditing in
+											store.send(.playbackScrubbed(value, isEditing: isEditing))
+										}
+									)
+
+									LayerDataSection(
+										layerData: layerData,
+										onDefaultPrimChanged: { primPath in
+											store.send(.defaultPrimChanged(primPath))
+										},
+										onMetersPerUnitChanged: { value in
+											store.send(.metersPerUnitChanged(value))
+										},
+										onUpAxisChanged: { axis in
+											store.send(.upAxisChanged(axis))
+										},
+										onConvertVariantsTapped: {
+											store.send(.convertVariantsToConfigurationsTapped)
+										}
+									)
+								}
 							} else {
 								// No layer data available yet
 								VStack(spacing: 8) {
@@ -243,6 +257,108 @@ struct PrimAttributesSection: View {
 	}
 }
 
+struct ScenePlaybackSection: View {
+	let playbackData: ScenePlaybackData?
+	let isPlaying: Bool
+	let currentTime: Double
+	let speed: Double
+	let onPlayPause: () -> Void
+	let onStop: () -> Void
+	let onScrub: (Double, Bool) -> Void
+	@State private var isExpanded: Bool = true
+
+	private var isEnabled: Bool {
+		playbackData?.hasTimeline ?? false
+	}
+
+	private var startTime: Double {
+		playbackData?.startTimeCode ?? 0
+	}
+
+	private var endTime: Double {
+		let end = playbackData?.endTimeCode ?? 0
+		return max(end, startTime)
+	}
+
+	private var fps: Double {
+		let value = playbackData?.timeCodesPerSecond ?? 24.0
+		return value > 0 ? value : 24.0
+	}
+
+	var body: some View {
+		VStack(alignment: .leading, spacing: 12) {
+			Button(action: { isExpanded.toggle() }) {
+				HStack(spacing: 4) {
+					Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+						.font(.system(size: 10))
+						.foregroundStyle(.secondary)
+					Text("Scene Playback")
+						.font(.system(size: 12, weight: .semibold))
+					Spacer()
+				}
+			}
+			.buttonStyle(.plain)
+
+			if isExpanded {
+				VStack(alignment: .leading, spacing: 10) {
+					HStack(spacing: 10) {
+						Button(action: onPlayPause) {
+							Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+								.font(.system(size: 12, weight: .semibold))
+								.frame(width: 18, height: 18)
+						}
+						.buttonStyle(.plain)
+
+						Button(action: onStop) {
+							Image(systemName: "stop.fill")
+								.font(.system(size: 10, weight: .semibold))
+								.frame(width: 18, height: 18)
+						}
+						.buttonStyle(.plain)
+
+						VStack(spacing: 2) {
+							Slider(
+								value: Binding(
+									get: { currentTime },
+									set: { onScrub($0, false) }
+								),
+								in: startTime...max(startTime + 0.001, endTime),
+								onEditingChanged: { isEditing in
+									onScrub(currentTime, isEditing)
+								}
+							)
+							.controlSize(.small)
+
+							HStack {
+								Text(formatFrame(currentTime))
+								Spacer()
+								Text(formatFrame(endTime))
+							}
+							.font(.caption2.monospacedDigit())
+							.foregroundStyle(.secondary)
+						}
+					}
+					.padding(8)
+					.background(.quaternary.opacity(0.4))
+					.clipShape(RoundedRectangle(cornerRadius: 8))
+					.disabled(!isEnabled)
+
+					if !isEnabled {
+						Text("No timeline range found in the USD.")
+							.font(.caption2)
+							.foregroundStyle(.secondary)
+					}
+				}
+			}
+		}
+	}
+
+	private func formatFrame(_ time: Double) -> String {
+		let frame = time * fps
+		return String(format: "%.0f", frame)
+	}
+}
+
 struct LayerDataSection: View {
 	let layerData: SceneLayerData
 	let onDefaultPrimChanged: (String) -> Void
@@ -282,6 +398,10 @@ struct LayerDataSection: View {
 						}
 						.pickerStyle(.menu)
 						.labelsHidden()
+						.padding(.horizontal, 6)
+						.padding(.vertical, 4)
+						.background(.quaternary.opacity(0.5))
+						.clipShape(RoundedRectangle(cornerRadius: 6))
 					}
 
 					InspectorRow(label: "Meters Per Unit") {
@@ -293,9 +413,13 @@ struct LayerDataSection: View {
 							),
 							format: .number
 						)
-						.textFieldStyle(.roundedBorder)
+						.textFieldStyle(.plain)
 						.multilineTextAlignment(.trailing)
 						.frame(width: 80)
+						.padding(.horizontal, 6)
+						.padding(.vertical, 4)
+						.background(.quaternary.opacity(0.5))
+						.clipShape(RoundedRectangle(cornerRadius: 6))
 					}
 
 					InspectorRow(label: "Up Axis") {
@@ -312,6 +436,10 @@ struct LayerDataSection: View {
 						}
 						.pickerStyle(.menu)
 						.labelsHidden()
+						.padding(.horizontal, 6)
+						.padding(.vertical, 4)
+						.background(.quaternary.opacity(0.5))
+						.clipShape(RoundedRectangle(cornerRadius: 6))
 					}
 
 					Button(action: onConvertVariantsTapped) {
@@ -324,6 +452,7 @@ struct LayerDataSection: View {
 					.buttonStyle(.borderless)
 					.disabled(true)
 					.foregroundStyle(.secondary)
+					.help("Deferred: will use USDInteropAdvanced combineVariants in a later pass.")
 				}
 			}
 		}
