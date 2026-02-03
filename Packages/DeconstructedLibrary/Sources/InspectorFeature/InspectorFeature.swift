@@ -408,10 +408,10 @@ private enum PlaybackTimerID {
 	case playback
 }
 
-private func startPlaybackTimer(
-	state: InspectorFeature.State,
-	clock: some Clock<Duration>
-) -> Effect<InspectorFeature.Action> {
+	private func startPlaybackTimer(
+		state: InspectorFeature.State,
+		clock: any Clock<Duration>
+	) -> Effect<InspectorFeature.Action> {
 	let fps = max(state.playbackData?.timeCodesPerSecond ?? 24.0, 1.0)
 	let interval = Duration.seconds(1.0 / fps)
 	return .run { send in

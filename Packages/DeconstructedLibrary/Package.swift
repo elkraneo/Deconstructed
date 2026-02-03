@@ -100,10 +100,14 @@ let package = Package(
 			url: "https://github.com/pointfreeco/swift-composable-architecture",
 			from: "1.23.1"
 		),
+		.package(
+			url: "https://github.com/pointfreeco/swift-sharing",
+			from: "2.3.0"
+		),
 		.package(url: "https://github.com/elkraneo/USDInterop", branch: "main"),
 		.package(
-			url: "https://github.com/elkraneo/USDInteropAdvanced",
-			branch: "main"
+			name: "USDInteropAdvanced",
+			path: "/Volumes/Plutonian/_Developer/USDInteropAdvanced"
 		),
 	],
 	targets: [
@@ -300,7 +304,10 @@ let package = Package(
 			]
 		),
 		.target(
-			name: "InspectorModels"
+			name: "InspectorModels",
+			dependencies: [
+				.product(name: "Sharing", package: "swift-sharing")
+			]
 		),
 		.target(
 			name: "InspectorFeature",

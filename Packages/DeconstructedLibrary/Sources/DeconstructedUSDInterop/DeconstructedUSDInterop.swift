@@ -1,6 +1,4 @@
-import CxxStdlib
 import Foundation
-import OpenUSD
 import USDInterfaces
 import USDInterop
 import USDInteropAdvanced
@@ -253,20 +251,21 @@ public enum DeconstructedUSDInterop {
 	) -> USDPrimAttributes? {
 		advancedClient.primAttributes(url: url, path: primPath)
 	}
-
 	/// Sets the metersPerUnit metadata for the stage.
 	public static func setMetersPerUnit(url: URL, value: Double) throws {
-		let stage = try openStage(url: url)
-		stage.SetMetadata(TfToken("metersPerUnit"), VtValue(Double(value)))
-		try saveRootLayer(stage: stage, url: url)
+		do {
+			try advancedClient.setMetersPerUnit(url: url, value: value)
+		} catch {
+			throw mapAdvancedError(error, url: url, primPath: "/", schema: nil)
+		}
 	}
-
 	/// Sets the upAxis metadata for the stage.
 	public static func setUpAxis(url: URL, axis: String) throws {
-		let stage = try openStage(url: url)
-		let token = TfToken(std.string(axis))
-		stage.SetMetadata(TfToken("upAxis"), VtValue(token))
-		try saveRootLayer(stage: stage, url: url)
+		do {
+			try advancedClient.setUpAxis(url: url, axis: axis)
+		} catch {
+			throw mapAdvancedError(error, url: url, primPath: "/", schema: nil)
+		}
 	}
 
 	private static func mapSchemaKind(_ kind: SchemaSpec.Kind) -> USDSchemaSpec.Kind {
@@ -307,23 +306,4 @@ public enum DeconstructedUSDInterop {
 		}
 		return error
 	}
-
-	private static func openStage(url: URL) throws -> UsdStage {
-		let stagePtr = UsdStage.Open(std.string(url.path), UsdStage.InitialLoadSet.LoadAll)
-		guard stagePtr._isNonnull() else {
-			throw DeconstructedUSDInteropError.stageOpenFailed(url)
-		}
-		return OpenUSD.Overlay.Dereference(stagePtr)
 	}
-
-	private static func saveRootLayer(stage: UsdStage, url: URL) throws {
-		let rootLayerHandle = stage.GetRootLayer()
-		guard Bool(rootLayerHandle) else {
-			throw DeconstructedUSDInteropError.rootLayerMissing(url)
-		}
-		let rootLayer = OpenUSD.Overlay.Dereference(rootLayerHandle)
-		guard rootLayer.Save() else {
-			throw DeconstructedUSDInteropError.saveFailed(url)
-		}
-	}
-}

@@ -1,5 +1,5 @@
 {
-  "originHash" : "00ad372c417c3afd3a70df456ff420c1bb270c25aafe8e235b7f5bf4dc0b6de6",
+  "originHash" : "e71f3e6ae66c175fa773908f6bc9a8d4f982852f601f664c92f966f1a9840138",
   "pins" : [
     {
       "identity" : "appleusdschemas",
@@ -143,15 +143,6 @@
       "state" : {
         "branch" : "main",
         "revision" : "b36e25a9cd980d856c0e3967faaa3a2ea321c940"
-      }
-    },
-    {
-      "identity" : "usdinteropadvanced",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/elkraneo/USDInteropAdvanced",
-      "state" : {
-        "branch" : "main",
-        "revision" : "3ea525015180c295d6e6307763784b5f8c93b9e8"
       }
     },
     {
