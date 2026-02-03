@@ -317,6 +317,7 @@ let package = Package(
 			name: "DeconstructedUSDPipeline",
 			dependencies: [
 				.product(name: "OpenUSD", package: "SwiftUsd"),
+				.product(name: "USDInteropAdvancedPlugins", package: "USDInteropAdvanced"),
 			],
 			swiftSettings: [
 				.interoperabilityMode(.Cxx),

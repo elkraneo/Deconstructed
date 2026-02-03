@@ -1,6 +1,7 @@
 import CxxStdlib
 import Foundation
 @_spi(Internal) import OpenUSD
+import USDInteropAdvancedPlugins
 
 // Deconstructed-specific USD pipeline helpers.
 //
@@ -10,37 +11,8 @@ import Foundation
 public enum DeconstructedUSDPipeline {
     public static func convertPluginToUsdc(sourceURL: URL, outputUSDC: URL, resourcesURL: URL) throws {
         try FileManager.default.createDirectory(at: resourcesURL, withIntermediateDirectories: true)
-
-        let stagePath = "\(sourceURL.path):SDF_FORMAT_ARGS:assetsPath=\(resourcesURL.path)"
-        let stagePtr = pxrInternal_v0_25_8__pxrReserved__.UsdStage.Open(
-            std.string(stagePath),
-            pxrInternal_v0_25_8__pxrReserved__.UsdStage.InitialLoadSet.LoadAll
-        )
-        guard stagePtr._isNonnull() else {
-            throw NSError(domain: "DeconstructedUSDPipeline", code: 1, userInfo: [
-                NSLocalizedDescriptionKey: "Failed to open plugin file: \(sourceURL.path)"
-            ])
-        }
-        let stage = OpenUSD.Overlay.Dereference(stagePtr)
-
-        let flattenedLayerPtr = stage.Flatten()
-        guard flattenedLayerPtr._isNonnull() else {
-            throw NSError(domain: "DeconstructedUSDPipeline", code: 2, userInfo: [
-                NSLocalizedDescriptionKey: "Failed to flatten stage"
-            ])
-        }
-        let flattenedLayer = OpenUSD.Overlay.Dereference(flattenedLayerPtr)
-
-        let success = flattenedLayer.Export(
-            std.string(outputUSDC.path),
-            std.string(),
-            pxrInternal_v0_25_8__pxrReserved__.SdfLayer.FileFormatArguments()
-        )
-        guard success else {
-            throw NSError(domain: "DeconstructedUSDPipeline", code: 3, userInfo: [
-                NSLocalizedDescriptionKey: "Failed to export flattened USDC to \(outputUSDC.path)"
-            ])
-        }
+        let client = USDAdvancedClient()
+        try client.convertPluginToUsdc(sourceURL: sourceURL, outputUSDC: outputUSDC, assetsPath: resourcesURL)
     }
 
     /// Deconstructed convention: rewrite texture asset paths to `../Resources/<filename>`,
