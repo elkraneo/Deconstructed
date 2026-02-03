@@ -12,24 +12,33 @@ public struct InspectorFeature {
 		public var sceneURL: URL?
 		public var selectedNodeID: SceneNode.ID?
 		public var layerData: SceneLayerData?
+		public var primAttributes: USDPrimAttributes?
 		public var sceneNodes: [SceneNode]
 		public var isLoading: Bool
 		public var errorMessage: String?
+		public var primIsLoading: Bool
+		public var primErrorMessage: String?
 
 		public init(
 			sceneURL: URL? = nil,
 			selectedNodeID: SceneNode.ID? = nil,
 			layerData: SceneLayerData? = nil,
+			primAttributes: USDPrimAttributes? = nil,
 			sceneNodes: [SceneNode] = [],
 			isLoading: Bool = false,
-			errorMessage: String? = nil
+			errorMessage: String? = nil,
+			primIsLoading: Bool = false,
+			primErrorMessage: String? = nil
 		) {
 			self.sceneURL = sceneURL
 			self.selectedNodeID = selectedNodeID
 			self.layerData = layerData
+			self.primAttributes = primAttributes
 			self.sceneNodes = sceneNodes
 			self.isLoading = isLoading
 			self.errorMessage = errorMessage
+			self.primIsLoading = primIsLoading
+			self.primErrorMessage = primErrorMessage
 		}
 
 		public var currentTarget: InspectorTarget {
@@ -54,6 +63,8 @@ public struct InspectorFeature {
 		case sceneGraphUpdated([SceneNode])
 		case layerDataLoaded(SceneLayerData)
 		case layerDataLoadFailed(String)
+		case primAttributesLoaded(USDPrimAttributes)
+		case primAttributesLoadFailed(String)
 		case refreshLayerData
 
 		case defaultPrimChanged(String)
@@ -81,6 +92,9 @@ public struct InspectorFeature {
 				state.selectedNodeID = nil
 				state.errorMessage = nil
 				state.layerData = nil
+				state.primAttributes = nil
+				state.primIsLoading = false
+				state.primErrorMessage = nil
 				state.sceneNodes = []
 				guard let url else {
 					state.isLoading = false
@@ -93,7 +107,27 @@ public struct InspectorFeature {
 
 			case let .selectionChanged(nodeID):
 				state.selectedNodeID = nodeID
-				return .none
+				state.primAttributes = nil
+				state.primErrorMessage = nil
+				guard let nodeID, let url = state.sceneURL else {
+					state.primIsLoading = false
+					return .none
+				}
+				state.primIsLoading = true
+				return .run { send in
+					if let attributes = DeconstructedUSDInterop.getPrimAttributes(
+						url: url,
+						primPath: nodeID
+					) {
+						await send(.primAttributesLoaded(attributes))
+					} else {
+						await send(.primAttributesLoadFailed("No prim data available."))
+					}
+				}
+				.cancellable(
+					id: PrimAttributesLoadCancellationID.load,
+					cancelInFlight: true
+				)
 
 			case let .sceneGraphUpdated(nodes):
 				print("[InspectorFeature] sceneGraphUpdated: \(nodes.count) root nodes")
@@ -124,6 +158,18 @@ public struct InspectorFeature {
 			case let .layerDataLoadFailed(message):
 				state.errorMessage = message
 				state.isLoading = false
+				return .none
+
+			case let .primAttributesLoaded(attributes):
+				state.primAttributes = attributes
+				state.primIsLoading = false
+				state.primErrorMessage = nil
+				return .none
+
+			case let .primAttributesLoadFailed(message):
+				state.primAttributes = nil
+				state.primIsLoading = false
+				state.primErrorMessage = message
 				return .none
 
 			case .refreshLayerData:
@@ -253,4 +299,8 @@ private func findNode(id: SceneNode.ID, in nodes: [SceneNode]) -> SceneNode? {
 		}
 	}
 	return nil
+}
+
+private enum PrimAttributesLoadCancellationID {
+	case load
 }

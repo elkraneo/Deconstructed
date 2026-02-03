@@ -232,6 +232,32 @@ public enum DeconstructedUSDInterop {
 		return (min: .zero, max: .zero, center: .zero, maxExtent: 0)
 	}
 
+	/// Retrieves stage metadata including layer data properties.
+	/// Returns USDStageMetadata containing defaultPrim, metersPerUnit, upAxis, etc.
+	public static func getStageMetadata(url: URL) -> USDStageMetadata {
+		return advancedClient.stageMetadata(url: url)
+	}
+
+	/// Retrieves key prim attributes for inspection.
+	public static func getPrimAttributes(
+		url: URL,
+		primPath: String
+	) -> USDPrimAttributes? {
+		advancedClient.primAttributes(url: url, path: primPath)
+	}
+
+	/// Sets the metersPerUnit metadata for the stage.
+	public static func setMetersPerUnit(url: URL, value: Double) throws {
+		// TODO: Implement via USDInteropAdvanced once API is available
+		throw DeconstructedUSDInteropError.notImplemented
+	}
+
+	/// Sets the upAxis metadata for the stage.
+	public static func setUpAxis(url: URL, axis: String) throws {
+		// TODO: Implement via USDInteropAdvanced once API is available
+		throw DeconstructedUSDInteropError.notImplemented
+	}
+
 	private static func mapSchemaKind(_ kind: SchemaSpec.Kind) -> USDSchemaSpec.Kind {
 		switch kind {
 		case .api:

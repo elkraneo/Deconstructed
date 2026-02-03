@@ -3,6 +3,7 @@ import InspectorFeature
 import InspectorModels
 import SceneGraphModels
 import SwiftUI
+import USDInterfaces
 
 public struct InspectorView: View {
 	@Bindable public var store: StoreOf<InspectorFeature>
@@ -60,7 +61,25 @@ public struct InspectorView: View {
 							}
 						case .prim:
 							if let selectedNode = store.selectedNode {
-								PrimDataSection(node: selectedNode)
+								VStack(alignment: .leading, spacing: 16) {
+									PrimDataSection(node: selectedNode)
+
+									if store.primIsLoading {
+										ProgressView()
+											.frame(maxWidth: .infinity, alignment: .center)
+											.padding(.vertical, 8)
+									} else if let message = store.primErrorMessage {
+										Text(message)
+											.font(.caption)
+											.foregroundStyle(.secondary)
+									} else if let primAttributes = store.primAttributes {
+										PrimAttributesSection(attributes: primAttributes)
+									} else {
+										Text("Select a prim to view its properties.")
+											.font(.caption)
+											.foregroundStyle(.secondary)
+									}
+								}
 							} else {
 								Text("No Prim Selected")
 									.font(.caption)
@@ -151,6 +170,72 @@ struct PrimDataSection: View {
 					InspectorRow(label: "Specifier") {
 						Text(node.specifier.rawValue)
 							.font(.system(size: 11))
+					}
+				}
+			}
+		}
+	}
+}
+
+struct PrimAttributesSection: View {
+	let attributes: USDPrimAttributes
+	@State private var isExpanded: Bool = true
+
+	var body: some View {
+		VStack(alignment: .leading, spacing: 12) {
+			Button(action: { isExpanded.toggle() }) {
+				HStack(spacing: 4) {
+					Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+						.font(.system(size: 10))
+						.foregroundStyle(.secondary)
+					Text("Properties")
+						.font(.system(size: 12, weight: .semibold))
+					Spacer()
+				}
+			}
+			.buttonStyle(.plain)
+
+			if isExpanded {
+				VStack(alignment: .leading, spacing: 12) {
+					InspectorRow(label: "USD Type") {
+						Text(attributes.typeName)
+							.font(.system(size: 11))
+					}
+
+					InspectorRow(label: "Active") {
+						Text(attributes.isActive ? "Yes" : "No")
+							.font(.system(size: 11))
+					}
+
+					InspectorRow(label: "Visibility") {
+						Text(attributes.visibility)
+							.font(.system(size: 11))
+					}
+
+					InspectorRow(label: "Purpose") {
+						Text(attributes.purpose)
+							.font(.system(size: 11))
+					}
+
+					InspectorRow(label: "Kind") {
+						Text(attributes.kind)
+							.font(.system(size: 11))
+					}
+
+					if !attributes.authoredAttributes.isEmpty {
+						Divider()
+
+						Text("Authored Attributes")
+							.font(.system(size: 11, weight: .semibold))
+							.foregroundStyle(.secondary)
+
+						ForEach(attributes.authoredAttributes, id: \.name) { attribute in
+							InspectorRow(label: attribute.name) {
+								Text(attribute.value)
+									.font(.system(size: 11))
+									.textSelection(.enabled)
+							}
+						}
 					}
 				}
 			}
