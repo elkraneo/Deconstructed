@@ -82,6 +82,18 @@ let package = Package(
 			name: "DeconstructedUSDInterop",
 			targets: ["DeconstructedUSDInterop"]
 		),
+		.library(
+			name: "InspectorModels",
+			targets: ["InspectorModels"]
+		),
+		.library(
+			name: "InspectorFeature",
+			targets: ["InspectorFeature"]
+		),
+		.library(
+			name: "InspectorUI",
+			targets: ["InspectorUI"]
+		),
 	],
 	dependencies: [
 		.package(
@@ -141,6 +153,8 @@ let package = Package(
 				"DeconstructedUSDInterop",
 				"ViewportUI",
 				"ViewportModels",
+				"InspectorUI",
+				"InspectorFeature",
 				.product(
 					name: "ComposableArchitecture",
 					package: "swift-composable-architecture"
@@ -157,6 +171,7 @@ let package = Package(
 				"RCPDocument",
 				"ProjectBrowserFeature",
 				"SceneGraphFeature",
+				"InspectorFeature",
 				"ViewportModels",
 				.product(
 					name: "ComposableArchitecture",
@@ -282,6 +297,35 @@ let package = Package(
 			swiftSettings: [
 				.interoperabilityMode(.Cxx),
 				.unsafeFlags(["-disable-cmo"], .when(configuration: .release)),
+			]
+		),
+		.target(
+			name: "InspectorModels"
+		),
+		.target(
+			name: "InspectorFeature",
+			dependencies: [
+				"InspectorModels",
+				"SceneGraphModels",
+				"DeconstructedUSDInterop",
+				.product(
+					name: "ComposableArchitecture",
+					package: "swift-composable-architecture"
+				),
+			],
+			swiftSettings: [
+				.interoperabilityMode(.Cxx)
+			]
+		),
+		.target(
+			name: "InspectorUI",
+			dependencies: [
+				"InspectorFeature",
+				"InspectorModels",
+				"SceneGraphModels",
+			],
+			swiftSettings: [
+				.interoperabilityMode(.Cxx)
 			]
 		),
 		.testTarget(

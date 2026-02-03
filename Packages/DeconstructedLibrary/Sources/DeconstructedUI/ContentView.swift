@@ -2,6 +2,8 @@ import ComposableArchitecture
 import DeconstructedFeatures
 import DeconstructedModels
 import Foundation
+import InspectorFeature
+import InspectorUI
 import ProjectBrowserFeature
 import ProjectBrowserUI
 import RCPDocument
@@ -123,13 +125,23 @@ public struct ContentView: View {
 									"\(sceneTab.fileURL.path)-\(sceneTab.reloadTrigger?.uuidString ?? "initial")"
 								)
 
-								ViewportFloatingToolbar(
-									context: viewportMenuContext(store: store)
-								)
-								.padding(12)
-							}
+							ViewportFloatingToolbar(
+								context: viewportMenuContext(store: store)
+							)
+							.padding(12)
 						}
-					} else if !store.openScenes.isEmpty {
+
+						Divider()
+
+						InspectorView(
+							store: store.scope(
+								state: \.inspector,
+								action: \.inspector
+							)
+						)
+						.frame(minWidth: 240, idealWidth: 280, maxWidth: 360)
+					}
+				} else if !store.openScenes.isEmpty {
 						// Show first scene if none selected but some are open
 						if let firstScene = store.openScenes.first {
 							HStack(spacing: 0) {
@@ -170,15 +182,25 @@ public struct ContentView: View {
 										"\(firstScene.fileURL.path)-\(firstScene.reloadTrigger?.uuidString ?? "initial")"
 									)
 
-									ViewportFloatingToolbar(
-										context: viewportMenuContext(store: store)
-									)
-									.padding(12)
-								}
+								ViewportFloatingToolbar(
+									context: viewportMenuContext(store: store)
+								)
+								.padding(12)
 							}
+
+							Divider()
+
+							InspectorView(
+								store: store.scope(
+									state: \.inspector,
+									action: \.inspector
+								)
+							)
+							.frame(minWidth: 240, idealWidth: 280, maxWidth: 360)
 						}
-					} else {
-						// No scene open - show placeholder
+					}
+				} else {
+					// No scene open - show placeholder
 						ContentUnavailableView(
 							"No Scene Open",
 							systemImage: DeconstructedConstants.SFSymbol.cubeTransparent,
