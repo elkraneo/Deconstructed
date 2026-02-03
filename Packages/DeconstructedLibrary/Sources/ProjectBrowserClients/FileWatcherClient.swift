@@ -20,6 +20,13 @@ extension FileWatcherClient: DependencyKey {
 			}
 		)
 	}()
+
+	public static let testValue: Self = Self(
+		watch: { _ in
+			// In tests we want file watching to complete immediately and never touch FSEvents.
+			AsyncStream { $0.finish() }
+		}
+	)
 }
 
 extension FileWatcherClient {

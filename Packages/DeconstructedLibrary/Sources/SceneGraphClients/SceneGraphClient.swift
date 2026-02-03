@@ -15,6 +15,11 @@ private enum SceneGraphClientKey: DependencyKey {
 	static let liveValue = SceneGraphClient(loadSceneGraph: { url in
 		try loadSceneGraphFromUSD(url: url)
 	})
+
+	static let testValue = SceneGraphClient(loadSceneGraph: { _ in
+		// Avoid touching the filesystem / OpenUSD when running unit tests.
+		[]
+	})
 }
 
 public extension DependencyValues {

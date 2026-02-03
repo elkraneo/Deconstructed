@@ -179,9 +179,12 @@ struct ProjectBrowserFeatureTests {
 			$0.isLoading = false
 			$0.assetItems = [updatedRoot]
 			$0.expandedDirectories = [rootId]
+			$0.isWatchingFiles = true
+			$0.watchedDirectoryURL = rootURL
 		}
 
 		#expect(await capture.get() == folderURL)
+		await store.finish()
 	}
 
 	// MARK: - Drag and Drop
@@ -360,7 +363,8 @@ struct ProjectBrowserFeatureTests {
 		let directoryId = UUID()
 
 		// Double-click sends itemDoubleClicked (UI handles setCurrentDirectory separately)
-		await store.send(.itemDoubleClicked(directoryId))
-		// itemDoubleClicked is a no-op in reducer - navigation handled by view
+		await store.send(.itemDoubleClicked(directoryId)) {
+			$0.selectedItems = [directoryId]
+		}
 	}
 }
