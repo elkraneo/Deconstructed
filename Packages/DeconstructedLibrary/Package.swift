@@ -3,6 +3,11 @@
 
 import PackageDescription
 
+// Workaround for Xcode/Swift explicit-module builds where Clang's dependency scanner
+// fails to locate libc++ headers (e.g. `cstddef`), causing `std` module failures
+// when building SwiftUsd/OpenUSD.
+let libcxxIncludeDir = "/Applications/Xcode-26.2.0.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1"
+
 let package = Package(
 	name: "DeconstructedLibrary",
 	platforms: [
@@ -83,6 +88,10 @@ let package = Package(
 			targets: ["DeconstructedUSDInterop"]
 		),
 		.library(
+			name: "DeconstructedUSDPipeline",
+			targets: ["DeconstructedUSDPipeline"]
+		),
+		.library(
 			name: "InspectorModels",
 			targets: ["InspectorModels"]
 		),
@@ -105,6 +114,7 @@ let package = Package(
 			from: "2.3.0"
 		),
 		.package(url: "https://github.com/elkraneo/USDInterop", branch: "main"),
+		.package(url: "https://github.com/apple/SwiftUsd.git", from: "5.2.0"),
 		.package(
 			name: "USDInteropAdvanced",
 			path: "/Volumes/Plutonian/_Developer/USDInteropAdvanced"
@@ -300,6 +310,17 @@ let package = Package(
 			],
 			swiftSettings: [
 				.interoperabilityMode(.Cxx),
+				.unsafeFlags(["-disable-cmo"], .when(configuration: .release)),
+			]
+		),
+		.target(
+			name: "DeconstructedUSDPipeline",
+			dependencies: [
+				.product(name: "OpenUSD", package: "SwiftUsd"),
+			],
+			swiftSettings: [
+				.interoperabilityMode(.Cxx),
+				.unsafeFlags(["-Xcc", "-isystem", "-Xcc", libcxxIncludeDir]),
 				.unsafeFlags(["-disable-cmo"], .when(configuration: .release)),
 			]
 		),
