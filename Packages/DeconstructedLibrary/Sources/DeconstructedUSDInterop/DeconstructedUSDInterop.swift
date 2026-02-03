@@ -159,12 +159,14 @@ public enum DeconstructedUSDInterop {
 			baseName: primitiveType.displayName
 		)
 		do {
-			return try advancedClient.createPrim(
+			let createdPath = try advancedClient.createPrim(
 				url: url,
 				parentPath: parentPath,
 				name: primName,
 				typeName: primitiveType.typeName
 			)
+			try advancedClient.applyPrimitiveDefaults(url: url, primPath: createdPath, preset: .rcp)
+			return createdPath
 		} catch {
 			throw mapAdvancedError(error, url: url, primPath: parentPath, schema: nil)
 		}
