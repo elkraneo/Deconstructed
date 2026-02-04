@@ -3,11 +3,6 @@
 
 import PackageDescription
 
-// Workaround for Xcode/Swift explicit-module builds where Clang's dependency scanner
-// fails to locate libc++ headers (e.g. `cstddef`), causing `std` module failures
-// when building SwiftUsd/OpenUSD.
-let libcxxIncludeDir = "/Applications/Xcode-26.2.0.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1"
-
 let package = Package(
 	name: "DeconstructedLibrary",
 	platforms: [
@@ -316,10 +311,13 @@ let package = Package(
 		.target(
 			name: "DeconstructedUSDPipeline",
 			dependencies: [
-				.product(name: "USDInteropAdvancedWorkflows", package: "USDInteropAdvanced"),
+				.product(
+					name: "USDInteropAdvancedWorkflows",
+					package: "USDInteropAdvanced"
+				)
 			],
 			swiftSettings: [
-				.unsafeFlags(["-disable-cmo"], .when(configuration: .release)),
+				.unsafeFlags(["-disable-cmo"], .when(configuration: .release))
 			]
 		),
 		.target(
