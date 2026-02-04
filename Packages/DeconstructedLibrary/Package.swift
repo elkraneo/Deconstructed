@@ -316,12 +316,9 @@ let package = Package(
 		.target(
 			name: "DeconstructedUSDPipeline",
 			dependencies: [
-				.product(name: "OpenUSD", package: "SwiftUsd"),
-				.product(name: "USDInteropAdvancedPlugins", package: "USDInteropAdvanced"),
+				.product(name: "USDInteropAdvancedWorkflows", package: "USDInteropAdvanced"),
 			],
 			swiftSettings: [
-				.interoperabilityMode(.Cxx),
-				.unsafeFlags(["-Xcc", "-isystem", "-Xcc", libcxxIncludeDir]),
 				.unsafeFlags(["-disable-cmo"], .when(configuration: .release)),
 			]
 		),
