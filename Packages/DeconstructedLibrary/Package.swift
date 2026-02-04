@@ -116,8 +116,8 @@ let package = Package(
 		.package(url: "https://github.com/elkraneo/USDInterop", branch: "main"),
 		.package(url: "https://github.com/apple/SwiftUsd.git", from: "5.2.0"),
 		.package(
-			name: "USDInteropAdvanced",
-			path: "/Volumes/Plutonian/_Developer/USDInteropAdvanced"
+			url: "https://github.com/reality2713/USDInteropAdvanced",
+			branch: "main"
 		),
 	],
 	targets: [
