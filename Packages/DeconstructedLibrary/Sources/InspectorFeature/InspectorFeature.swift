@@ -14,7 +14,7 @@ public struct InspectorFeature {
 		public var layerData: SceneLayerData?
 		public var playbackData: ScenePlaybackData?
 		public var primAttributes: USDPrimAttributes?
-		public var primTransform: TransformData?
+		public var primTransform: USDTransformData?
 		public var sceneNodes: [SceneNode]
 		public var isLoading: Bool
 		public var errorMessage: String?
@@ -31,7 +31,7 @@ public struct InspectorFeature {
 			layerData: SceneLayerData? = nil,
 			playbackData: ScenePlaybackData? = nil,
 			primAttributes: USDPrimAttributes? = nil,
-			primTransform: TransformData? = nil,
+			primTransform: USDTransformData? = nil,
 			sceneNodes: [SceneNode] = [],
 			isLoading: Bool = false,
 			errorMessage: String? = nil,
@@ -83,7 +83,7 @@ public struct InspectorFeature {
 		case sceneMetadataLoadFailed(String)
 		case primAttributesLoaded(USDPrimAttributes)
 		case primAttributesLoadFailed(String)
-		case primTransformLoaded(TransformData)
+		case primTransformLoaded(USDTransformData)
 		case primTransformLoadFailed(String)
 		case refreshLayerData
 

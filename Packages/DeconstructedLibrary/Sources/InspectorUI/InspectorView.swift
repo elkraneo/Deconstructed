@@ -1,5 +1,4 @@
 import ComposableArchitecture
-import DeconstructedUSDInterop
 import InspectorFeature
 import InspectorModels
 import SceneGraphModels
@@ -271,13 +270,13 @@ struct PrimAttributesSection: View {
 }
 
 struct TransformSection: View {
-	let transform: TransformData
+	let transform: USDTransformData
 	let metersPerUnit: Double?
 	@State private var isExpanded: Bool = true
 
 	private var lengthUnitLabel: String {
 		guard let metersPerUnit else { return "m" }
-		if abs(metersPerUnit - 0.01) < 0.0001 { return "cm" }
+		if Swift.abs(metersPerUnit - 0.01) < 0.0001 { return "cm" }
 		return "m"
 	}
 
@@ -348,7 +347,7 @@ private struct TransformRow: View {
 	}
 
 	private func formatNumber(_ value: Double) -> String {
-		if abs(value) < 0.0001 { return "0" }
+		if Swift.abs(value) < 0.0001 { return "0" }
 		return String(format: "%.2f", value)
 	}
 }
