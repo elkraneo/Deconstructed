@@ -20,7 +20,14 @@ Reality Composer Pro (RCP) is Apple's professional tool for creating 3D content 
 | Architecture | The Composable Architecture (TCA) 1.23.1 |
 | Document Model | Document-based app with `FileWrapper` |
 | File Watching | FSEvents (macOS native API) |
+| 3D Rendering | ModelKit + USD (via C++ interop) |
 | Swift Version | 6.2 with strict concurrency |
+
+### External Dependencies
+
+- **[USDInterop](https://github.com/elkraneo/USDInterop)** - Swift bindings for OpenUSD
+- **[USDInteropAdvanced](https://github.com/elkraneo/USDInteropAdvanced)** - Higher-level USD operations (metadata, scene graph, editing)
+- **[AppleUSDSchemas](https://github.com/elkraneo/AppleUSDSchemas)** - Apple's proprietary USD schema definitions
 
 ## Project Structure
 
@@ -37,7 +44,15 @@ Deconstructed/
 │       │   ├── DeconstructedModels/# JSON schema models
 │       │   ├── ProjectBrowserFeature/  # File browser TCA feature
 │       │   ├── ProjectBrowserClients/  # File watching, asset discovery
-│       │   └── ProjectBrowserUI/   # SwiftUI views
+│       │   ├── ProjectBrowserUI/   # SwiftUI views
+│       │   ├── SceneGraphFeature/  # Scene hierarchy navigation
+│       │   ├── SceneGraphClients/  # USD scene loading
+│       │   ├── SceneGraphUI/       # Scene tree view
+│       │   ├── ViewportModels/     # Viewport state models
+│       │   ├── ViewportUI/         # 3D viewport (ModelKit-based)
+│       │   ├── InspectorFeature/   # Inspector TCA feature
+│       │   ├── InspectorModels/    # Inspector data models
+│       │   └── InspectorUI/        # Inspector panel views
 │       └── Tests/
 └── Deconstructed.xcodeproj/
 ```
@@ -88,18 +103,67 @@ Uses **FSEvents** instead of `DispatchSource` because:
 
 Events are debounced (300ms) to prevent excessive UI reloads during batch operations.
 
+### Inspector Architecture
+
+The Inspector panel uses a **context-sensitive** approach:
+
+- **Scene Layer Mode**: Shows USD stage metadata (default prim, meters per unit, up axis) when no prim is selected
+- **Prim Mode**: Will show prim-specific properties when a node is selected in the Scene Navigator
+
+State is synchronized via TCA's scoped reducers - DocumentEditorFeature wires the inspector to scene URL changes and selection updates from the Scene Navigator.
+
+### USD Metadata Flow
+
+Layer data is read from USD stage metadata via `USDAdvancedClient.stageMetadata()`:
+- `upAxis`: "Y" or "Z" (normalized from TfToken values)
+- `metersPerUnit`: Scene scale factor
+- `defaultPrimName`: The default prim path
+
+Available prims for the default prim dropdown are collected from the scene graph hierarchy and merged with the layer data once both streams converge.
+
 ## Blog Series
 
 This project is documented in a series of articles exploring the reverse-engineering process:
 
-1. **[Deconstructing Reality Composer Pro: Introduction](https://www.elkraneo.com/deconstructing-reality-composer-pro-intro/)**
+1. **[Deconstructing Reality Composer Pro: Introduction](https://elkraneo.com/deconstructing-reality-composer-pro-intro/)**
    - Overview of the project goals and motivations
    - Initial exploration of the `.realitycomposerpro` format
 
-2. **[Deconstructing Reality Composer Pro: Document Type](https://www.elkraneo.com/deconstructing-reality-composer-pro-document-type/)**
+2. **[Deconstructing Reality Composer Pro: Document Type](https://elkraneo.com/deconstructing-reality-composer-pro-document-type/)**
    - Deep dive into the package structure
    - Understanding `main.json` and UUID mappings
    - Document-based app architecture with `FileWrapper`
+
+3. **[Deconstructing Reality Composer Pro: Project Browser](https://elkraneo.com/deconstructing-reality-composer-pro-project-browser/)**
+   - Building the file browser with TCA
+   - File watching with FSEvents
+   - Asset discovery and tree management
+
+4. **[Deconstructing Reality Composer Pro: Viewport](https://elkraneo.com/deconstructing-reality-composer-pro-viewport/)**
+   - Integrating ModelKit for 3D rendering
+   - Viewport toolbar and camera controls
+   - Environment configuration
+
+5. **[Deconstructing Reality Composer Pro: Scene Navigator](https://elkraneo.com/deconstructing-reality-composer-pro-scene-navigator/)**
+   - Scene hierarchy visualization
+   - USD prim navigation
+   - Inserting primitives and structural elements
+
+## Current Status
+
+### Implemented Features
+
+- ✅ **Document Handling**: Open and save `.realitycomposerpro` packages
+- ✅ **Project Browser**: File tree with folder creation, file operations, and live watching
+- ✅ **Scene Navigator**: Hierarchy view with prim selection and insertion
+- ✅ **Viewport**: 3D preview with grid, axes, and environment controls
+- ✅ **Inspector**: Layer Data panel (default prim, meters per unit, up axis)
+
+### In Progress
+
+- 🚧 **Inspector**: Prim-specific property editing
+- 🚧 **Component Management**: ECS component visualization and editing
+- 🚧 **Material Editor**: Shader graph integration
 
 ## Development
 
