@@ -126,6 +126,10 @@ public struct InspectorView: View {
 	private var headerTitle: String {
 		switch store.currentTarget {
 		case .sceneLayer:
+			if let url = store.sceneURL {
+				let name = url.deletingPathExtension().lastPathComponent
+				return name.isEmpty ? "Scene" : name
+			}
 			return "Scene"
 		case .prim(let path):
 			let components = path.split(separator: "/")
@@ -143,18 +147,19 @@ public struct InspectorView: View {
 	}
 }
 
-struct PrimDataSection: View {
-	let node: SceneNode
-	@State private var isExpanded: Bool = true
+private struct InspectorGroupBox<Content: View>: View {
+	let title: String
+	@Binding var isExpanded: Bool
+	@ViewBuilder let content: Content
 
 	var body: some View {
-		VStack(alignment: .leading, spacing: 12) {
+		VStack(alignment: .leading, spacing: 10) {
 			Button(action: { isExpanded.toggle() }) {
-				HStack(spacing: 4) {
+				HStack(spacing: 6) {
 					Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
 						.font(.system(size: 10))
 						.foregroundStyle(.secondary)
-					Text("Prim")
+					Text(title)
 						.font(.system(size: 12, weight: .semibold))
 					Spacer()
 				}
@@ -162,29 +167,43 @@ struct PrimDataSection: View {
 			.buttonStyle(.plain)
 
 			if isExpanded {
-				VStack(alignment: .leading, spacing: 12) {
-					InspectorRow(label: "Name") {
-						Text(node.name)
-							.font(.system(size: 11))
-							.textSelection(.enabled)
-					}
+				content
+			}
+		}
+		.padding(12)
+		.background(.quaternary.opacity(0.35))
+		.clipShape(RoundedRectangle(cornerRadius: 12))
+	}
+}
 
-					InspectorRow(label: "Path") {
-						Text(node.path)
-							.font(.system(size: 11))
-							.textSelection(.enabled)
-					}
+struct PrimDataSection: View {
+	let node: SceneNode
+	@State private var isExpanded: Bool = true
 
-					InspectorRow(label: "Type") {
-						Text(node.typeName ?? "Unknown")
-							.font(.system(size: 11))
-							.foregroundStyle(node.typeName == nil ? .secondary : .primary)
-					}
+	var body: some View {
+		InspectorGroupBox(title: "Prim", isExpanded: $isExpanded) {
+			VStack(alignment: .leading, spacing: 12) {
+				InspectorRow(label: "Name") {
+					Text(node.name)
+						.font(.system(size: 11))
+						.textSelection(.enabled)
+				}
 
-					InspectorRow(label: "Specifier") {
-						Text(node.specifier.rawValue)
-							.font(.system(size: 11))
-					}
+				InspectorRow(label: "Path") {
+					Text(node.path)
+						.font(.system(size: 11))
+						.textSelection(.enabled)
+				}
+
+				InspectorRow(label: "Type") {
+					Text(node.typeName ?? "Unknown")
+						.font(.system(size: 11))
+						.foregroundStyle(node.typeName == nil ? .secondary : .primary)
+				}
+
+				InspectorRow(label: "Specifier") {
+					Text(node.specifier.rawValue)
+						.font(.system(size: 11))
 				}
 			}
 		}
@@ -196,59 +215,45 @@ struct PrimAttributesSection: View {
 	@State private var isExpanded: Bool = true
 
 	var body: some View {
-		VStack(alignment: .leading, spacing: 12) {
-			Button(action: { isExpanded.toggle() }) {
-				HStack(spacing: 4) {
-					Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-						.font(.system(size: 10))
-						.foregroundStyle(.secondary)
-					Text("Properties")
-						.font(.system(size: 12, weight: .semibold))
-					Spacer()
+		InspectorGroupBox(title: "Properties", isExpanded: $isExpanded) {
+			VStack(alignment: .leading, spacing: 12) {
+				InspectorRow(label: "USD Type") {
+					Text(attributes.typeName)
+						.font(.system(size: 11))
 				}
-			}
-			.buttonStyle(.plain)
 
-			if isExpanded {
-				VStack(alignment: .leading, spacing: 12) {
-					InspectorRow(label: "USD Type") {
-						Text(attributes.typeName)
-							.font(.system(size: 11))
-					}
+				InspectorRow(label: "Active") {
+					Text(attributes.isActive ? "Yes" : "No")
+						.font(.system(size: 11))
+				}
 
-					InspectorRow(label: "Active") {
-						Text(attributes.isActive ? "Yes" : "No")
-							.font(.system(size: 11))
-					}
+				InspectorRow(label: "Visibility") {
+					Text(attributes.visibility)
+						.font(.system(size: 11))
+				}
 
-					InspectorRow(label: "Visibility") {
-						Text(attributes.visibility)
-							.font(.system(size: 11))
-					}
+				InspectorRow(label: "Purpose") {
+					Text(attributes.purpose)
+						.font(.system(size: 11))
+				}
 
-					InspectorRow(label: "Purpose") {
-						Text(attributes.purpose)
-							.font(.system(size: 11))
-					}
+				InspectorRow(label: "Kind") {
+					Text(attributes.kind)
+						.font(.system(size: 11))
+				}
 
-					InspectorRow(label: "Kind") {
-						Text(attributes.kind)
-							.font(.system(size: 11))
-					}
+				if !attributes.authoredAttributes.isEmpty {
+					Divider()
 
-					if !attributes.authoredAttributes.isEmpty {
-						Divider()
+					Text("Authored Attributes")
+						.font(.system(size: 11, weight: .semibold))
+						.foregroundStyle(.secondary)
 
-						Text("Authored Attributes")
-							.font(.system(size: 11, weight: .semibold))
-							.foregroundStyle(.secondary)
-
-						ForEach(attributes.authoredAttributes, id: \.name) { attribute in
-							InspectorRow(label: attribute.name) {
-								Text(attribute.value)
-									.font(.system(size: 11))
-									.textSelection(.enabled)
-							}
+					ForEach(attributes.authoredAttributes, id: \.name) { attribute in
+						InspectorRow(label: attribute.name) {
+							Text(attribute.value)
+								.font(.system(size: 11))
+								.textSelection(.enabled)
 						}
 					}
 				}
@@ -286,68 +291,54 @@ struct ScenePlaybackSection: View {
 	}
 
 	var body: some View {
-		VStack(alignment: .leading, spacing: 12) {
-			Button(action: { isExpanded.toggle() }) {
-				HStack(spacing: 4) {
-					Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-						.font(.system(size: 10))
-						.foregroundStyle(.secondary)
-					Text("Scene Playback")
-						.font(.system(size: 12, weight: .semibold))
-					Spacer()
-				}
-			}
-			.buttonStyle(.plain)
+		InspectorGroupBox(title: "Scene Playback", isExpanded: $isExpanded) {
+			VStack(alignment: .leading, spacing: 10) {
+				HStack(spacing: 10) {
+					Button(action: onPlayPause) {
+						Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+							.font(.system(size: 12, weight: .semibold))
+							.frame(width: 18, height: 18)
+					}
+					.buttonStyle(.plain)
 
-			if isExpanded {
-				VStack(alignment: .leading, spacing: 10) {
-					HStack(spacing: 10) {
-						Button(action: onPlayPause) {
-							Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-								.font(.system(size: 12, weight: .semibold))
-								.frame(width: 18, height: 18)
-						}
-						.buttonStyle(.plain)
+					Button(action: onStop) {
+						Image(systemName: "stop.fill")
+							.font(.system(size: 10, weight: .semibold))
+							.frame(width: 18, height: 18)
+					}
+					.buttonStyle(.plain)
 
-						Button(action: onStop) {
-							Image(systemName: "stop.fill")
-								.font(.system(size: 10, weight: .semibold))
-								.frame(width: 18, height: 18)
-						}
-						.buttonStyle(.plain)
-
-						VStack(spacing: 2) {
-							Slider(
-								value: Binding(
-									get: { currentTime },
-									set: { onScrub($0, false) }
-								),
-								in: startTime...max(startTime + 0.001, endTime),
-								onEditingChanged: { isEditing in
-									onScrub(currentTime, isEditing)
-								}
-							)
-							.controlSize(.small)
-
-							HStack {
-								Text(formatFrame(currentTime))
-								Spacer()
-								Text(formatFrame(endTime))
+					VStack(spacing: 2) {
+						Slider(
+							value: Binding(
+								get: { currentTime },
+								set: { onScrub($0, false) }
+							),
+							in: startTime...max(startTime + 0.001, endTime),
+							onEditingChanged: { isEditing in
+								onScrub(currentTime, isEditing)
 							}
-							.font(.caption2.monospacedDigit())
-							.foregroundStyle(.secondary)
-						}
-					}
-					.padding(8)
-					.background(.quaternary.opacity(0.4))
-					.clipShape(RoundedRectangle(cornerRadius: 8))
-					.disabled(!isEnabled)
+						)
+						.controlSize(.small)
 
-					if !isEnabled {
-						Text("No timeline range found in the USD.")
-							.font(.caption2)
-							.foregroundStyle(.secondary)
+						HStack {
+							Text(formatFrame(currentTime))
+							Spacer()
+							Text(formatFrame(endTime))
+						}
+						.font(.caption2.monospacedDigit())
+						.foregroundStyle(.secondary)
 					}
+				}
+				.padding(8)
+				.background(.quaternary.opacity(0.4))
+				.clipShape(RoundedRectangle(cornerRadius: 8))
+				.disabled(!isEnabled)
+
+				if !isEnabled {
+					Text("No timeline range found in the USD.")
+						.font(.caption2)
+						.foregroundStyle(.secondary)
 				}
 			}
 		}
@@ -368,92 +359,78 @@ struct LayerDataSection: View {
 	@State private var isExpanded: Bool = true
 
 	var body: some View {
-		VStack(alignment: .leading, spacing: 12) {
-			Button(action: { isExpanded.toggle() }) {
-				HStack(spacing: 4) {
-					Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-						.font(.system(size: 10))
-						.foregroundStyle(.secondary)
-					Text("Layer Data")
-						.font(.system(size: 12, weight: .semibold))
-					Spacer()
-				}
-			}
-			.buttonStyle(.plain)
-
-			if isExpanded {
-				VStack(alignment: .leading, spacing: 12) {
-					InspectorRow(label: "Default Prim") {
-						Picker(
-							"",
-							selection: Binding(
-								get: { layerData.defaultPrim ?? "" },
-								set: { onDefaultPrimChanged($0) }
-							)
-						) {
-							Text("None").tag("")
-							ForEach(layerData.availablePrims, id: \.self) { prim in
-								Text(prim).tag(prim)
-							}
-						}
-						.pickerStyle(.menu)
-						.labelsHidden()
-						.padding(.horizontal, 6)
-						.padding(.vertical, 4)
-						.background(.quaternary.opacity(0.5))
-						.clipShape(RoundedRectangle(cornerRadius: 6))
-					}
-
-					InspectorRow(label: "Meters Per Unit") {
-						TextField(
-							"",
-							value: Binding(
-								get: { layerData.metersPerUnit },
-								set: { onMetersPerUnitChanged($0) }
-							),
-							format: .number
+		InspectorGroupBox(title: "Layer Data", isExpanded: $isExpanded) {
+			VStack(alignment: .leading, spacing: 12) {
+				InspectorRow(label: "Default Prim") {
+					Picker(
+						"",
+						selection: Binding(
+							get: { layerData.defaultPrim ?? "" },
+							set: { onDefaultPrimChanged($0) }
 						)
-						.textFieldStyle(.plain)
-						.multilineTextAlignment(.trailing)
-						.frame(width: 80)
-						.padding(.horizontal, 6)
-						.padding(.vertical, 4)
-						.background(.quaternary.opacity(0.5))
-						.clipShape(RoundedRectangle(cornerRadius: 6))
-					}
-
-					InspectorRow(label: "Up Axis") {
-						Picker(
-							"",
-							selection: Binding(
-								get: { layerData.upAxis },
-								set: { onUpAxisChanged($0) }
-							)
-						) {
-							ForEach(UpAxis.allCases, id: \.self) { axis in
-								Text(axis.displayName).tag(axis)
-							}
+					) {
+						Text("None").tag("")
+						ForEach(layerData.availablePrims, id: \.self) { prim in
+							Text(prim).tag(prim)
 						}
-						.pickerStyle(.menu)
-						.labelsHidden()
-						.padding(.horizontal, 6)
-						.padding(.vertical, 4)
-						.background(.quaternary.opacity(0.5))
-						.clipShape(RoundedRectangle(cornerRadius: 6))
 					}
-
-					Button(action: onConvertVariantsTapped) {
-						Label(
-							"Convert Variants to Configurations",
-							systemImage: "arrow.triangle.2.circlepath"
-						)
-						.font(.system(size: 11))
-					}
-					.buttonStyle(.borderless)
-					.disabled(true)
-					.foregroundStyle(.secondary)
-					.help("Deferred: will use USDInteropAdvanced combineVariants in a later pass.")
+					.pickerStyle(.menu)
+					.labelsHidden()
+					.padding(.horizontal, 6)
+					.padding(.vertical, 4)
+					.background(.quaternary.opacity(0.5))
+					.clipShape(RoundedRectangle(cornerRadius: 6))
 				}
+
+				InspectorRow(label: "Meters Per Unit") {
+					TextField(
+						"",
+						value: Binding(
+							get: { layerData.metersPerUnit },
+							set: { onMetersPerUnitChanged($0) }
+						),
+						format: .number
+					)
+					.textFieldStyle(.plain)
+					.multilineTextAlignment(.trailing)
+					.frame(width: 80)
+					.padding(.horizontal, 6)
+					.padding(.vertical, 4)
+					.background(.quaternary.opacity(0.5))
+					.clipShape(RoundedRectangle(cornerRadius: 6))
+				}
+
+				InspectorRow(label: "Up Axis") {
+					Picker(
+						"",
+						selection: Binding(
+							get: { layerData.upAxis },
+							set: { onUpAxisChanged($0) }
+						)
+					) {
+						ForEach(UpAxis.allCases, id: \.self) { axis in
+							Text(axis.displayName).tag(axis)
+						}
+					}
+					.pickerStyle(.menu)
+					.labelsHidden()
+					.padding(.horizontal, 6)
+					.padding(.vertical, 4)
+					.background(.quaternary.opacity(0.5))
+					.clipShape(RoundedRectangle(cornerRadius: 6))
+				}
+
+				Button(action: onConvertVariantsTapped) {
+					Label(
+						"Convert Variants to Configurations",
+						systemImage: "arrow.triangle.2.circlepath"
+					)
+					.font(.system(size: 11))
+				}
+				.buttonStyle(.borderless)
+				.disabled(true)
+				.foregroundStyle(.secondary)
+				.help("Deferred: will use USDInteropAdvanced combineVariants in a later pass.")
 			}
 		}
 	}
