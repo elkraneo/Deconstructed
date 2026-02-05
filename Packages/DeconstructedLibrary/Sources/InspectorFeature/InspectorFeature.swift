@@ -14,6 +14,7 @@ public struct InspectorFeature {
 		public var layerData: SceneLayerData?
 		public var playbackData: ScenePlaybackData?
 		public var primAttributes: USDPrimAttributes?
+		public var primTransform: TransformData?
 		public var sceneNodes: [SceneNode]
 		public var isLoading: Bool
 		public var errorMessage: String?
@@ -30,6 +31,7 @@ public struct InspectorFeature {
 			layerData: SceneLayerData? = nil,
 			playbackData: ScenePlaybackData? = nil,
 			primAttributes: USDPrimAttributes? = nil,
+			primTransform: TransformData? = nil,
 			sceneNodes: [SceneNode] = [],
 			isLoading: Bool = false,
 			errorMessage: String? = nil,
@@ -45,6 +47,7 @@ public struct InspectorFeature {
 			self.layerData = layerData
 			self.playbackData = playbackData
 			self.primAttributes = primAttributes
+			self.primTransform = primTransform
 			self.sceneNodes = sceneNodes
 			self.isLoading = isLoading
 			self.errorMessage = errorMessage
@@ -80,6 +83,8 @@ public struct InspectorFeature {
 		case sceneMetadataLoadFailed(String)
 		case primAttributesLoaded(USDPrimAttributes)
 		case primAttributesLoadFailed(String)
+		case primTransformLoaded(TransformData)
+		case primTransformLoadFailed(String)
 		case refreshLayerData
 
 		case defaultPrimChanged(String)
@@ -116,6 +121,7 @@ public struct InspectorFeature {
 				state.layerData = nil
 				state.playbackData = nil
 				state.primAttributes = nil
+				state.primTransform = nil
 				state.primIsLoading = false
 				state.primErrorMessage = nil
 				state.sceneNodes = []
@@ -137,6 +143,7 @@ public struct InspectorFeature {
 			case let .selectionChanged(nodeID):
 				state.selectedNodeID = nodeID
 				state.primAttributes = nil
+				state.primTransform = nil
 				state.primErrorMessage = nil
 				guard let nodeID, let url = state.sceneURL else {
 					state.primIsLoading = false
@@ -151,6 +158,15 @@ public struct InspectorFeature {
 						await send(.primAttributesLoaded(attributes))
 					} else {
 						await send(.primAttributesLoadFailed("No prim data available."))
+					}
+
+					if let transform = DeconstructedUSDInterop.getPrimTransform(
+						url: url,
+						primPath: nodeID
+					) {
+						await send(.primTransformLoaded(transform))
+					} else {
+						await send(.primTransformLoadFailed("No transform data available."))
 					}
 				}
 				.cancellable(
@@ -204,6 +220,18 @@ public struct InspectorFeature {
 
 			case let .primAttributesLoadFailed(message):
 				state.primAttributes = nil
+				state.primIsLoading = false
+				state.primErrorMessage = message
+				return .none
+
+			case let .primTransformLoaded(transform):
+				state.primTransform = transform
+				state.primIsLoading = false
+				state.primErrorMessage = nil
+				return .none
+
+			case let .primTransformLoadFailed(message):
+				state.primTransform = nil
 				state.primIsLoading = false
 				state.primErrorMessage = message
 				return .none

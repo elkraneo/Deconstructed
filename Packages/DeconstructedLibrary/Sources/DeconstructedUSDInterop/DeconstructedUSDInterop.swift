@@ -1,7 +1,25 @@
+import CxxStdlib
 import Foundation
+import OpenUSD
 import USDInterfaces
 import USDInterop
 import USDInteropAdvanced
+
+public struct TransformData: Equatable, Sendable {
+	public var position: SIMD3<Double>
+	public var rotationDegrees: SIMD3<Double>
+	public var scale: SIMD3<Double>
+
+	public init(
+		position: SIMD3<Double> = .zero,
+		rotationDegrees: SIMD3<Double> = .zero,
+		scale: SIMD3<Double> = SIMD3<Double>(repeating: 1)
+	) {
+		self.position = position
+		self.rotationDegrees = rotationDegrees
+		self.scale = scale
+	}
+}
 
 public enum DeconstructedUSDInteropError: Error, LocalizedError, Sendable {
 	case stageOpenFailed(URL)
@@ -114,6 +132,9 @@ public struct EditOp: Sendable, Hashable {
 
 public enum DeconstructedUSDInterop {
 	private static let advancedClient = USDAdvancedClient()
+	private typealias UsdGeomXformable = pxrInternal_v0_25_8__pxrReserved__.UsdGeomXformable
+	private typealias GfVec3f = pxrInternal_v0_25_8__pxrReserved__.GfVec3f
+	private typealias VtValue = pxrInternal_v0_25_8__pxrReserved__.VtValue
 
 	public static func setDefaultPrim(url: URL, primPath: String) throws {
 		do {
@@ -253,6 +274,70 @@ public enum DeconstructedUSDInterop {
 	) -> USDPrimAttributes? {
 		advancedClient.primAttributes(url: url, path: primPath)
 	}
+
+	public static func getPrimTransform(
+		url: URL,
+		primPath: String
+	) -> TransformData? {
+		do {
+			let stage = try openStage(url: url)
+			let prim = stage.GetPrimAtPath(SdfPath(std.string(primPath)))
+			guard prim.IsValid() else {
+				return nil
+			}
+
+			let xformable = UsdGeomXformable(prim)
+			var resetXformStack = false
+			let ops = xformable.GetOrderedXformOps(&resetXformStack)
+
+			var position = SIMD3<Double>(repeating: 0)
+			var rotation = SIMD3<Double>(repeating: 0)
+			var scale = SIMD3<Double>(repeating: 1)
+
+			for i in 0..<ops.size() {
+				let op = ops[i]
+				let name = String(op.GetOpName().GetString())
+				var value = VtValue()
+				if !op.Get(&value, UsdTimeCode.Default()) {
+					continue
+				}
+
+				if name.contains("translate") {
+					if let vec = extractVec3(from: value) {
+						position = vec
+					}
+				} else if name.contains("scale") {
+					if let vec = extractVec3(from: value) {
+						scale = vec
+					}
+				} else if name.contains("rotateXYZ") {
+					if let vec = extractVec3(from: value) {
+						rotation = vec
+					}
+				} else if name.contains("rotateX") {
+					if let x = extractScalar(from: value) {
+						rotation.x = x
+					}
+				} else if name.contains("rotateY") {
+					if let y = extractScalar(from: value) {
+						rotation.y = y
+					}
+				} else if name.contains("rotateZ") {
+					if let z = extractScalar(from: value) {
+						rotation.z = z
+					}
+				}
+			}
+
+			return TransformData(
+				position: position,
+				rotationDegrees: rotation,
+				scale: scale
+			)
+		} catch {
+			return nil
+		}
+	}
 	/// Sets the metersPerUnit metadata for the stage.
 	public static func setMetersPerUnit(url: URL, value: Double) throws {
 		do {
@@ -308,4 +393,26 @@ public enum DeconstructedUSDInterop {
 		}
 		return error
 	}
+
+	private static func openStage(url: URL) throws -> UsdStage {
+		let stagePtr = UsdStage.Open(std.string(url.path), UsdStage.InitialLoadSet.LoadAll)
+		guard stagePtr._isNonnull() else {
+			throw DeconstructedUSDInteropError.stageOpenFailed(url)
+		}
+		return OpenUSD.Overlay.Dereference(stagePtr)
 	}
+
+	private static func extractVec3(from value: VtValue) -> SIMD3<Double>? {
+		let vec: GfVec3f = value.Get()
+		let array = vec.GetArray()
+		if array.count < 3 {
+			return nil
+		}
+		return SIMD3<Double>(Double(array[0]), Double(array[1]), Double(array[2]))
+	}
+
+	private static func extractScalar(from value: VtValue) -> Double? {
+		let text = String(describing: value)
+		return Double(text)
+	}
+}

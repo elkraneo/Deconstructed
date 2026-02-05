@@ -1,4 +1,5 @@
 import ComposableArchitecture
+import DeconstructedUSDInterop
 import InspectorFeature
 import InspectorModels
 import SceneGraphModels
@@ -77,6 +78,13 @@ public struct InspectorView: View {
 							if let selectedNode = store.selectedNode {
 								VStack(alignment: .leading, spacing: 16) {
 									PrimDataSection(node: selectedNode)
+
+									if let transform = store.primTransform {
+										TransformSection(
+											transform: transform,
+											metersPerUnit: store.layerData?.metersPerUnit
+										)
+									}
 
 									if store.primIsLoading {
 										ProgressView()
@@ -259,6 +267,89 @@ struct PrimAttributesSection: View {
 				}
 			}
 		}
+	}
+}
+
+struct TransformSection: View {
+	let transform: TransformData
+	let metersPerUnit: Double?
+	@State private var isExpanded: Bool = true
+
+	private var lengthUnitLabel: String {
+		guard let metersPerUnit else { return "m" }
+		if abs(metersPerUnit - 0.01) < 0.0001 { return "cm" }
+		return "m"
+	}
+
+	var body: some View {
+		InspectorGroupBox(title: "Transform", isExpanded: $isExpanded) {
+			VStack(alignment: .leading, spacing: 10) {
+				TransformRow(
+					label: "Position",
+					unit: lengthUnitLabel,
+					values: transform.position
+				)
+				TransformRow(
+					label: "Rotation",
+					unit: "°",
+					values: transform.rotationDegrees
+				)
+				TransformRow(
+					label: "Scale",
+					unit: "",
+					values: transform.scale
+				)
+			}
+		}
+	}
+}
+
+private struct TransformRow: View {
+	let label: String
+	let unit: String
+	let values: SIMD3<Double>
+
+	var body: some View {
+		HStack(spacing: 8) {
+			Text(label)
+				.font(.system(size: 11))
+				.foregroundStyle(.secondary)
+				.frame(width: 80, alignment: .leading)
+
+			Text(unit)
+				.font(.system(size: 10))
+				.foregroundStyle(.secondary)
+				.frame(width: 18, alignment: .leading)
+
+			Spacer()
+
+			axisField(values.x, label: "X")
+			axisField(values.y, label: "Y")
+			axisField(values.z, label: "Z")
+		}
+	}
+
+	private func axisField(_ value: Double, label: String) -> some View {
+		Text(formatNumber(value))
+			.font(.system(size: 11, weight: .medium))
+			.frame(width: 44, alignment: .trailing)
+			.padding(.horizontal, 6)
+			.padding(.vertical, 4)
+			.background(.quaternary.opacity(0.5))
+			.clipShape(RoundedRectangle(cornerRadius: 6))
+			.overlay(
+				Text(label)
+					.font(.system(size: 8))
+					.foregroundStyle(.secondary)
+					.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+					.padding(.leading, 4)
+					.padding(.bottom, 2)
+			)
+	}
+
+	private func formatNumber(_ value: Double) -> String {
+		if abs(value) < 0.0001 { return "0" }
+		return String(format: "%.2f", value)
 	}
 }
 
