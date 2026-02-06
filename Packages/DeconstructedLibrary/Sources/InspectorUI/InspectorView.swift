@@ -276,11 +276,27 @@ struct TransformSection: View {
 	let metersPerUnit: Double?
 	let onTransformChanged: (USDTransformData) -> Void
 	@State private var isExpanded: Bool = true
+	@State private var isUniformScale: Bool
 
 	private var lengthUnitLabel: String {
 		guard let metersPerUnit else { return "m" }
 		if Swift.abs(metersPerUnit - 0.01) < 0.0001 { return "cm" }
 		return "m"
+	}
+
+	init(
+		transform: USDTransformData,
+		metersPerUnit: Double?,
+		onTransformChanged: @escaping (USDTransformData) -> Void
+	) {
+		self.transform = transform
+		self.metersPerUnit = metersPerUnit
+		self.onTransformChanged = onTransformChanged
+		let s = transform.scale
+		let isUniform =
+			Swift.abs(s.x - s.y) < 0.000_001
+			&& Swift.abs(s.y - s.z) < 0.000_001
+		self._isUniformScale = State(initialValue: isUniform)
 	}
 
 	var body: some View {
@@ -306,10 +322,11 @@ struct TransformSection: View {
 						onTransformChanged(updated)
 					}
 				)
-				TransformEditableRow(
+				UniformScaleEditableRow(
 					label: "Scale",
 					unit: "",
 					values: transform.scale,
+					isUniformScale: $isUniformScale,
 					onValuesChanged: { values in
 						var updated = transform
 						updated.scale = values
@@ -357,6 +374,80 @@ private struct TransformEditableRow: View {
 				onValuesChanged(updated)
 			}
 		}
+	}
+
+	private func axisField(_ value: Double, label: String, onCommit: @escaping (Double) -> Void) -> some View {
+		EditableAxisField(
+			value: value,
+			label: label,
+			onCommit: onCommit
+		)
+	}
+}
+
+private struct UniformScaleEditableRow: View {
+	let label: String
+	let unit: String
+	let values: SIMD3<Double>
+	@Binding var isUniformScale: Bool
+	let onValuesChanged: (SIMD3<Double>) -> Void
+
+	var body: some View {
+		HStack(spacing: 8) {
+			Text(label)
+				.font(.system(size: 11))
+				.foregroundStyle(.secondary)
+				.frame(width: 80, alignment: .leading)
+
+			Text(unit)
+				.font(.system(size: 10))
+				.foregroundStyle(.secondary)
+				.frame(width: 18, alignment: .leading)
+
+			Button {
+				isUniformScale.toggle()
+				guard isUniformScale else { return }
+				let v = (values.x + values.y + values.z) / 3.0
+				onValuesChanged(SIMD3<Double>(repeating: v))
+			} label: {
+				Image(systemName: isUniformScale ? "link" : "link.slash")
+					.font(.system(size: 11, weight: .semibold))
+					.foregroundStyle(.secondary)
+					.frame(width: 18, height: 18)
+			}
+			.buttonStyle(.plain)
+			.help("Toggle uniform scale")
+
+			Spacer()
+
+			axisField(values.x, label: "X") { value in
+				onValuesChanged(updatedScale(axis: .x, value: value))
+			}
+			axisField(values.y, label: "Y") { value in
+				onValuesChanged(updatedScale(axis: .y, value: value))
+			}
+			axisField(values.z, label: "Z") { value in
+				onValuesChanged(updatedScale(axis: .z, value: value))
+			}
+		}
+	}
+
+	private enum Axis { case x, y, z }
+
+	private func updatedScale(axis: Axis, value: Double) -> SIMD3<Double> {
+		if isUniformScale {
+			return SIMD3<Double>(repeating: value)
+		}
+		var updated = values
+		switch axis {
+		case .x:
+			updated.x = value
+		case .y:
+			updated.y = value
+		case .z:
+			updated.z = value
+		}
+		return updated
 	}
 
 	private func axisField(_ value: Double, label: String, onCommit: @escaping (Double) -> Void) -> some View {
