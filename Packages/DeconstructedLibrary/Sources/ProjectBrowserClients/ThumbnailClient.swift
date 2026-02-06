@@ -6,8 +6,8 @@ import Foundation
 
 @DependencyClient
 public struct ThumbnailClient: Sendable {
-	public var generate: @Sendable (_ url: URL, _ size: CGFloat) async -> NSImage?
-	public var invalidate: @Sendable (_ url: URL) async -> Void
+	public var generate: @Sendable (_ url: URL, _ size: CGFloat) async -> NSImage? = { _, _ in nil }
+	public var invalidate: @Sendable (_ url: URL) async -> Void = { _ in }
 }
 
 extension ThumbnailClient: DependencyKey {

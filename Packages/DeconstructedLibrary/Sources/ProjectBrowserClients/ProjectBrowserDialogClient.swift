@@ -4,8 +4,8 @@ import Foundation
 
 @DependencyClient
 public struct ProjectBrowserDialogClient: Sendable {
-	public var selectImportContentURLs: @Sendable () async -> [URL]
-	public var selectMoveDestination: @Sendable (_ rootURL: URL) async -> URL?
+	public var selectImportContentURLs: @Sendable () async -> [URL] = { [] }
+	public var selectMoveDestination: @Sendable (_ rootURL: URL) async -> URL? = { _ in nil }
 }
 
 extension ProjectBrowserDialogClient: DependencyKey {

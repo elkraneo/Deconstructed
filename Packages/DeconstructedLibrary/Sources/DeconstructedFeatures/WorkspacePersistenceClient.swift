@@ -5,10 +5,10 @@ import Foundation
 @DependencyClient
 public struct WorkspacePersistenceClient: Sendable {
 	public var saveOpenScenes: @Sendable (_ documentURL: URL, _ openSceneURLs: [URL], _ selectedSceneURL: URL?) throws -> Void
-	public var loadWorkspaceRestore: @Sendable (_ documentURL: URL) -> WorkspaceRestore?
+	public var loadWorkspaceRestore: @Sendable (_ documentURL: URL) -> WorkspaceRestore? = { _ in nil }
 	public var appendCameraHistory: @Sendable (_ documentURL: URL, _ sceneURL: URL, _ title: String, _ transform: [Float], _ date: Date) throws -> Void
-	public var loadCameraHistory: @Sendable (_ documentURL: URL, _ sceneURL: URL) -> [CameraHistoryItem]
-	public var loadGridVisibility: @Sendable (_ documentURL: URL) -> Bool?
+	public var loadCameraHistory: @Sendable (_ documentURL: URL, _ sceneURL: URL) -> [CameraHistoryItem] = { _, _ in [] }
+	public var loadGridVisibility: @Sendable (_ documentURL: URL) -> Bool? = { _ in nil }
 	public var saveGridVisibility: @Sendable (_ documentURL: URL, _ isVisible: Bool) throws -> Void
 }
 
