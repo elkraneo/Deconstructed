@@ -1,5 +1,5 @@
 {
-  "originHash" : "780886cab017b79158d5c0299cd0dbc381cc3ea804fb4ed258665a13e942e0d6",
+  "originHash" : "48b4afc275601d207c425120975db62337e1bc9278f6bc2ac56b536f1d45000c",
   "pins" : [
     {
       "identity" : "appleusdschemas",
@@ -142,7 +142,7 @@
       "location" : "https://github.com/elkraneo/USDInterop",
       "state" : {
         "branch" : "main",
-        "revision" : "b36e25a9cd980d856c0e3967faaa3a2ea321c940"
+        "revision" : "7490eeaac971976296575d93f9b5f61c0d79857e"
       }
     },
     {
