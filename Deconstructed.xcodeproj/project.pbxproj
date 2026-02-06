@@ -141,6 +141,7 @@
 			mainGroup = AE746AEE2F278AE90087A28B;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
+				AE97CAA02F353FD2007F526D /* XCLocalSwiftPackageReference "Packages/DeconstructedLibrary" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = AE746AF82F278AE90087A28B /* Products */;
@@ -430,6 +431,13 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		AE97CAA02F353FD2007F526D /* XCLocalSwiftPackageReference "Packages/DeconstructedLibrary" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/DeconstructedLibrary;
+		};
+/* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
 		48ECA5A5964B403CB25F24F7 /* DeconstructedUI */ = {
