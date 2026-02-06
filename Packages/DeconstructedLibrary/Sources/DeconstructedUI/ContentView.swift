@@ -8,6 +8,7 @@ import ProjectBrowserFeature
 import ProjectBrowserUI
 import RCPDocument
 import SceneGraphUI
+import SceneGraphModels
 import SwiftUI
 import ViewportModels
 import ViewportUI
@@ -106,6 +107,7 @@ public struct ContentView: View {
 									if case let .prim(path) = store.inspector.currentTarget { return path }
 									return nil
 								}()
+								let uniquePrimPathByLeafName = uniquePrimPathByLeafName(store.sceneNavigator.nodes)
 
 								ViewportView(
 									modelURL: sceneTab.fileURL,
@@ -130,7 +132,8 @@ public struct ContentView: View {
 									modelReloadRequestID: sceneTab.reloadTrigger,
 									selectedPrimPath: selectedPrimPath,
 									livePrimTransform: sceneTab.livePrimTransform,
-									livePrimTransformRequestID: sceneTab.livePrimTransformRequestID
+									livePrimTransformRequestID: sceneTab.livePrimTransformRequestID,
+									uniquePrimPathByLeafName: uniquePrimPathByLeafName
 								)
 
 							ViewportFloatingToolbar(
@@ -168,6 +171,7 @@ public struct ContentView: View {
 										if case let .prim(path) = store.inspector.currentTarget { return path }
 										return nil
 									}()
+									let uniquePrimPathByLeafName = uniquePrimPathByLeafName(store.sceneNavigator.nodes)
 
 									ViewportView(
 										modelURL: firstScene.fileURL,
@@ -195,7 +199,8 @@ public struct ContentView: View {
 										modelReloadRequestID: firstScene.reloadTrigger,
 										selectedPrimPath: selectedPrimPath,
 										livePrimTransform: firstScene.livePrimTransform,
-										livePrimTransformRequestID: firstScene.livePrimTransformRequestID
+										livePrimTransformRequestID: firstScene.livePrimTransformRequestID,
+										uniquePrimPathByLeafName: uniquePrimPathByLeafName
 									)
 
 								ViewportFloatingToolbar(
@@ -234,6 +239,24 @@ public struct ContentView: View {
 				systemImage: DeconstructedConstants.SFSymbol.arrowTriangle2Circlepath
 			)
 		}
+	}
+
+	private func uniquePrimPathByLeafName(_ nodes: [SceneNode]) -> [String: String] {
+		var byLeaf: [String: Set<String>] = [:]
+
+		func walk(_ node: SceneNode) {
+			byLeaf[node.name, default: []].insert(node.path)
+			for child in node.children { walk(child) }
+		}
+
+		for node in nodes { walk(node) }
+
+		var result: [String: String] = [:]
+		result.reserveCapacity(byLeaf.count)
+		for (leaf, paths) in byLeaf where paths.count == 1 {
+			result[leaf] = paths.first!
+		}
+		return result
 	}
 
 	// MARK: - Editor Panel Area (Bottom with Tabs)

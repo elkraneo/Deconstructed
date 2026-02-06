@@ -6,6 +6,10 @@ import USDInterfaces
 import ViewportModels
 import simd
 
+private struct USDPrimPathComponent: Component, Sendable {
+	let primPath: String
+}
+
 /// RealityKit viewport view with arcball camera controls and grid.
 public struct ViewportView: View {
 	/// Configuration for rendering options
@@ -27,6 +31,9 @@ public struct ViewportView: View {
 	let livePrimTransform: USDTransformData?
 	/// Changes to this value request applying `livePrimTransform` to the selected prim entity.
 	let livePrimTransformRequestID: UUID?
+	/// Best-effort mapping from entity leaf name -> full USD prim path, for tagging entities after import.
+	/// Only includes leaf names that are unique in the USD scene.
+	let uniquePrimPathByLeafName: [String: String]
 
 	// Internal state
 	@State private var rootEntity: Entity?
@@ -54,7 +61,8 @@ public struct ViewportView: View {
 		modelReloadRequestID: UUID? = nil,
 		selectedPrimPath: String? = nil,
 		livePrimTransform: USDTransformData? = nil,
-		livePrimTransformRequestID: UUID? = nil
+		livePrimTransformRequestID: UUID? = nil,
+		uniquePrimPathByLeafName: [String: String] = [:]
 	) {
 		self.modelURL = modelURL
 		self.configuration = configuration
@@ -66,6 +74,7 @@ public struct ViewportView: View {
 		self.selectedPrimPath = selectedPrimPath
 		self.livePrimTransform = livePrimTransform
 		self.livePrimTransformRequestID = livePrimTransformRequestID
+		self.uniquePrimPathByLeafName = uniquePrimPathByLeafName
 	}
 
 	public var body: some View {
@@ -251,6 +260,9 @@ public struct ViewportView: View {
 			modelAnchor.addChild(newEntity)
 			oldEntity?.removeFromParent()
 
+			// Tag imported entities with USD prim paths using a best-effort name match.
+			tagEntitiesWithUSDPrimPaths(root: newEntity)
+
 			// Update scene bounds
 			let bounds = newEntity.visualBounds(relativeTo: nil)
 			sceneBounds = SceneBounds(min: bounds.min, max: bounds.max)
@@ -321,6 +333,9 @@ public struct ViewportView: View {
 	private func resolveEntity(forPrimPath primPath: String) -> Entity? {
 		guard let root = rootEntity else { return nil }
 
+		// Prefer explicit tags if we were able to assign them.
+		if let tagged = findEntity(withUSDPrimPath: primPath, in: root) { return tagged }
+
 		// 1) Exact match: some importers use full prim path as the entity name.
 		if let exact = root.findEntity(named: primPath) { return exact }
 
@@ -330,6 +345,37 @@ public struct ViewportView: View {
 
 		// 3) Fallback: first entity with a matching leaf name in hierarchy.
 		return firstEntity(where: { $0.name == leaf }, in: root)
+	}
+
+	@MainActor
+	private func findEntity(withUSDPrimPath primPath: String, in root: Entity) -> Entity? {
+		if let comp = root.components[USDPrimPathComponent.self],
+		   comp.primPath == primPath {
+			return root
+		}
+		for child in root.children {
+			if let found = findEntity(withUSDPrimPath: primPath, in: child) { return found }
+		}
+		return nil
+	}
+
+	@MainActor
+	private func tagEntitiesWithUSDPrimPaths(root: Entity) {
+		// Name matching is the only stable join we have with RealityKit's importer.
+		// We only tag entities whose name is unique in the USD prim hierarchy.
+		let map = uniquePrimPathByLeafName
+		guard !map.isEmpty else { return }
+
+		func walk(_ entity: Entity) {
+			if let path = map[entity.name], !path.isEmpty {
+				entity.components.set(USDPrimPathComponent(primPath: path))
+			}
+			for child in entity.children {
+				walk(child)
+			}
+		}
+
+		walk(root)
 	}
 
 	@MainActor
