@@ -1,5 +1,5 @@
 {
-  "originHash" : "b8a723c5c944fcd957b2d5cc0fee0f6909385e5b0aae463526938667d7e8defa",
+  "originHash" : "c7774492c678eee0954dd85a8e94cc28055ca24c624a346ba8efc2daa623fc4c",
   "pins" : [
     {
       "identity" : "appleusdschemas",
@@ -78,8 +78,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/swift-dependencies",
       "state" : {
-        "revision" : "411297072220a96f1501211afebd3715316907d2",
-        "version" : "1.10.1"
+        "revision" : "c79f72b3e67a1eb64f66f76704c22ed6a5c1ed84",
+        "version" : "1.11.0"
       }
     },
     {
@@ -142,7 +142,7 @@
       "location" : "https://github.com/elkraneo/USDInterop",
       "state" : {
         "branch" : "main",
-        "revision" : "b36e25a9cd980d856c0e3967faaa3a2ea321c940"
+        "revision" : "7490eeaac971976296575d93f9b5f61c0d79857e"
       }
     },
     {
@@ -151,7 +151,7 @@
       "location" : "https://github.com/reality2713/USDInteropAdvanced",
       "state" : {
         "branch" : "main",
-        "revision" : "4bb1f6e629e7b34ad3eec5aad0db9fe5304ad649"
+        "revision" : "aeb03539f6e6265446e27ea5cb8c0704f4a32c77"
       }
     },
     {
