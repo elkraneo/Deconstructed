@@ -341,10 +341,92 @@ public struct ViewportView: View {
 
 		// 2) Leaf match: many importers use the prim name.
 		let leaf = primPath.split(separator: "/").last.map(String.init) ?? primPath
+		// If multiple candidates exist (duplicate leaf names), use the full prim path to disambiguate.
+		if let byStructure = resolveEntityByUSDPathStructure(primPath: primPath, in: root) {
+			byStructure.components.set(USDPrimPathComponent(primPath: primPath))
+			return byStructure
+		}
 		if let byLeaf = root.findEntity(named: leaf) { return byLeaf }
 
 		// 3) Fallback: first entity with a matching leaf name in hierarchy.
 		return firstEntity(where: { $0.name == leaf }, in: root)
+	}
+
+	@MainActor
+	private func resolveEntityByUSDPathStructure(primPath: String, in root: Entity) -> Entity? {
+		let primComponents = primPath.split(separator: "/").map(String.init)
+		guard let leaf = primComponents.last else { return nil }
+
+		let candidates = findEntities(named: leaf, in: root)
+		guard candidates.count > 1 else {
+			// If there is only one match, we don't need structural scoring.
+			return candidates.first?.entity
+		}
+
+		let scored = candidates.map { candidate -> (Entity, Int) in
+			let chain = normalizeEntityNameChain(candidate.nameChain)
+			return (candidate.entity, scoreEntityChain(chain, againstUSDPathComponents: primComponents))
+		}
+
+		// Pick the best score; require at least 2 matching components to avoid random selection.
+		guard let best = scored.max(by: { $0.1 < $1.1 }), best.1 >= 2 else { return nil }
+		return best.0
+	}
+
+	@MainActor
+	private func findEntities(named name: String, in root: Entity) -> [(entity: Entity, nameChain: [String])] {
+		var results: [(Entity, [String])] = []
+		results.reserveCapacity(8)
+
+		func walk(_ entity: Entity, chain: [String]) {
+			let nextChain = chain + [entity.name]
+			if entity.name == name {
+				results.append((entity, nextChain))
+			}
+			for child in entity.children {
+				walk(child, chain: nextChain)
+			}
+		}
+
+		walk(root, chain: [])
+		return results
+	}
+
+	private func normalizeEntityNameChain(_ chain: [String]) -> [String] {
+		// RealityKit wrapper names we add during viewport setup.
+		let ignored: Set<String> = [
+			"",
+			"SceneRoot",
+			"ModelAnchor",
+			"LoadedModel",
+			"MainCamera",
+			"KeyLight",
+			"FillLight",
+			"ImageBasedLight",
+			"Skybox",
+			"Grid",
+		]
+		return chain.filter { !ignored.contains($0) }
+	}
+
+	private func scoreEntityChain(_ chain: [String], againstUSDPathComponents usd: [String]) -> Int {
+		// Score by matching from the leaf upwards:
+		// USD: ["Root", "Group", "Cube"]
+		// Entity chain might be ["Root", "Group", "Cube"] (after normalization)
+		var score = 0
+		var i = chain.count - 1
+		var j = usd.count - 1
+		while i >= 0 && j >= 0 {
+			if chain[i] == usd[j] {
+				score += 1
+				i -= 1
+				j -= 1
+			} else {
+				// Allow entity chain to have extra nodes (e.g. intermediate groups).
+				i -= 1
+			}
+		}
+		return score
 	}
 
 	@MainActor
