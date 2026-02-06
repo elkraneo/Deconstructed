@@ -410,9 +410,10 @@ private struct UniformScaleEditableRow: View {
 				let v = (values.x + values.y + values.z) / 3.0
 				onValuesChanged(SIMD3<Double>(repeating: v))
 			} label: {
-				Image(systemName: isUniformScale ? "link" : "link.slash")
+				// `link.slash` is not available on macOS; use a stable pair.
+				Image(systemName: isUniformScale ? "link.circle.fill" : "link.circle")
 					.font(.system(size: 11, weight: .semibold))
-					.foregroundStyle(.secondary)
+					.foregroundStyle(isUniformScale ? .primary : .secondary)
 					.frame(width: 18, height: 18)
 			}
 			.buttonStyle(.plain)
