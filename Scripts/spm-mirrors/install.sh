@@ -22,10 +22,10 @@ function set_mirror() {
 }
 
 set_mirror "https://github.com/reality2713/USDInteropAdvanced" "/Volumes/Plutonian/_Developer/USDInteropAdvanced"
-set_mirror "https://github.com/elkraneo/USDInterop" "/Volumes/Plutonian/_Developer/USDInterop"
+set_mirror "https://github.com/Reality2713/USDInterop" "/Volumes/Plutonian/_Developer/USDInterop"
 set_mirror "https://github.com/reality2713/AppleUSDSchemas" "/Volumes/Plutonian/_Developer/AppleUSDSchemas"
+set_mirror "https://github.com/elkraneo/Deconstructed.git" "/Volumes/Plutonian/_Developer/Deconstructed/source/Deconstructed"
 
 echo ""
 echo "Mirrors installed. Current mirror status:"
 ./Scripts/spm-mirrors/status.sh
-

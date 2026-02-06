@@ -9,4 +9,5 @@
 # Local Xcode/SwiftPM transient data.
 **/DerivedData/
 .swiftpm/
-
+.build/
+**/.build/

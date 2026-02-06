@@ -8,10 +8,10 @@ function unset_mirror() {
 }
 
 unset_mirror "https://github.com/reality2713/USDInteropAdvanced"
-unset_mirror "https://github.com/elkraneo/USDInterop"
+unset_mirror "https://github.com/Reality2713/USDInterop"
 unset_mirror "https://github.com/reality2713/AppleUSDSchemas"
+unset_mirror "https://github.com/elkraneo/Deconstructed.git"
 
 echo ""
 echo "Mirrors removed. Current mirror status:"
 ./Scripts/spm-mirrors/status.sh
-

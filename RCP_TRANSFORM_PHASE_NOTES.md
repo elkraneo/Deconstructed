@@ -33,6 +33,21 @@ Implication:
 
 - Our Transform inspector should edit USD transforms (layer-authored `xformOp` ops), not store transforms in `.realitycomposerpro` metadata as a separate “component”.
 
+## Key Confirmation: Where RCP Stores Material Bindings
+
+We also verified that RCP authors material bindings directly in USD using the standard relationship:
+
+- `rel material:binding = </Root/Cube/DefaultMaterial>`
+
+Reference file (same as above):
+
+- `/Volumes/Plutonian/_Developer/Deconstructed/references/Base/Sources/Base/Base.rkassets/Scene.usda`
+
+Implication:
+
+- The “Material Bindings” inspector should operate on authored USD relationships (UsdShade MaterialBindingAPI),
+  not a separate app-only component system.
+
 ## What `.realitycomposerpro` Metadata Gives Us (and What It Doesn’t)
 
 RCP’s `main.json` is a loose index that maps *scene file paths* to UUIDs:
@@ -200,4 +215,3 @@ What we can say defensibly:
 - Expand inspector beyond Transform:
   - References, material bindings, primitive parameters.
   - This likely requires adding new typed DTOs to `USDInterfaces` and implementing typed endpoints in `USDInteropAdvanced` (schemas, authored attributes, relationships).
-

@@ -108,8 +108,7 @@ let package = Package(
 			url: "https://github.com/pointfreeco/swift-sharing",
 			from: "2.3.0"
 		),
-		.package(url: "https://github.com/elkraneo/USDInterop", branch: "main"),
-		.package(url: "https://github.com/apple/SwiftUsd.git", from: "5.2.0"),
+		.package(url: "https://github.com/Reality2713/USDInterop", branch: "main"),
 		.package(
 			url: "https://github.com/reality2713/USDInteropAdvanced",
 			branch: "main"

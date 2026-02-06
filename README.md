@@ -25,9 +25,9 @@ Reality Composer Pro (RCP) is Apple's professional tool for creating 3D content 
 
 ### External Dependencies
 
-- **[USDInterop](https://github.com/elkraneo/USDInterop)** - Swift bindings for OpenUSD
-- **[USDInteropAdvanced](https://github.com/elkraneo/USDInteropAdvanced)** - Higher-level USD operations (metadata, scene graph, editing)
-- **[AppleUSDSchemas](https://github.com/elkraneo/AppleUSDSchemas)** - Apple's proprietary USD schema definitions
+- **[USDInterop](https://github.com/Reality2713/USDInterop)** - Swift bindings for OpenUSD
+- **[USDInteropAdvanced](https://github.com/Reality2713/USDInteropAdvanced)** - Higher-level USD operations (metadata, scene graph, editing)
+- **[AppleUSDSchemas](https://github.com/Reality2713/AppleUSDSchemas)** - Apple's proprietary USD schema definitions
 
 ## Local Development (CI-Safe)
 

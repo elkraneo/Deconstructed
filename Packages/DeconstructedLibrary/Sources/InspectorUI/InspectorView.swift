@@ -414,7 +414,9 @@ private struct UniformScaleEditableRow: View {
 				Image(systemName: isUniformScale ? "link.circle.fill" : "link.circle")
 					.font(.system(size: 11, weight: .semibold))
 					.foregroundStyle(isUniformScale ? .primary : .secondary)
-					.frame(width: 18, height: 18)
+					.padding(4)
+					.background(.quaternary.opacity(0.55))
+					.clipShape(RoundedRectangle(cornerRadius: 6))
 			}
 			.buttonStyle(.plain)
 			.help("Toggle uniform scale")

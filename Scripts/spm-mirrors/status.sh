@@ -13,6 +13,6 @@ function show_mirror() {
 }
 
 show_mirror "https://github.com/reality2713/USDInteropAdvanced"
-show_mirror "https://github.com/elkraneo/USDInterop"
+show_mirror "https://github.com/Reality2713/USDInterop"
 show_mirror "https://github.com/reality2713/AppleUSDSchemas"
-
+show_mirror "https://github.com/elkraneo/Deconstructed.git"
