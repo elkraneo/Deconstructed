@@ -1,4 +1,5 @@
 import ComposableArchitecture
+import Foundation
 import InspectorFeature
 import InspectorModels
 import SceneGraphModels
@@ -373,6 +374,9 @@ private struct EditableAxisField: View {
 	let onCommit: (Double) -> Void
 	@State private var text: String = ""
 
+	private static let numberFormat = FloatingPointFormatStyle<Double>.number
+		.precision(.fractionLength(0...3))
+
 	var body: some View {
 		TextField(label, text: $text)
 			.textFieldStyle(.plain)
@@ -392,10 +396,10 @@ private struct EditableAxisField: View {
 					.padding(.bottom, 2)
 			)
 			.onAppear {
-				text = formatNumber(value)
+				text = value.formatted(Self.numberFormat)
 			}
 			.onChange(of: value) { _, newValue in
-				text = formatNumber(newValue)
+				text = newValue.formatted(Self.numberFormat)
 			}
 			.onSubmit {
 				commit()
@@ -404,17 +408,12 @@ private struct EditableAxisField: View {
 
 	private func commit() {
 		let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
-		guard let parsed = Double(normalized) else {
-			text = formatNumber(value)
+		guard let parsed = try? Self.numberFormat.parseStrategy.parse(normalized) else {
+			text = value.formatted(Self.numberFormat)
 			return
 		}
 		onCommit(parsed)
-		text = formatNumber(parsed)
-	}
-
-	private func formatNumber(_ value: Double) -> String {
-		if Swift.abs(value) < 0.0001 { return "0" }
-		return String(format: "%.2f", value)
+		text = parsed.formatted(Self.numberFormat)
 	}
 }
 

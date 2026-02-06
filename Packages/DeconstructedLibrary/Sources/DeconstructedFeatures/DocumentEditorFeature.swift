@@ -435,7 +435,18 @@ public struct DocumentEditorFeature {
 				
 				return effects.isEmpty ? .none : .merge(effects)
 
-			case .inspector:
+			case let .inspector(inspectorAction):
+				// Keep viewport in sync after inspector-authored USD edits.
+				if case .primTransformSaveSucceeded = inspectorAction,
+				   case .scene(let tabID) = state.selectedTab,
+				   var tab = state.openScenes[id: tabID] {
+					tab.reloadTrigger = UUID()
+					state.openScenes[id: tabID] = tab
+					return .merge(
+						.send(.projectBrowser(.sceneModified(tab.fileURL))),
+						.send(.sceneNavigator(.refreshRequested))
+					)
+				}
 				return .none
           
             case let .sceneModified(tabID):
