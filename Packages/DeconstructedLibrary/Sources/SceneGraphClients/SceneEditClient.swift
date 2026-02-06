@@ -42,24 +42,33 @@ public struct SceneEditClient: Sendable {
 }
 
 private enum SceneEditClientKey: DependencyKey {
-	static let liveValue = SceneEditClient(
-		createPrimitive: { url, parentPath, primitiveType, name in
-			try DeconstructedUSDInterop.createPrimitive(
-				url: url,
-				parentPath: parentPath,
-				primitiveType: primitiveType,
-				name: name
-			)
-		},
-		createStructural: { url, parentPath, structuralType, name in
-			try DeconstructedUSDInterop.createStructural(
-				url: url,
-				parentPath: parentPath,
-				structuralType: structuralType,
-				name: name
-			)
-		}
-	)
+	static var liveValue: SceneEditClient {
+		SceneEditClient(
+			createPrimitive: { url, parentPath, primitiveType, name in
+				try DeconstructedUSDInterop.createPrimitive(
+					url: url,
+					parentPath: parentPath,
+					primitiveType: primitiveType,
+					name: name
+				)
+			},
+			createStructural: { url, parentPath, structuralType, name in
+				try DeconstructedUSDInterop.createStructural(
+					url: url,
+					parentPath: parentPath,
+					structuralType: structuralType,
+					name: name
+				)
+			}
+		)
+	}
+
+	static var testValue: SceneEditClient {
+		SceneEditClient(
+			createPrimitive: { _, _, _, _ in "/" },
+			createStructural: { _, _, _, _ in "/" }
+		)
+	}
 }
 
 public extension DependencyValues {

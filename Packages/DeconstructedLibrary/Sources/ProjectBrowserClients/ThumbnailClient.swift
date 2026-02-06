@@ -11,13 +11,13 @@ public struct ThumbnailClient: Sendable {
 }
 
 extension ThumbnailClient: DependencyKey {
-	public static let liveValue: Self = {
+	public static var liveValue: Self {
 		let generator = ThumbnailGenerator()
 		return Self(
 			generate: { @Sendable url, size in await generator.thumbnail(for: url, size: size) },
 			invalidate: { @Sendable url in await generator.invalidateCache(for: url) }
 		)
-	}()
+	}
 }
 
 public actor ThumbnailGenerator {

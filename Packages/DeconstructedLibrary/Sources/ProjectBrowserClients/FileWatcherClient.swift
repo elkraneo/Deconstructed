@@ -12,21 +12,23 @@ public struct FileWatcherClient: Sendable {
 }
 
 extension FileWatcherClient: DependencyKey {
-	public static let liveValue: Self = {
+	public static var liveValue: Self {
 		let storage = WatcherStorage()
 		return Self(
 			watch: { directory in
 				storage.watch(directory: directory)
 			}
 		)
-	}()
+	}
 
-	public static let testValue: Self = Self(
-		watch: { _ in
-			// In tests we want file watching to complete immediately and never touch FSEvents.
-			AsyncStream { $0.finish() }
-		}
-	)
+	public static var testValue: Self {
+		Self(
+			watch: { _ in
+				// In tests we want file watching to complete immediately and never touch FSEvents.
+				AsyncStream { $0.finish() }
+			}
+		)
+	}
 }
 
 extension FileWatcherClient {

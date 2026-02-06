@@ -11,9 +11,15 @@ public struct RecentDocumentsClient: Sendable {
 }
 
 private enum RecentDocumentsClientKey: DependencyKey {
-	static let liveValue = RecentDocumentsClient(fetch: {
-		NSDocumentController.shared.recentDocumentURLs
-	})
+	static var liveValue: RecentDocumentsClient {
+		RecentDocumentsClient(fetch: {
+			NSDocumentController.shared.recentDocumentURLs
+		})
+	}
+
+	static var testValue: RecentDocumentsClient {
+		RecentDocumentsClient(fetch: { [] })
+	}
 }
 
 public struct NewProjectClient: Sendable {
@@ -25,9 +31,15 @@ public struct NewProjectClient: Sendable {
 }
 
 private enum NewProjectClientKey: DependencyKey {
-	static let liveValue = NewProjectClient(create: {
-		await NewProjectCreator.shared.createNewProject()
-	})
+	static var liveValue: NewProjectClient {
+		NewProjectClient(create: {
+			await NewProjectCreator.shared.createNewProject()
+		})
+	}
+
+	static var testValue: NewProjectClient {
+		NewProjectClient(create: {})
+	}
 }
 
 public extension DependencyValues {

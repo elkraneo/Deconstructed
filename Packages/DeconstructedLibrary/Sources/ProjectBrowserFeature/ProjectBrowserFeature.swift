@@ -42,7 +42,7 @@ public struct ProjectBrowserFeature {
 		public init() {}
 	}
 
-	public enum Action: Equatable, BindableAction {
+	public enum Action: BindableAction {
 		case binding(BindingAction<State>)
 
 		// Lifecycle

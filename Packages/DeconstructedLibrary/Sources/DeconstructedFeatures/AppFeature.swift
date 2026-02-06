@@ -20,7 +20,7 @@ public struct AppFeature {
 		}
 	}
 
-	public enum Action: Equatable {
+	public enum Action {
 		case onAppear
 		case refreshRecentProjects
 		case recentProjectsResponse([URL])

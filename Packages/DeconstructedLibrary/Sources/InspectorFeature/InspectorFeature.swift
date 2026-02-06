@@ -74,7 +74,7 @@ public struct InspectorFeature {
 		}
 	}
 
-	public enum Action: Equatable, BindableAction {
+	public enum Action: BindableAction {
 		case binding(BindingAction<State>)
 		case sceneURLChanged(URL?)
 		case selectionChanged(SceneNode.ID?)

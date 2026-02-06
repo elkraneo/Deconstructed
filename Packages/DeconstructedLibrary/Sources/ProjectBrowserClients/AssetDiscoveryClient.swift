@@ -1,5 +1,4 @@
 import DeconstructedModels
-import DeconstructedModels
 import Foundation
 import ProjectBrowserModels
 import ComposableArchitecture
@@ -11,12 +10,12 @@ public struct AssetDiscoveryClient: Sendable {
 }
 
 extension AssetDiscoveryClient: DependencyKey {
-	public static let liveValue: Self = {
+	public static var liveValue: Self {
 		let service = AssetDiscoveryService()
 		return Self(
 			discover: { documentURL in try await service.discoverAssets(for: documentURL) }
 		)
-	}()
+	}
 }
 
 /// Live implementation for asset discovery
