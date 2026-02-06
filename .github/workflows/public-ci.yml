@@ -1,0 +1,95 @@
+name: Public CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - "release/**"
+
+concurrency:
+  group: public-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    runs-on: macos-26
+    outputs:
+      usdinteropadvanced_related: ${{ steps.filter.outputs.usdinteropadvanced_related }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed paths
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            usdinteropadvanced_related:
+              - 'Packages/DeconstructedLibrary/Sources/DeconstructedUSDInterop/**'
+              - 'Packages/DeconstructedLibrary/Package.swift'
+              - 'Deconstructed.xcodeproj/project.pbxproj'
+
+  guardrails:
+    runs-on: macos-26
+    needs: changes
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate dependency sources
+        run: ./.github/scripts/verify-dependency-sources.sh
+
+      - name: Validate dependency sources in pushed commit range
+        if: github.event_name == 'push'
+        run: ./.github/scripts/verify-dependency-sources.sh . "${{ github.event.before }}..${{ github.sha }}"
+
+  swift-package:
+    runs-on: macos-26
+    needs: [changes, guardrails]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode 26.2
+        run: |
+          if [ -d /Applications/Xcode_26.2.app ]; then
+            sudo xcode-select -s /Applications/Xcode_26.2.app
+          fi
+          xcodebuild -version
+          swift --version
+
+      - name: Resolve package dependencies
+        run: swift package --package-path Packages/DeconstructedLibrary resolve
+
+      - name: Build DeconstructedLibrary
+        run: swift build --package-path Packages/DeconstructedLibrary
+
+      - name: Test DeconstructedLibrary
+        run: swift test --package-path Packages/DeconstructedLibrary
+
+  usdinteropadvanced-release-gate:
+    runs-on: macos-26
+    needs: [changes, guardrails]
+    if: needs.changes.outputs.usdinteropadvanced_related == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode 26.2
+        run: |
+          if [ -d /Applications/Xcode_26.2.app ]; then
+            sudo xcode-select -s /Applications/Xcode_26.2.app
+          fi
+          xcodebuild -version
+          swift --version
+
+      - name: Resolve package dependencies
+        run: swift package --package-path Packages/DeconstructedLibrary resolve
+
+      - name: Build DeconstructedLibrary (Release)
+        run: swift build --configuration release --package-path Packages/DeconstructedLibrary
