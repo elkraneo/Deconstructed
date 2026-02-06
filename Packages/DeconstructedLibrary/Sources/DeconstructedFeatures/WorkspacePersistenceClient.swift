@@ -23,7 +23,7 @@ extension WorkspacePersistenceClient: DependencyKey {
 				)
 			},
 			loadWorkspaceRestore: { documentURL in
-				loadWorkspaceRestore(documentURL: documentURL)
+				loadWorkspaceRestoreFromDisk(documentURL: documentURL)
 			},
 			appendCameraHistory: { documentURL, sceneURL, title, transform, date in
 				try updateSceneCameraHistory(
@@ -35,7 +35,7 @@ extension WorkspacePersistenceClient: DependencyKey {
 				)
 			},
 			loadCameraHistory: { documentURL, sceneURL in
-				loadCameraHistory(documentURL: documentURL, sceneURL: sceneURL)
+				loadCameraHistoryFromDisk(documentURL: documentURL, sceneURL: sceneURL)
 			},
 			loadGridVisibility: { documentURL in
 				loadSettingsGridVisible(documentURL: documentURL)
@@ -54,7 +54,7 @@ public extension DependencyValues {
 	}
 }
 
-private func loadCameraHistory(documentURL: URL, sceneURL: URL) -> [CameraHistoryItem] {
+private func loadCameraHistoryFromDisk(documentURL: URL, sceneURL: URL) -> [CameraHistoryItem] {
 	guard let sceneUUID = sceneUUIDForURL(documentURL: documentURL, sceneURL: sceneURL) else {
 		return []
 	}
@@ -111,7 +111,7 @@ private func updateUserData(
 	try writeJSONDictionary(rootObject, to: userDataURL)
 }
 
-private func loadWorkspaceRestore(documentURL: URL) -> WorkspaceRestore? {
+private func loadWorkspaceRestoreFromDisk(documentURL: URL) -> WorkspaceRestore? {
 	let workspaceURL = documentURL.appendingPathComponent("WorkspaceData")
 	guard let userDataURL = findUserDataURL(in: workspaceURL),
 	      let rootObject = loadJSONDictionary(url: userDataURL) else {
