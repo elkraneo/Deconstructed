@@ -16,6 +16,9 @@ public struct ViewportView: View {
 	let cameraTransform: [Float]?
 	let cameraTransformRequestID: UUID?
 	let frameRequestID: UUID?
+	/// Triggers reloading the current model URL without rebuilding the whole SwiftUI view.
+	/// This is used to refresh after edits while preserving camera state.
+	let modelReloadRequestID: UUID?
 
 	// Internal state
 	@State private var rootEntity: Entity?
@@ -23,6 +26,7 @@ public struct ViewportView: View {
 	@State private var sceneBounds = SceneBounds()
 	@State private var isZUp = false
 	@State private var appliedCameraTransformRequestID: UUID?
+	@State private var appliedModelReloadRequestID: UUID?
 	@State private var gridEntity: Entity?
 
 	// IBL state
@@ -37,6 +41,8 @@ public struct ViewportView: View {
 		cameraTransform: [Float]? = nil,
 		cameraTransformRequestID: UUID? = nil,
 		frameRequestID: UUID? = nil
+		,
+		modelReloadRequestID: UUID? = nil
 	) {
 		self.modelURL = modelURL
 		self.configuration = configuration
@@ -44,6 +50,7 @@ public struct ViewportView: View {
 		self.cameraTransform = cameraTransform
 		self.cameraTransformRequestID = cameraTransformRequestID
 		self.frameRequestID = frameRequestID
+		self.modelReloadRequestID = modelReloadRequestID
 	}
 
 	public var body: some View {
@@ -55,7 +62,7 @@ public struct ViewportView: View {
 			// Load model if URL provided
 			if let url = modelURL {
 				Task {
-					await loadModel(from: url)
+					await loadModel(from: url, behavior: .sceneOpenedOrChanged)
 				}
 			}
 
@@ -88,6 +95,23 @@ public struct ViewportView: View {
 		}
 		.onChange(of: cameraTransformRequestID) { _, newID in
 			_ = applyCameraTransformIfNeeded(requestID: newID)
+		}
+		.onChange(of: modelURL) { _, newURL in
+			guard let url = newURL else { return }
+			Task {
+				await loadModel(from: url, behavior: .sceneOpenedOrChanged)
+			}
+		}
+		.onChange(of: modelReloadRequestID) { _, newID in
+			guard let id = newID else { return }
+			guard appliedModelReloadRequestID != id else { return }
+			appliedModelReloadRequestID = id
+
+			guard let url = modelURL else { return }
+			Task {
+				// Reload the model without framing or camera restore.
+				await loadModel(from: url, behavior: .reloadPreservingCamera)
+			}
 		}
 		.onChange(of: frameRequestID) { _, _ in
 			frameScene()
@@ -177,29 +201,45 @@ public struct ViewportView: View {
 
 	// MARK: - Model Loading
 
+	private enum ModelLoadBehavior: Sendable {
+		/// Used when opening a scene or switching to a different scene URL.
+		/// Frames the model unless an explicit camera restore is requested.
+		case sceneOpenedOrChanged
+		/// Used after edits (e.g. transform changes) when we want the viewport to update
+		/// without resetting the user's camera.
+		case reloadPreservingCamera
+	}
+
 	@MainActor
-	private func loadModel(from url: URL) async {
+	private func loadModel(from url: URL, behavior: ModelLoadBehavior) async {
 		do {
-			let entity = try await Entity(contentsOf: url)
-			entity.name = "LoadedModel"
+			// Load first, then swap, so we don't show a blank viewport while loading.
+			let newEntity = try await Entity(contentsOf: url)
+			newEntity.name = "LoadedModel"
 
-			let anchor = rootEntity?.findEntity(named: "ModelAnchor")
-			anchor?.children.first(where: { $0.name == "LoadedModel" })?
-				.removeFromParent()
+			guard let modelAnchor = rootEntity?.findEntity(named: "ModelAnchor") else {
+				return
+			}
 
-			if let modelAnchor = anchor {
-				modelAnchor.addChild(entity)
+			let oldEntity = modelAnchor.children.first(where: { $0.name == "LoadedModel" })
+			modelAnchor.addChild(newEntity)
+			oldEntity?.removeFromParent()
 
-				// Update scene bounds
-				let bounds = entity.visualBounds(relativeTo: nil)
-				sceneBounds = SceneBounds(min: bounds.min, max: bounds.max)
+			// Update scene bounds
+			let bounds = newEntity.visualBounds(relativeTo: nil)
+			sceneBounds = SceneBounds(min: bounds.min, max: bounds.max)
 
+			switch behavior {
+			case .sceneOpenedOrChanged:
 				if applyCameraTransformIfNeeded(
 					requestID: cameraTransformRequestID,
 					focus: bounds.center
 				) == false {
 					frameScene(bounds: bounds)
 				}
+			case .reloadPreservingCamera:
+				// Intentionally keep the current cameraState. We only update the model.
+				break
 			}
 		} catch {
 			print(
