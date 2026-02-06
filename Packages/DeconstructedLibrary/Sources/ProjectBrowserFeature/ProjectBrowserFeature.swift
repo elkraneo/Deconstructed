@@ -1,4 +1,3 @@
-import AppKit
 import DeconstructedModels
 import DeconstructedModels
 import Foundation
@@ -102,6 +101,8 @@ public struct ProjectBrowserFeature {
 	@Dependency(\.fileOperationsClient) var fileOperations
 	@Dependency(\.fileWatcherClient) var fileWatcher
 	@Dependency(\.thumbnailClient) var thumbnailClient
+	@Dependency(\.projectBrowserDialogClient) var dialogClient
+	@Dependency(\.projectDataIndexClient) var projectDataIndexClient
 	@Dependency(\.continuousClock) var clock
 
 	public init() {}
@@ -214,16 +215,9 @@ public struct ProjectBrowserFeature {
 					return .none
 				}
 				let fileOperations = self.fileOperations
+				let dialogClient = self.dialogClient
 				return .run { send in
-					let urls = await MainActor.run { () -> [URL] in
-						let panel = NSOpenPanel()
-						panel.canChooseFiles = true
-						panel.canChooseDirectories = true
-						panel.allowsMultipleSelection = true
-						panel.title = "Import Content"
-						panel.prompt = "Import"
-						return panel.runModal() == .OK ? panel.urls : []
-					}
+					let urls = await dialogClient.selectImportContentURLs()
 
 					guard !urls.isEmpty else { return }
 
@@ -262,6 +256,7 @@ public struct ProjectBrowserFeature {
 			}
 			let documentURL = state.documentURL
 			let fileOperations = self.fileOperations
+			let projectDataIndexClient = self.projectDataIndexClient
 			return .run { send in
 				do {
 					let sceneURL = try await fileOperations.createScene(
@@ -269,7 +264,7 @@ public struct ProjectBrowserFeature {
 						DeconstructedConstants.FileName.untitledScene
 					)
 					if let documentURL {
-						try? updateProjectDataForNewScene(documentURL: documentURL, sceneURL: sceneURL)
+						try? projectDataIndexClient.registerNewScene(documentURL, sceneURL)
 					}
 					await send(.fileOperationCompleted)
 				} catch {
@@ -299,11 +294,12 @@ public struct ProjectBrowserFeature {
 				let documentURL = state.documentURL
 				let itemURL = item.url
 				let fileOperations = self.fileOperations
+				let projectDataIndexClient = self.projectDataIndexClient
 				return .run { send in
 					do {
 						let newURL = try await fileOperations.rename(itemURL, trimmed)
 						if let documentURL {
-							try updateProjectDataForMove(documentURL: documentURL, from: itemURL, to: newURL)
+							try projectDataIndexClient.registerMove(documentURL, itemURL, newURL)
 						}
 						await send(.fileOperationCompleted)
 					} catch {
@@ -331,17 +327,10 @@ public struct ProjectBrowserFeature {
 				}
 				let documentURL = state.documentURL
 				let fileOperations = self.fileOperations
+				let dialogClient = self.dialogClient
+				let projectDataIndexClient = self.projectDataIndexClient
 				return .run { send in
-					let destination = await MainActor.run { () -> URL? in
-						let panel = NSOpenPanel()
-						panel.canChooseFiles = false
-						panel.canChooseDirectories = true
-						panel.allowsMultipleSelection = false
-						panel.directoryURL = rootURL
-						panel.title = "Move To Folder"
-						panel.prompt = "Move"
-						return panel.runModal() == .OK ? panel.url : nil
-					}
+					let destination = await dialogClient.selectMoveDestination(rootURL)
 
 					guard let destination else { return }
 					guard destination.path.hasPrefix(rootURL.path) else {
@@ -353,7 +342,7 @@ public struct ProjectBrowserFeature {
 						let moved = try await fileOperations.move(itemURLs, destination)
 						if let documentURL {
 							for (from, to) in moved {
-								try updateProjectDataForMove(documentURL: documentURL, from: from, to: to)
+								try projectDataIndexClient.registerMove(documentURL, from, to)
 							}
 						}
 						await send(.fileOperationCompleted)
@@ -380,12 +369,13 @@ public struct ProjectBrowserFeature {
 				let destinationURL = destinationItem.url
 				let documentURL = state.documentURL
 				let fileOperations = self.fileOperations
+				let projectDataIndexClient = self.projectDataIndexClient
 				return .run { send in
 					do {
 						let moved = try await fileOperations.move(itemURLs, destinationURL)
 						if let documentURL {
 							for (from, to) in moved {
-								try updateProjectDataForMove(documentURL: documentURL, from: from, to: to)
+								try projectDataIndexClient.registerMove(documentURL, from, to)
 							}
 						}
 						await send(.fileOperationCompleted)
@@ -520,136 +510,4 @@ private func isDescendant(_ url: URL, of root: URL) -> Bool {
 	let rootPath = root.standardizedFileURL.path
 	let urlPath = url.standardizedFileURL.path
 	return urlPath == rootPath || urlPath.hasPrefix(rootPath + "/")
-}
-
-private func updateProjectDataForNewScene(documentURL: URL, sceneURL: URL) throws {
-	let projectDataURL = documentURL
-		.appendingPathComponent(DeconstructedConstants.DirectoryName.projectData)
-		.appendingPathComponent(DeconstructedConstants.FileName.mainJson)
-	let data = try Data(contentsOf: projectDataURL)
-	var projectData = try JSONDecoder().decode(RCPProjectData.self, from: data)
-
-	let sceneUUID = UUID().uuidString
-	let scenePath = try scenePathForURL(documentURL: documentURL, sceneURL: sceneURL)
-	projectData.pathsToIds[scenePath] = sceneUUID
-	projectData.uuidToIntID[sceneUUID] = Int64.random(in: Int64.min...Int64.max)
-
-	let encoder = JSONEncoder()
-	encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-	let updated = try encoder.encode(projectData)
-	try updated.write(to: projectDataURL, options: .atomic)
-
-	try updateSceneMetadataListForNewScene(documentURL: documentURL, sceneUUID: sceneUUID)
-	try ensurePluginDataForScene(documentURL: documentURL, sceneUUID: sceneUUID)
-}
-
-private func updateProjectDataForMove(documentURL: URL, from: URL, to: URL) throws {
-	let projectDataURL = documentURL
-		.appendingPathComponent(DeconstructedConstants.DirectoryName.projectData)
-		.appendingPathComponent(DeconstructedConstants.FileName.mainJson)
-	let data = try Data(contentsOf: projectDataURL)
-	let decoder = JSONDecoder()
-	var projectData = try decoder.decode(RCPProjectData.self, from: data)
-
-	let rootURL = documentURL.deletingLastPathComponent()
-	let fromComponents = relativeComponents(from: rootURL, to: from)
-	let toComponents = relativeComponents(from: rootURL, to: to)
-	guard !fromComponents.isEmpty, !toComponents.isEmpty else {
-		return
-	}
-
-	var updatedPaths: [String: String] = [:]
-	for (path, uuid) in projectData.pathsToIds {
-		let components = pathComponents(from: path)
-		if components.starts(with: fromComponents) {
-			let newComponents = toComponents + components.dropFirst(fromComponents.count)
-			let newPath = encodedScenePath(from: Array(newComponents))
-			updatedPaths[newPath] = uuid
-		} else {
-			updatedPaths[path] = uuid
-		}
-	}
-
-	projectData.pathsToIds = updatedPaths
-	let encoder = JSONEncoder()
-	encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-	let updated = try encoder.encode(projectData)
-	try updated.write(to: projectDataURL, options: .atomic)
-}
-
-private func scenePathForURL(documentURL: URL, sceneURL: URL) throws -> String {
-	let rootURL = documentURL.deletingLastPathComponent()
-	let components = relativeComponents(from: rootURL, to: sceneURL)
-	guard !components.isEmpty else {
-		throw CocoaError(.fileReadInvalidFileName)
-	}
-	return encodedScenePath(from: components)
-}
-
-private func relativeComponents(from rootURL: URL, to fileURL: URL) -> [String] {
-	let rootComponents = rootURL.standardizedFileURL.pathComponents
-	let fileComponents = fileURL.standardizedFileURL.pathComponents
-	guard fileComponents.starts(with: rootComponents) else {
-		return []
-	}
-	return Array(fileComponents.dropFirst(rootComponents.count))
-}
-
-private func pathComponents(from path: String) -> [String] {
-	path.split(separator: "/")
-		.map { String($0) }
-		.map { $0.removingPercentEncoding ?? $0 }
-}
-
-private func encodedScenePath(from components: [String]) -> String {
-	let encoded = components.map { component in
-		component.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? component
-	}
-	return "/" + encoded.joined(separator: "/")
-}
-
-private func updateSceneMetadataListForNewScene(documentURL: URL, sceneUUID: String) throws {
-	let metadataURL = documentURL
-		.appendingPathComponent(DeconstructedConstants.DirectoryName.workspaceData)
-		.appendingPathComponent(DeconstructedConstants.FileName.sceneMetadataList)
-	let existingData = try? Data(contentsOf: metadataURL)
-	var metadataList: RCPSceneMetadataList
-	if let existingData,
-	   let decoded = try? JSONDecoder().decode(RCPSceneMetadataList.self, from: existingData) {
-		metadataList = decoded
-	} else {
-		metadataList = RCPSceneMetadataList(scenes: [:])
-	}
-
-	if metadataList.scenes[sceneUUID] == nil {
-		metadataList.scenes[sceneUUID] = RCPSceneMetadataList.SceneMetadata(
-			uuid: sceneUUID,
-			name: DeconstructedConstants.DefaultValue.rootNodeName,
-			isExpanded: true,
-			isLocked: false
-		)
-	}
-
-	let updated = try metadataList.encode()
-	try updated.write(to: metadataURL, options: .atomic)
-}
-
-private func ensurePluginDataForScene(documentURL: URL, sceneUUID: String) throws {
-	let pluginRoot = documentURL
-		.appendingPathComponent(DeconstructedConstants.DirectoryName.pluginData)
-		.appendingPathComponent(sceneUUID)
-		.appendingPathComponent(DeconstructedConstants.FileName.shaderGraphEditorPluginID)
-	let fileURL = pluginRoot.appendingPathComponent(DeconstructedConstants.FileName.shaderGraphEditorPluginID)
-
-	if FileManager.default.fileExists(atPath: fileURL.path) {
-		return
-	}
-
-	try FileManager.default.createDirectory(at: pluginRoot, withIntermediateDirectories: true)
-	let payload: [String: Any] = [
-		DeconstructedConstants.JSONKey.materialPreviewEnvironmentType: DeconstructedConstants.DefaultValue.materialPreviewEnvironmentType,
-		DeconstructedConstants.JSONKey.materialPreviewObjectType: DeconstructedConstants.DefaultValue.materialPreviewObjectType
-	]
-	let data = try JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted, .sortedKeys])
-	try data.write(to: fileURL, options: .atomic)
 }

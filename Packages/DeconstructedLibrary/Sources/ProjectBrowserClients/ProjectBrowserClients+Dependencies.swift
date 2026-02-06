@@ -20,4 +20,14 @@ public extension DependencyValues {
 		get { self[ThumbnailClient.self] }
 		set { self[ThumbnailClient.self] = newValue }
 	}
+
+	var projectBrowserDialogClient: ProjectBrowserDialogClient {
+		get { self[ProjectBrowserDialogClient.self] }
+		set { self[ProjectBrowserDialogClient.self] = newValue }
+	}
+
+	var projectDataIndexClient: ProjectDataIndexClient {
+		get { self[ProjectDataIndexClient.self] }
+		set { self[ProjectDataIndexClient.self] = newValue }
+	}
 }
