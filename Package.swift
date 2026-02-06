@@ -201,6 +201,9 @@ let package = Package(
 		),
 		.target(
 			name: "InspectorModels",
+			dependencies: [
+				.product(name: "Sharing", package: "swift-sharing"),
+			],
 			path: "Packages/DeconstructedLibrary/Sources/InspectorModels"
 		),
 		.target(
