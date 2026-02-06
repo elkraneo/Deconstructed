@@ -6,6 +6,7 @@ public struct ViewportConfiguration: Sendable {
 	public var showGrid: Bool
 	public var showAxes: Bool
 	public var metersPerUnit: Double
+	public var isZUp: Bool
 
 	// MARK: - Camera
 	public var defaultDistance: Float
@@ -19,6 +20,7 @@ public struct ViewportConfiguration: Sendable {
 		showGrid: Bool = true,
 		showAxes: Bool = true,
 		metersPerUnit: Double = 1.0,
+		isZUp: Bool = false,
 		defaultDistance: Float = 5.0,
 		minDistance: Float = 0.01,
 		maxDistance: Float? = nil,
@@ -27,6 +29,7 @@ public struct ViewportConfiguration: Sendable {
 		self.showGrid = showGrid
 		self.showAxes = showAxes
 		self.metersPerUnit = metersPerUnit
+		self.isZUp = isZUp
 		self.defaultDistance = defaultDistance
 		self.minDistance = minDistance
 		self.maxDistance = maxDistance

@@ -2,6 +2,7 @@ import CoreGraphics
 import ImageIO
 import RealityKit
 import SwiftUI
+import USDInterfaces
 import ViewportModels
 import simd
 
@@ -20,6 +21,13 @@ public struct ViewportView: View {
 	/// This is used to refresh after edits while preserving camera state.
 	let modelReloadRequestID: UUID?
 
+	/// Selected USD prim path (e.g. "/Root/Capsule") for live transform application.
+	let selectedPrimPath: String?
+	/// Latest edited transform for the selected prim.
+	let livePrimTransform: USDTransformData?
+	/// Changes to this value request applying `livePrimTransform` to the selected prim entity.
+	let livePrimTransformRequestID: UUID?
+
 	// Internal state
 	@State private var rootEntity: Entity?
 	@State private var cameraState = ArcballCameraState()
@@ -28,6 +36,7 @@ public struct ViewportView: View {
 	@State private var appliedCameraTransformRequestID: UUID?
 	@State private var appliedModelReloadRequestID: UUID?
 	@State private var gridEntity: Entity?
+	@State private var appliedLivePrimTransformRequestID: UUID?
 
 	// IBL state
 	@State private var iblEntity: Entity?
@@ -42,7 +51,10 @@ public struct ViewportView: View {
 		cameraTransformRequestID: UUID? = nil,
 		frameRequestID: UUID? = nil
 		,
-		modelReloadRequestID: UUID? = nil
+		modelReloadRequestID: UUID? = nil,
+		selectedPrimPath: String? = nil,
+		livePrimTransform: USDTransformData? = nil,
+		livePrimTransformRequestID: UUID? = nil
 	) {
 		self.modelURL = modelURL
 		self.configuration = configuration
@@ -51,6 +63,9 @@ public struct ViewportView: View {
 		self.cameraTransformRequestID = cameraTransformRequestID
 		self.frameRequestID = frameRequestID
 		self.modelReloadRequestID = modelReloadRequestID
+		self.selectedPrimPath = selectedPrimPath
+		self.livePrimTransform = livePrimTransform
+		self.livePrimTransformRequestID = livePrimTransformRequestID
 	}
 
 	public var body: some View {
@@ -58,6 +73,7 @@ public struct ViewportView: View {
 			let root = makeSceneRoot()
 			content.add(root)
 			self.rootEntity = root
+			self.isZUp = configuration.isZUp
 
 			// Load model if URL provided
 			if let url = modelURL {
@@ -113,6 +129,14 @@ public struct ViewportView: View {
 				await loadModel(from: url, behavior: .reloadPreservingCamera)
 			}
 		}
+		.onChange(of: livePrimTransformRequestID) { _, newID in
+			guard let id = newID else { return }
+			guard appliedLivePrimTransformRequestID != id else { return }
+			appliedLivePrimTransformRequestID = id
+
+			guard let primPath = selectedPrimPath, let transform = livePrimTransform else { return }
+			applyLiveTransform(primPath: primPath, transform: transform)
+		}
 		.onChange(of: frameRequestID) { _, _ in
 			frameScene()
 		}
@@ -137,6 +161,8 @@ public struct ViewportView: View {
 
 	@MainActor
 	private func makeSceneRoot() -> Entity {
+		isZUp = configuration.isZUp
+
 		let root = Entity()
 		root.name = "SceneRoot"
 
@@ -177,7 +203,7 @@ public struct ViewportView: View {
 			metersPerUnit: configuration.metersPerUnit,
 			worldExtent: Double(sceneBounds.maxExtent)
 				* configuration.metersPerUnit,
-			isZUp: isZUp
+			isZUp: configuration.isZUp
 		)
 		grid.isEnabled = configuration.showGrid
 		grid.name = "Grid"
@@ -256,6 +282,71 @@ public struct ViewportView: View {
 			return
 		}
 		camera.transform.matrix = state.transform
+	}
+
+	// MARK: - Live USD -> RealityKit Transform
+
+	@MainActor
+	private func applyLiveTransform(primPath: String, transform: USDTransformData) {
+		guard let entity = resolveEntity(forPrimPath: primPath) else {
+			// Best-effort: live updates are optional, the USD file still gets authored.
+			return
+		}
+
+		let metersPerUnit = configuration.metersPerUnit > 0 ? configuration.metersPerUnit : 1.0
+
+		// USD translate values are in stage units; RealityKit uses meters.
+		let translation = SIMD3<Float>(
+			Float(transform.position.x * metersPerUnit),
+			Float(transform.position.y * metersPerUnit),
+			Float(transform.position.z * metersPerUnit)
+		)
+
+		let rotation = eulerDegreesXYZToQuat(
+			x: Float(transform.rotationDegrees.x),
+			y: Float(transform.rotationDegrees.y),
+			z: Float(transform.rotationDegrees.z)
+		)
+
+		let scale = SIMD3<Float>(
+			Float(transform.scale.x),
+			Float(transform.scale.y),
+			Float(transform.scale.z)
+		)
+
+		entity.transform = Transform(scale: scale, rotation: rotation, translation: translation)
+	}
+
+	@MainActor
+	private func resolveEntity(forPrimPath primPath: String) -> Entity? {
+		guard let root = rootEntity else { return nil }
+
+		// 1) Exact match: some importers use full prim path as the entity name.
+		if let exact = root.findEntity(named: primPath) { return exact }
+
+		// 2) Leaf match: many importers use the prim name.
+		let leaf = primPath.split(separator: "/").last.map(String.init) ?? primPath
+		if let byLeaf = root.findEntity(named: leaf) { return byLeaf }
+
+		// 3) Fallback: first entity with a matching leaf name in hierarchy.
+		return firstEntity(where: { $0.name == leaf }, in: root)
+	}
+
+	@MainActor
+	private func firstEntity(where predicate: (Entity) -> Bool, in root: Entity) -> Entity? {
+		if predicate(root) { return root }
+		for child in root.children {
+			if let found = firstEntity(where: predicate, in: child) { return found }
+		}
+		return nil
+	}
+
+	private func eulerDegreesXYZToQuat(x: Float, y: Float, z: Float) -> simd_quatf {
+		let rx = simd_quatf(angle: x * .pi / 180.0, axis: SIMD3<Float>(1, 0, 0))
+		let ry = simd_quatf(angle: y * .pi / 180.0, axis: SIMD3<Float>(0, 1, 0))
+		let rz = simd_quatf(angle: z * .pi / 180.0, axis: SIMD3<Float>(0, 0, 1))
+		// XYZ order (apply X, then Y, then Z).
+		return rz * ry * rx
 	}
 
 	// MARK: - Environment / IBL

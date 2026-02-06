@@ -4,6 +4,7 @@ import Foundation
 import InspectorFeature
 import ProjectBrowserFeature
 import SceneGraphFeature
+import USDInterfaces
 import ViewportModels
 
 /// Represents an open scene tab with its viewport state
@@ -16,6 +17,11 @@ public struct SceneTab: Equatable, Identifiable {
 	public var frameRequestID: UUID?
 	/// Trigger to force viewport reload when scene is modified
 	public var reloadTrigger: UUID?
+
+	/// Live transform edits (applied to the viewport without reloading the USD).
+	public var livePrimTransformPrimPath: String?
+	public var livePrimTransform: USDTransformData?
+	public var livePrimTransformRequestID: UUID?
     
     public init(
 		id: UUID = UUID(),
@@ -23,7 +29,10 @@ public struct SceneTab: Equatable, Identifiable {
 		cameraTransform: [Float]? = nil,
 		cameraTransformRequestID: UUID? = nil,
 		frameRequestID: UUID? = nil,
-		reloadTrigger: UUID? = nil
+		reloadTrigger: UUID? = nil,
+		livePrimTransformPrimPath: String? = nil,
+		livePrimTransform: USDTransformData? = nil,
+		livePrimTransformRequestID: UUID? = nil
 	) {
         self.id = id
         let normalized = normalizedSceneURL(fileURL)
@@ -33,6 +42,9 @@ public struct SceneTab: Equatable, Identifiable {
 		self.cameraTransformRequestID = cameraTransformRequestID
 		self.frameRequestID = frameRequestID
 		self.reloadTrigger = reloadTrigger
+		self.livePrimTransformPrimPath = livePrimTransformPrimPath
+		self.livePrimTransform = livePrimTransform
+		self.livePrimTransformRequestID = livePrimTransformRequestID
     }
 }
 
@@ -494,16 +506,24 @@ public struct DocumentEditorFeature {
 				return effects.isEmpty ? .none : .merge(effects)
 
 			case let .inspector(inspectorAction):
-				// Keep viewport in sync after inspector-authored USD edits.
+				// Apply live transform edits to the viewport without reloading the USD asset.
+				if case let .primTransformChanged(transform) = inspectorAction,
+				   case .scene(let tabID) = state.selectedTab,
+				   var tab = state.openScenes[id: tabID],
+				   case let .prim(path) = state.inspector.currentTarget {
+					tab.livePrimTransformPrimPath = path
+					tab.livePrimTransform = transform
+					tab.livePrimTransformRequestID = uuid()
+					state.openScenes[id: tabID] = tab
+					return .none
+				}
+
+				// Keep thumbnails/scene graph in sync after inspector-authored USD edits.
 				if case .primTransformSaveSucceeded = inspectorAction,
 				   case .scene(let tabID) = state.selectedTab,
-				   var tab = state.openScenes[id: tabID] {
-					tab.reloadTrigger = uuid()
-					state.openScenes[id: tabID] = tab
-					return .merge(
-						.send(.projectBrowser(.sceneModified(tab.fileURL))),
-						.send(.sceneNavigator(.refreshRequested))
-					)
+				   let tab = state.openScenes[id: tabID] {
+					// Do not reload the viewport here. The live update already happened.
+					return .send(.projectBrowser(.sceneModified(tab.fileURL)))
 				}
 				return .none
           

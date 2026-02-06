@@ -102,11 +102,18 @@ public struct ContentView: View {
 							Divider()
 
 							ZStack(alignment: .bottomLeading) {
+								let selectedPrimPath: String? = {
+									if case let .prim(path) = store.inspector.currentTarget { return path }
+									return nil
+								}()
+
 								ViewportView(
 									modelURL: sceneTab.fileURL,
 									configuration: ViewportConfiguration(
 										showGrid: store.viewportShowGrid,
 										showAxes: true,
+										metersPerUnit: store.inspector.layerData?.metersPerUnit ?? 1.0,
+										isZUp: store.inspector.layerData?.upAxis == .z,
 										environment: EnvironmentConfiguration(
 											environmentPath: store.environmentPath,
 											showBackground: store.environmentShowBackground,
@@ -120,7 +127,10 @@ public struct ContentView: View {
 									cameraTransform: sceneTab.cameraTransform,
 									cameraTransformRequestID: sceneTab.cameraTransformRequestID,
 									frameRequestID: sceneTab.frameRequestID,
-									modelReloadRequestID: sceneTab.reloadTrigger
+									modelReloadRequestID: sceneTab.reloadTrigger,
+									selectedPrimPath: selectedPrimPath,
+									livePrimTransform: sceneTab.livePrimTransform,
+									livePrimTransformRequestID: sceneTab.livePrimTransformRequestID
 								)
 
 							ViewportFloatingToolbar(
@@ -154,11 +164,18 @@ public struct ContentView: View {
 								Divider()
 
 								ZStack(alignment: .bottomLeading) {
+									let selectedPrimPath: String? = {
+										if case let .prim(path) = store.inspector.currentTarget { return path }
+										return nil
+									}()
+
 									ViewportView(
 										modelURL: firstScene.fileURL,
 										configuration: ViewportConfiguration(
 											showGrid: store.viewportShowGrid,
 											showAxes: true,
+											metersPerUnit: store.inspector.layerData?.metersPerUnit ?? 1.0,
+											isZUp: store.inspector.layerData?.upAxis == .z,
 											environment: EnvironmentConfiguration(
 												environmentPath: store.environmentPath,
 												showBackground: store.environmentShowBackground,
@@ -175,7 +192,10 @@ public struct ContentView: View {
 										cameraTransformRequestID: firstScene
 											.cameraTransformRequestID,
 										frameRequestID: firstScene.frameRequestID,
-										modelReloadRequestID: firstScene.reloadTrigger
+										modelReloadRequestID: firstScene.reloadTrigger,
+										selectedPrimPath: selectedPrimPath,
+										livePrimTransform: firstScene.livePrimTransform,
+										livePrimTransformRequestID: firstScene.livePrimTransformRequestID
 									)
 
 								ViewportFloatingToolbar(
