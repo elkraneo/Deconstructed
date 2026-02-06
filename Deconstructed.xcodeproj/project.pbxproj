@@ -15,7 +15,6 @@
 
 /* Begin PBXFileReference section */
 		AE746AF72F278AE90087A28B /* Deconstructed.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Deconstructed.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		AE746B772F297B300087A28B /* DeconstructedLibrary */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = DeconstructedLibrary; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -57,9 +56,7 @@
 		AE746AEE2F278AE90087A28B = {
 			isa = PBXGroup;
 			children = (
-				AE746B762F297A590087A28B /* Packages */,
 				AE746AF92F278AE90087A28B /* Deconstructed */,
-				AE746B782F297B5E0087A28B /* Frameworks */,
 				AE746AF82F278AE90087A28B /* Products */,
 			);
 			sourceTree = "<group>";
@@ -70,21 +67,6 @@
 				AE746AF72F278AE90087A28B /* Deconstructed.app */,
 			);
 			name = Products;
-			sourceTree = "<group>";
-		};
-		AE746B762F297A590087A28B /* Packages */ = {
-			isa = PBXGroup;
-			children = (
-				AE746B772F297B300087A28B /* DeconstructedLibrary */,
-			);
-			path = Packages;
-			sourceTree = "<group>";
-		};
-		AE746B782F297B5E0087A28B /* Frameworks */ = {
-			isa = PBXGroup;
-			children = (
-			);
-			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -124,7 +106,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 2620;
-				LastUpgradeCheck = 2620;
+				LastUpgradeCheck = 2630;
 				TargetAttributes = {
 					AE746AF62F278AE90087A28B = {
 						CreatedOnToolsVersion = 26.2;
@@ -186,6 +168,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 4;
+				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = 32JHA4FFUH;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -220,8 +203,8 @@
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_EXPLICIT_MODULE_BUILD = NO;
 				SWIFT_ENABLE_EXPLICIT_MODULES = NO;
+				SWIFT_EXPLICIT_MODULE_BUILD = NO;
 				SWIFT_OBJC_BRIDGING_HEADER = "$(TARGET_NAME)/ShaderTypes.h";
 				SWIFT_OBJC_INTEROP_MODE = objcxx;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
@@ -241,6 +224,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 4;
+				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = 32JHA4FFUH;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -274,8 +258,8 @@
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_EXPLICIT_MODULE_BUILD = NO;
 				SWIFT_ENABLE_EXPLICIT_MODULES = NO;
+				SWIFT_EXPLICIT_MODULE_BUILD = NO;
 				SWIFT_OBJC_BRIDGING_HEADER = "$(TARGET_NAME)/ShaderTypes.h";
 				SWIFT_OBJC_INTEROP_MODE = objcxx;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
@@ -318,6 +302,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = 32JHA4FFUH;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -343,9 +328,10 @@
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
-				SWIFT_EXPLICIT_MODULE_BUILD = NO;
 				SWIFT_ENABLE_EXPLICIT_MODULES = NO;
+				SWIFT_EXPLICIT_MODULE_BUILD = NO;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
 			name = Debug;
@@ -385,6 +371,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = 32JHA4FFUH;
 				ENABLE_NS_ASSERTIONS = NO;
@@ -403,9 +390,10 @@
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = macosx;
-				SWIFT_EXPLICIT_MODULE_BUILD = NO;
-				SWIFT_ENABLE_EXPLICIT_MODULES = NO;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_ENABLE_EXPLICIT_MODULES = NO;
+				SWIFT_EXPLICIT_MODULE_BUILD = NO;
 			};
 			name = Release;
 		};

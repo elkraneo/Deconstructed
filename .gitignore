@@ -1,0 +1,12 @@
+.DS_Store
+**/.DS_Store
+
+# Xcode user-specific state should never be committed.
+**/xcuserdata/
+**/*.xcuserstate
+**/*.xcbkptlist
+
+# Local Xcode/SwiftPM transient data.
+**/DerivedData/
+.swiftpm/
+

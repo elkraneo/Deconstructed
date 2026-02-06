@@ -29,6 +29,23 @@ Reality Composer Pro (RCP) is Apple's professional tool for creating 3D content 
 - **[USDInteropAdvanced](https://github.com/elkraneo/USDInteropAdvanced)** - Higher-level USD operations (metadata, scene graph, editing)
 - **[AppleUSDSchemas](https://github.com/elkraneo/AppleUSDSchemas)** - Apple's proprietary USD schema definitions
 
+## Local Development (CI-Safe)
+
+This repo keeps all SwiftPM dependencies in git as `.package(url: ...)` (CI-safe). For local development, use **SwiftPM mirrors** to route those same URLs to local checkouts without changing any committed manifests.
+
+1. Open `/Volumes/Plutonian/_Developer/Deconstructed/source/Deconstructed/Deconstructed.xcworkspace` (not the `.xcodeproj`).
+2. Install mirrors (optional, but recommended if you have local clones):
+```sh
+./Scripts/spm-mirrors/install.sh
+```
+3. If Xcode appears “stuck” on an old revision:
+- Xcode: `File > Packages > Reset Package Caches`, then `File > Packages > Resolve Package Versions`
+- Or delete DerivedData for this app
+4. To return to pure-remote resolution:
+```sh
+./Scripts/spm-mirrors/uninstall.sh
+```
+
 ## Project Structure
 
 ```
