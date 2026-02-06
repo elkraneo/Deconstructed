@@ -158,6 +158,7 @@ let package = Package(
 			dependencies: [
 				"SceneGraphModels",
 				"DeconstructedModels",
+				"DeconstructedUSDInterop",
 				.product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
 				.product(name: "USDInterfaces", package: "USDInterop"),
 				.product(name: "USDInteropAdvancedInspection", package: "USDInteropAdvanced"),
