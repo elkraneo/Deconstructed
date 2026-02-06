@@ -97,25 +97,28 @@ struct DocumentEditorFeatureTests {
 		state.projectBrowser.documentURL = documentURL
 
 		let clock = TestClock()
+		let expectedDate = Date(timeIntervalSinceReferenceDate: 123)
 		let store = TestStore(initialState: state) {
 			DocumentEditorFeature()
 		} withDependencies: {
 			$0.continuousClock = clock
+			$0.date.now = expectedDate
 		}
-		store.exhaustivity = .off
 
 		let transform = Array(repeating: Float(1.0), count: 16)
 		await store.send(.sceneCameraChanged(sceneURL, transform))
 		await clock.advance(by: .seconds(1))
-		await Task.yield()
+		await store.receive(\.cameraHistoryCommit)
 
 		let updated = try readJSON(from: userDataURL)
 		let history = updated["sceneCameraHistory"] as? [String: Any]
 		let entries = history?[sceneUUID] as? [[String: Any]]
 		let last = entries?.last
 		let stored = last?["transform"] as? [Double]
+		let date = last?["date"] as? Double
 
 		#expect(stored?.count == 16)
+		#expect(date == expectedDate.timeIntervalSinceReferenceDate)
 	}
 
 	@Test

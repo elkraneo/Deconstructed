@@ -1,5 +1,4 @@
 import DeconstructedModels
-import DeconstructedModels
 import Foundation
 import ProjectBrowserClients
 import ProjectBrowserModels
@@ -104,6 +103,7 @@ public struct ProjectBrowserFeature {
 	@Dependency(\.projectBrowserDialogClient) var dialogClient
 	@Dependency(\.projectDataIndexClient) var projectDataIndexClient
 	@Dependency(\.continuousClock) var clock
+	@Dependency(\.uuid) var uuid
 
 	public init() {}
 
@@ -254,20 +254,25 @@ public struct ProjectBrowserFeature {
 				state.errorMessage = "Could not determine destination folder."
 				return .none
 			}
-			let documentURL = state.documentURL
-			let fileOperations = self.fileOperations
-			let projectDataIndexClient = self.projectDataIndexClient
-			return .run { send in
-				do {
-					let sceneURL = try await fileOperations.createScene(
-						destination,
-						DeconstructedConstants.FileName.untitledScene
-					)
-					if let documentURL {
-						try? projectDataIndexClient.registerNewScene(documentURL, sceneURL)
-					}
-					await send(.fileOperationCompleted)
-				} catch {
+				let documentURL = state.documentURL
+				let fileOperations = self.fileOperations
+				let projectDataIndexClient = self.projectDataIndexClient
+				let uuid = self.uuid
+				return .run { send in
+					do {
+						let sceneURL = try await fileOperations.createScene(
+							destination,
+							DeconstructedConstants.FileName.untitledScene
+						)
+						if let documentURL {
+							try? projectDataIndexClient.registerNewScene(
+								documentURL,
+								sceneURL,
+								uuid().uuidString
+							)
+						}
+						await send(.fileOperationCompleted)
+					} catch {
 					await send(.fileOperationFailed(error.localizedDescription))
 				}
 			}
@@ -438,11 +443,11 @@ public struct ProjectBrowserFeature {
 				await send(.loadAssets(documentURL: documentURL))
 			}
 
-		case let .sceneModified(url):
-			// Increment thumbnail version to trigger reload
-			state.thumbnailVersions[url] = UUID()
-			// Invalidate the cache
-			let thumbnailClient = self.thumbnailClient
+			case let .sceneModified(url):
+				// Increment thumbnail version to trigger reload
+				state.thumbnailVersions[url] = uuid()
+				// Invalidate the cache
+				let thumbnailClient = self.thumbnailClient
 			return .run { _ in
 				await thumbnailClient.invalidate(url)
 			}

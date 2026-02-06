@@ -4,15 +4,23 @@ import Foundation
 
 @DependencyClient
 public struct ProjectDataIndexClient: Sendable {
-	public var registerNewScene: @Sendable (_ documentURL: URL, _ sceneURL: URL) throws -> Void
+	public var registerNewScene: @Sendable (
+		_ documentURL: URL,
+		_ sceneURL: URL,
+		_ sceneUUID: String
+	) throws -> Void
 	public var registerMove: @Sendable (_ documentURL: URL, _ from: URL, _ to: URL) throws -> Void
 }
 
 extension ProjectDataIndexClient: DependencyKey {
 	public static var liveValue: Self {
 		Self(
-			registerNewScene: { documentURL, sceneURL in
-				try updateProjectDataForNewScene(documentURL: documentURL, sceneURL: sceneURL)
+			registerNewScene: { documentURL, sceneURL, sceneUUID in
+				try updateProjectDataForNewScene(
+					documentURL: documentURL,
+					sceneURL: sceneURL,
+					sceneUUID: sceneUUID
+				)
 			},
 			registerMove: { documentURL, from, to in
 				try updateProjectDataForMove(documentURL: documentURL, from: from, to: to)
@@ -21,17 +29,20 @@ extension ProjectDataIndexClient: DependencyKey {
 	}
 }
 
-private func updateProjectDataForNewScene(documentURL: URL, sceneURL: URL) throws {
+private func updateProjectDataForNewScene(
+	documentURL: URL,
+	sceneURL: URL,
+	sceneUUID: String
+) throws {
 	let projectDataURL = documentURL
 		.appendingPathComponent(DeconstructedConstants.DirectoryName.projectData)
 		.appendingPathComponent(DeconstructedConstants.FileName.mainJson)
 	let data = try Data(contentsOf: projectDataURL)
 	var projectData = try JSONDecoder().decode(RCPProjectData.self, from: data)
 
-	let sceneUUID = UUID().uuidString
 	let scenePath = try scenePathForURL(documentURL: documentURL, sceneURL: sceneURL)
 	projectData.pathsToIds[scenePath] = sceneUUID
-	projectData.uuidToIntID[sceneUUID] = Int64.random(in: Int64.min...Int64.max)
+	projectData.uuidToIntID[sceneUUID] = numericSceneID(from: sceneUUID)
 
 	let encoder = JSONEncoder()
 	encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -40,6 +51,20 @@ private func updateProjectDataForNewScene(documentURL: URL, sceneURL: URL) throw
 
 	try updateSceneMetadataListForNewScene(documentURL: documentURL, sceneUUID: sceneUUID)
 	try ensurePluginDataForScene(documentURL: documentURL, sceneUUID: sceneUUID)
+}
+
+private func numericSceneID(from sceneUUID: String) -> Int64 {
+	guard let uuid = UUID(uuidString: sceneUUID) else {
+		return 0
+	}
+	return Int64(bitPattern: UInt64(uuid.uuid.0) << 56
+		| UInt64(uuid.uuid.1) << 48
+		| UInt64(uuid.uuid.2) << 40
+		| UInt64(uuid.uuid.3) << 32
+		| UInt64(uuid.uuid.4) << 24
+		| UInt64(uuid.uuid.5) << 16
+		| UInt64(uuid.uuid.6) << 8
+		| UInt64(uuid.uuid.7))
 }
 
 private func updateProjectDataForMove(documentURL: URL, from: URL, to: URL) throws {

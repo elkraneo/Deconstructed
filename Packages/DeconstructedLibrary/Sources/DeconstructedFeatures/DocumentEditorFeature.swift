@@ -18,13 +18,14 @@ public struct SceneTab: Equatable, Identifiable {
 	public var reloadTrigger: UUID?
     
     public init(
+		id: UUID = UUID(),
 		fileURL: URL,
 		cameraTransform: [Float]? = nil,
 		cameraTransformRequestID: UUID? = nil,
 		frameRequestID: UUID? = nil,
 		reloadTrigger: UUID? = nil
 	) {
-        self.id = UUID()
+        self.id = id
         let normalized = normalizedSceneURL(fileURL)
         self.fileURL = normalized
         self.displayName = normalized.lastPathComponent
@@ -165,6 +166,8 @@ public struct DocumentEditorFeature {
 	public init() {}
 
 	@Dependency(\.continuousClock) var clock
+	@Dependency(\.date.now) var now
+	@Dependency(\.uuid) var uuid
 	@Dependency(\.workspacePersistenceClient) var workspacePersistenceClient
     
     public var body: some ReducerOf<Self> {
@@ -193,14 +196,15 @@ public struct DocumentEditorFeature {
 
 			case let .workspaceRestored(restored):
 				state.openScenes = IdentifiedArray(
-					uniqueElements: restored.openSceneURLs.map { url in
-						SceneTab(
-							fileURL: url,
-							cameraTransform: restored.cameraTransforms[url],
-							cameraTransformRequestID: restored.cameraTransforms[url] == nil ? nil : UUID()
-						)
-					}
-				)
+						uniqueElements: restored.openSceneURLs.map { url in
+							SceneTab(
+								id: uuid(),
+								fileURL: url,
+								cameraTransform: restored.cameraTransforms[url],
+								cameraTransformRequestID: restored.cameraTransforms[url] == nil ? nil : uuid()
+							)
+						}
+					)
 				if let selected = restored.selectedSceneURL,
 				   let selectedTab = state.openScenes.first(where: { $0.fileURL == selected }) {
 					state.selectedTab = .scene(id: selectedTab.id)
@@ -308,7 +312,7 @@ public struct DocumentEditorFeature {
 			}
 			
 			// Open new scene
-			let newTab = SceneTab(fileURL: normalizedURL)
+				let newTab = SceneTab(id: uuid(), fileURL: normalizedURL)
 			print("[DocumentEditorFeature] Created new tab: \(newTab.id)")
 			state.openScenes.append(newTab)
 			state.selectedTab = .scene(id: newTab.id)
@@ -407,11 +411,12 @@ public struct DocumentEditorFeature {
 				}
 				let title = url.deletingPathExtension().lastPathComponent
 				let workspacePersistenceClient = self.workspacePersistenceClient
-				let entry = CameraHistoryItem(
-					date: Date(),
-					title: title,
-					transform: transform
-				)
+					let entry = CameraHistoryItem(
+						id: uuid(),
+						date: now,
+						title: title,
+						transform: transform
+					)
 				if shouldAppendCameraHistory(entry, to: state.cameraHistory) {
 					state.cameraHistory.append(entry)
 					if state.cameraHistory.count > cameraHistoryMaxEntries {
@@ -430,13 +435,13 @@ public struct DocumentEditorFeature {
 				}
 
 			case .frameSceneRequested, .frameSelectedRequested:
-				guard case .scene(let id) = state.selectedTab,
-				      var tab = state.openScenes[id: id] else {
+					guard case .scene(let id) = state.selectedTab,
+					      var tab = state.openScenes[id: id] else {
+						return .none
+					}
+					tab.frameRequestID = uuid()
+					state.openScenes[id: id] = tab
 					return .none
-				}
-				tab.frameRequestID = UUID()
-				state.openScenes[id: id] = tab
-				return .none
 
 			case .toggleGridRequested:
 				state.viewportShowGrid.toggle()
@@ -450,15 +455,15 @@ public struct DocumentEditorFeature {
 				}
 
 			case let .cameraHistorySelected(id):
-				guard case .scene(let selectedId) = state.selectedTab,
-				      var tab = state.openScenes[id: selectedId],
-				      let item = state.cameraHistory.first(where: { $0.id == id }) else {
+					guard case .scene(let selectedId) = state.selectedTab,
+					      var tab = state.openScenes[id: selectedId],
+					      let item = state.cameraHistory.first(where: { $0.id == id }) else {
+						return .none
+					}
+					tab.cameraTransform = item.transform
+					tab.cameraTransformRequestID = uuid()
+					state.openScenes[id: selectedId] = tab
 					return .none
-				}
-				tab.cameraTransform = item.transform
-				tab.cameraTransformRequestID = UUID()
-				state.openScenes[id: selectedId] = tab
-				return .none
                 
             case .projectBrowser:
                           return .none
@@ -470,7 +475,7 @@ public struct DocumentEditorFeature {
 				if case .primCreated = sceneAction,
 				   case .scene(let tabID) = state.selectedTab,
 				   var tab = state.openScenes[id: tabID] {
-					tab.reloadTrigger = UUID()
+					tab.reloadTrigger = uuid()
 					state.openScenes[id: tabID] = tab
 					// Also invalidate thumbnail for this scene via ProjectBrowserFeature
 					effects.append(.send(.projectBrowser(.sceneModified(tab.fileURL))))
@@ -493,7 +498,7 @@ public struct DocumentEditorFeature {
 				if case .primTransformSaveSucceeded = inspectorAction,
 				   case .scene(let tabID) = state.selectedTab,
 				   var tab = state.openScenes[id: tabID] {
-					tab.reloadTrigger = UUID()
+					tab.reloadTrigger = uuid()
 					state.openScenes[id: tabID] = tab
 					return .merge(
 						.send(.projectBrowser(.sceneModified(tab.fileURL))),
@@ -502,11 +507,11 @@ public struct DocumentEditorFeature {
 				}
 				return .none
           
-            case let .sceneModified(tabID):
-            	if var tab = state.openScenes[id: tabID] {
-            		tab.reloadTrigger = UUID()
-            		state.openScenes[id: tabID] = tab
-            	}
+	            case let .sceneModified(tabID):
+	            	if var tab = state.openScenes[id: tabID] {
+	            		tab.reloadTrigger = uuid()
+	            		state.openScenes[id: tabID] = tab
+	            	}
             	return .none
 
 			case let .environmentPathChanged(path):
@@ -545,8 +550,8 @@ public struct CameraHistoryItem: Equatable, Identifiable, Sendable {
 	public let title: String
 	public let transform: [Float]
 
-	public init(date: Date, title: String, transform: [Float]) {
-		self.id = UUID()
+	public init(id: UUID = UUID(), date: Date, title: String, transform: [Float]) {
+		self.id = id
 		self.date = date
 		self.title = title
 		self.transform = transform
