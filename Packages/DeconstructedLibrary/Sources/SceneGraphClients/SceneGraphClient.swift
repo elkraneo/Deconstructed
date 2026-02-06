@@ -1,7 +1,7 @@
 import ComposableArchitecture
+import DeconstructedUSDInterop
 import Foundation
 import SceneGraphModels
-import USDInterop
 
 public struct SceneGraphClient: Sendable {
 	public var loadSceneGraph: @Sendable (_ url: URL) async throws -> [SceneNode]
@@ -38,13 +38,13 @@ private func loadSceneGraphFromUSD(url: URL) throws -> [SceneNode] {
 		return []
 	}
 
-	if let json = USDInteropStage.sceneGraphJSON(url: url),
+	if let json = DeconstructedUSDInterop.sceneGraphJSON(url: url),
 	   let data = json.data(using: .utf8),
 	   let decoded = try? JSONDecoder().decode([CxxSceneNode].self, from: data) {
 		return decoded.map { $0.toSceneNode() }
 	}
 
-	if let usda = USDInteropStage.exportUSDA(url: url) {
+	if let usda = DeconstructedUSDInterop.exportUSDA(url: url) {
 		return parseSceneNodes(usda)
 	}
 

@@ -112,6 +112,20 @@ public struct EditOp: Sendable, Hashable {
 	public init() {}
 }
 
+public struct USDSceneBounds: Sendable, Equatable {
+	public var min: SIMD3<Float>
+	public var max: SIMD3<Float>
+	public var center: SIMD3<Float>
+	public var maxExtent: Float
+
+	public init(min: SIMD3<Float>, max: SIMD3<Float>, center: SIMD3<Float>, maxExtent: Float) {
+		self.min = min
+		self.max = max
+		self.center = center
+		self.maxExtent = maxExtent
+	}
+}
+
 public enum DeconstructedUSDInterop {
 	private static let advancedClient = USDAdvancedClient()
 
@@ -230,14 +244,27 @@ public enum DeconstructedUSDInterop {
 	}
 
 	/// Compute scene bounds by iterating mesh points.
-	/// Returns (min, max, center, maxExtent) for camera framing.
-	public static func getSceneBounds(url: URL) throws -> (
-		min: SIMD3<Float>, max: SIMD3<Float>, center: SIMD3<Float>, maxExtent: Float
-	) {
+	/// Returns scene bounds for camera framing.
+	public static func getSceneBounds(url: URL) throws -> USDSceneBounds {
 		if let bounds = USDInteropStage.sceneBounds(url: url) {
-			return (min: bounds.min, max: bounds.max, center: bounds.center, maxExtent: bounds.maxExtent)
+			return USDSceneBounds(
+				min: bounds.min,
+				max: bounds.max,
+				center: bounds.center,
+				maxExtent: bounds.maxExtent
+			)
 		}
-		return (min: .zero, max: .zero, center: .zero, maxExtent: 0)
+		return USDSceneBounds(min: .zero, max: .zero, center: .zero, maxExtent: 0)
+	}
+
+	/// Returns the scene graph JSON produced by the low-level interop layer.
+	public static func sceneGraphJSON(url: URL) -> String? {
+		USDInteropStage.sceneGraphJSON(url: url)
+	}
+
+	/// Exports USDA text from the low-level interop layer.
+	public static func exportUSDA(url: URL) -> String? {
+		USDInteropStage.exportUSDA(url: url)
 	}
 
 	/// Retrieves stage metadata including layer data properties.

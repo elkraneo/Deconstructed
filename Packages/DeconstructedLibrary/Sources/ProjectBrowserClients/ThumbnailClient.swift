@@ -1,8 +1,8 @@
 import AppKit
 import ComposableArchitecture
 import CryptoKit
+import DeconstructedUSDInterop
 import Foundation
-import USDInterop
 
 @DependencyClient
 public struct ThumbnailClient: Sendable {
@@ -56,8 +56,7 @@ public actor ThumbnailGenerator {
 	}
 
 	private func generateThumbnail(url: URL, output: URL, size: CGFloat) async -> NSImage? {
-		let bounds = USDInteropStage.sceneBounds(url: url)
-
+		let bounds = try? DeconstructedUSDInterop.getSceneBounds(url: url)
 		if let bounds, bounds.maxExtent > 0 {
 			print("[ThumbnailGenerator] Using bounds-based camera for: \(url.lastPathComponent)")
 			return await generateThumbnailWithBounds(url: url, output: output, size: size, bounds: bounds)
@@ -67,7 +66,12 @@ public actor ThumbnailGenerator {
 		}
 	}
 
-	private func generateThumbnailWithBounds(url: URL, output: URL, size: CGFloat, bounds: USDInteropStage.SceneBounds) async -> NSImage? {
+	private func generateThumbnailWithBounds(
+		url: URL,
+		output: URL,
+		size: CGFloat,
+		bounds: USDSceneBounds
+	) async -> NSImage? {
 		// Default camera is at (0, 0, 10) looking at origin
 		// We want to position camera based on scene bounds
 		let fov: Float = 60.0 * .pi / 180.0

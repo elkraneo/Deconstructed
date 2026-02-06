@@ -202,10 +202,7 @@ let package = Package(
 			dependencies: [
 				"ProjectBrowserModels",
 				"DeconstructedModels",
-				.product(
-					name: "USDInterop",
-					package: "USDInterop"
-				),
+				"DeconstructedUSDInterop",
 				.product(
 					name: "ComposableArchitecture",
 					package: "swift-composable-architecture"
@@ -257,10 +254,6 @@ let package = Package(
 			dependencies: [
 				"SceneGraphModels",
 				"DeconstructedUSDInterop",
-				.product(
-					name: "USDInterop",
-					package: "USDInterop"
-				),
 				.product(
 					name: "ComposableArchitecture",
 					package: "swift-composable-architecture"
