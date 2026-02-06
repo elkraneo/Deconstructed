@@ -141,7 +141,8 @@ public struct ArcballCameraControls: ViewModifier {
         // Calculate pan direction relative to camera rotation
         let rotX = simd_quatf(angle: state.rotation.x, axis: [1, 0, 0])
         let rotY = simd_quatf(angle: state.rotation.y, axis: [0, 1, 0])
-        let orientation = rotY * rotX
+        // Avoid operator overload ambiguity under Swift 6 + C++ interop builds.
+        let orientation = simd_mul(rotY, rotX)
         
         let right = orientation.act([1, 0, 0])
         let up = orientation.act([0, 1, 0])
