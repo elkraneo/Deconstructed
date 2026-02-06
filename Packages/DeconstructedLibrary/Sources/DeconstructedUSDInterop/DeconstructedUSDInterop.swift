@@ -260,6 +260,18 @@ public enum DeconstructedUSDInterop {
 	) -> USDTransformData? {
 		advancedClient.primTransform(url: url, path: primPath)
 	}
+
+	public static func setPrimTransform(
+		url: URL,
+		primPath: String,
+		transform: USDTransformData
+	) throws {
+		do {
+			try advancedClient.setPrimTransform(url: url, path: primPath, transform: transform)
+		} catch {
+			throw mapAdvancedError(error, url: url, primPath: primPath, schema: nil)
+		}
+	}
 	/// Sets the metersPerUnit metadata for the stage.
 	public static func setMetersPerUnit(url: URL, value: Double) throws {
 		do {

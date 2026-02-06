@@ -81,7 +81,8 @@ public struct InspectorView: View {
 									if let transform = store.primTransform {
 										TransformSection(
 											transform: transform,
-											metersPerUnit: store.layerData?.metersPerUnit
+											metersPerUnit: store.layerData?.metersPerUnit,
+											onTransformChanged: { store.send(.primTransformChanged($0)) }
 										)
 									}
 
@@ -272,6 +273,7 @@ struct PrimAttributesSection: View {
 struct TransformSection: View {
 	let transform: USDTransformData
 	let metersPerUnit: Double?
+	let onTransformChanged: (USDTransformData) -> Void
 	@State private var isExpanded: Bool = true
 
 	private var lengthUnitLabel: String {
@@ -283,30 +285,46 @@ struct TransformSection: View {
 	var body: some View {
 		InspectorGroupBox(title: "Transform", isExpanded: $isExpanded) {
 			VStack(alignment: .leading, spacing: 10) {
-				TransformRow(
+				TransformEditableRow(
 					label: "Position",
 					unit: lengthUnitLabel,
-					values: transform.position
+					values: transform.position,
+					onValuesChanged: { values in
+						var updated = transform
+						updated.position = values
+						onTransformChanged(updated)
+					}
 				)
-				TransformRow(
+				TransformEditableRow(
 					label: "Rotation",
 					unit: "°",
-					values: transform.rotationDegrees
+					values: transform.rotationDegrees,
+					onValuesChanged: { values in
+						var updated = transform
+						updated.rotationDegrees = values
+						onTransformChanged(updated)
+					}
 				)
-				TransformRow(
+				TransformEditableRow(
 					label: "Scale",
 					unit: "",
-					values: transform.scale
+					values: transform.scale,
+					onValuesChanged: { values in
+						var updated = transform
+						updated.scale = values
+						onTransformChanged(updated)
+					}
 				)
 			}
 		}
 	}
 }
 
-private struct TransformRow: View {
+private struct TransformEditableRow: View {
 	let label: String
 	let unit: String
 	let values: SIMD3<Double>
+	let onValuesChanged: (SIMD3<Double>) -> Void
 
 	var body: some View {
 		HStack(spacing: 8) {
@@ -322,15 +340,44 @@ private struct TransformRow: View {
 
 			Spacer()
 
-			axisField(values.x, label: "X")
-			axisField(values.y, label: "Y")
-			axisField(values.z, label: "Z")
+			axisField(values.x, label: "X") { value in
+				var updated = values
+				updated.x = value
+				onValuesChanged(updated)
+			}
+			axisField(values.y, label: "Y") { value in
+				var updated = values
+				updated.y = value
+				onValuesChanged(updated)
+			}
+			axisField(values.z, label: "Z") { value in
+				var updated = values
+				updated.z = value
+				onValuesChanged(updated)
+			}
 		}
 	}
 
-	private func axisField(_ value: Double, label: String) -> some View {
-		Text(formatNumber(value))
+	private func axisField(_ value: Double, label: String, onCommit: @escaping (Double) -> Void) -> some View {
+		EditableAxisField(
+			value: value,
+			label: label,
+			onCommit: onCommit
+		)
+	}
+}
+
+private struct EditableAxisField: View {
+	let value: Double
+	let label: String
+	let onCommit: (Double) -> Void
+	@State private var text: String = ""
+
+	var body: some View {
+		TextField(label, text: $text)
+			.textFieldStyle(.plain)
 			.font(.system(size: 11, weight: .medium))
+			.multilineTextAlignment(.trailing)
 			.frame(width: 44, alignment: .trailing)
 			.padding(.horizontal, 6)
 			.padding(.vertical, 4)
@@ -344,6 +391,25 @@ private struct TransformRow: View {
 					.padding(.leading, 4)
 					.padding(.bottom, 2)
 			)
+			.onAppear {
+				text = formatNumber(value)
+			}
+			.onChange(of: value) { _, newValue in
+				text = formatNumber(newValue)
+			}
+			.onSubmit {
+				commit()
+			}
+	}
+
+	private func commit() {
+		let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
+		guard let parsed = Double(normalized) else {
+			text = formatNumber(value)
+			return
+		}
+		onCommit(parsed)
+		text = formatNumber(parsed)
 	}
 
 	private func formatNumber(_ value: Double) -> String {

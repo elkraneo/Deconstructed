@@ -85,6 +85,9 @@ public struct InspectorFeature {
 		case primAttributesLoadFailed(String)
 		case primTransformLoaded(USDTransformData)
 		case primTransformLoadFailed(String)
+		case primTransformChanged(USDTransformData)
+		case primTransformSaveSucceeded
+		case primTransformSaveFailed(String)
 		case refreshLayerData
 
 		case defaultPrimChanged(String)
@@ -234,6 +237,39 @@ public struct InspectorFeature {
 				state.primTransform = nil
 				state.primIsLoading = false
 				state.primErrorMessage = message
+				return .none
+
+			case let .primTransformChanged(transform):
+				guard let url = state.sceneURL,
+				      let primPath = state.selectedNodeID else {
+					return .none
+				}
+				state.primTransform = transform
+				state.primErrorMessage = nil
+				return .run { send in
+					do {
+						try DeconstructedUSDInterop.setPrimTransform(
+							url: url,
+							primPath: primPath,
+							transform: transform
+						)
+						await send(.primTransformSaveSucceeded)
+					} catch {
+						if let refreshed = DeconstructedUSDInterop.getPrimTransform(
+							url: url,
+							primPath: primPath
+						) {
+							await send(.primTransformLoaded(refreshed))
+						}
+						await send(.primTransformSaveFailed(error.localizedDescription))
+					}
+				}
+
+			case .primTransformSaveSucceeded:
+				return .none
+
+			case let .primTransformSaveFailed(message):
+				state.primErrorMessage = "Failed to save transform: \(message)"
 				return .none
 
 			case .refreshLayerData:
