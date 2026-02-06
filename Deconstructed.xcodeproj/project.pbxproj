@@ -120,15 +120,12 @@
 				en,
 				Base,
 			);
-			mainGroup = AE746AEE2F278AE90087A28B;
-			minimizedProjectReferenceProxies = 1;
-			packageReferences = (
-				AE97CAA02F353FD2007F526D /* XCLocalSwiftPackageReference "Packages/DeconstructedLibrary" */,
-			);
-			preferredProjectObjectVersion = 77;
-			productRefGroup = AE746AF82F278AE90087A28B /* Products */;
-			projectDirPath = "";
-			projectRoot = "";
+				mainGroup = AE746AEE2F278AE90087A28B;
+				minimizedProjectReferenceProxies = 1;
+				preferredProjectObjectVersion = 77;
+				productRefGroup = AE746AF82F278AE90087A28B /* Products */;
+				projectDirPath = "";
+				projectRoot = "";
 			targets = (
 				AE746AF62F278AE90087A28B /* Deconstructed */,
 			);
@@ -418,19 +415,12 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-/* End XCConfigurationList section */
+	/* End XCConfigurationList section */
 
-/* Begin XCLocalSwiftPackageReference section */
-		AE97CAA02F353FD2007F526D /* XCLocalSwiftPackageReference "Packages/DeconstructedLibrary" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = Packages/DeconstructedLibrary;
-		};
-/* End XCLocalSwiftPackageReference section */
-
-/* Begin XCSwiftPackageProductDependency section */
-		48ECA5A5964B403CB25F24F7 /* DeconstructedUI */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = DeconstructedUI;
+	/* Begin XCSwiftPackageProductDependency section */
+			48ECA5A5964B403CB25F24F7 /* DeconstructedUI */ = {
+				isa = XCSwiftPackageProductDependency;
+				productName = DeconstructedUI;
 		};
 		4C624E32E7E6488699328A16 /* DeconstructedClients */ = {
 			isa = XCSwiftPackageProductDependency;
