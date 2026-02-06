@@ -22,8 +22,7 @@ fi
 
 if [[ -n "$COMMIT_RANGE" ]]; then
   echo "Checking commit range for forbidden local package references: $COMMIT_RANGE"
-  mapfile -t commits < <(git rev-list "$COMMIT_RANGE")
-  for commit in "${commits[@]}"; do
+  while IFS= read -r commit; do
     if git grep -n -E '\.package\s*\(\s*path\s*:' "$commit" -- ':(glob)**/Package.swift' >/dev/null; then
       echo
       echo "ERROR: Commit $commit contains forbidden .package(path:) dependency."
@@ -36,7 +35,7 @@ if [[ -n "$COMMIT_RANGE" ]]; then
       git grep -n 'XCLocalSwiftPackageReference' "$commit" -- ':(glob)**/*.pbxproj' || true
       exit 1
     fi
-  done
+  done < <(git rev-list "$COMMIT_RANGE")
 fi
 
 echo "Dependency source checks passed."
