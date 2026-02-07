@@ -32,6 +32,14 @@ Reverse-engineer and clone Reality Composer Pro's functionality:
 3. Edit scenes and assets
 4. Save changes back to the package format
 
+## Private USDInteropAdvanced / Public Deconstructed
+
+- The `USDInteropAdvanced` source repo is private.
+- This public repo depends on the binary wrapper package:
+  - `https://github.com/Reality2713/USDInteropAdvanced-binaries`
+  - Current version: `0.2.15`
+- For local development against the private source, use SwiftPM mirrors as documented in this repo (so you can point the dependency at your local checkout instead of the binaries).
+
 ## Reference Implementation
 
 Analyze this real RCP project for format details:
