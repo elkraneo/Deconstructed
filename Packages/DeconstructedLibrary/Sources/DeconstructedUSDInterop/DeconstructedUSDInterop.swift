@@ -2,6 +2,7 @@ import Foundation
 import USDInterfaces
 import USDInterop
 import USDInteropAdvanced
+import USDInteropAdvancedCore
 
 public enum DeconstructedUSDInteropError: Error, LocalizedError, Sendable {
 	case stageOpenFailed(URL)
@@ -127,7 +128,7 @@ public struct USDSceneBounds: Sendable, Equatable {
 }
 
 public enum DeconstructedUSDInterop {
-	private static let advancedClient = USDAdvancedClient()
+	private static let advancedClient = USDInteropAdvancedCore.USDAdvancedClient()
 
 	public static func setDefaultPrim(url: URL, primPath: String) throws {
 		do {
@@ -333,7 +334,7 @@ public enum DeconstructedUSDInterop {
 		primPath: String,
 		schema: String?
 	) -> Error {
-		if let advancedError = error as? USDAdvancedError {
+		if let advancedError = error as? USDInteropAdvancedCore.USDAdvancedError {
 			switch advancedError {
 			case .stageOpenFailed:
 				return DeconstructedUSDInteropError.stageOpenFailed(url)
