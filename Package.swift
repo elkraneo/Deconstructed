@@ -42,7 +42,7 @@ let package = Package(
 		.package(url: "https://github.com/pointfreeco/swift-composable-architecture", from: "1.23.1"),
 		.package(url: "https://github.com/pointfreeco/swift-sharing", from: "2.3.0"),
 		.package(url: "https://github.com/Reality2713/USDInterop", branch: "main"),
-		.package(url: "https://github.com/reality2713/USDInteropAdvanced", branch: "main"),
+		.package(url: "https://github.com/Reality2713/USDInteropAdvanced-binaries", from: "0.2.8"),
 	],
 	targets: [
 		.target(
