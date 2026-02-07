@@ -161,7 +161,7 @@ let package = Package(
 				"DeconstructedUSDInterop",
 				.product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
 				.product(name: "USDInterfaces", package: "USDInterop"),
-				.product(name: "USDInteropAdvancedInspection", package: "USDInteropAdvanced"),
+				.product(name: "USDInteropAdvancedInspection", package: "USDInteropAdvanced-binaries"),
 			],
 			path: "Packages/DeconstructedLibrary/Sources/SceneGraphClients",
 			swiftSettings: [.interoperabilityMode(.Cxx)]
@@ -186,8 +186,8 @@ let package = Package(
 			name: "DeconstructedUSDInterop",
 			dependencies: [
 				.product(name: "USDInterfaces", package: "USDInterop"),
-				.product(name: "USDInteropAdvancedEditing", package: "USDInteropAdvanced"),
-				.product(name: "USDInteropAdvancedInspection", package: "USDInteropAdvanced"),
+				.product(name: "USDInteropAdvancedEditing", package: "USDInteropAdvanced-binaries"),
+				.product(name: "USDInteropAdvancedInspection", package: "USDInteropAdvanced-binaries"),
 			],
 			path: "Packages/DeconstructedLibrary/Sources/DeconstructedUSDInterop",
 			swiftSettings: [.interoperabilityMode(.Cxx)]
@@ -195,7 +195,7 @@ let package = Package(
 		.target(
 			name: "DeconstructedUSDPipeline",
 			dependencies: [
-				.product(name: "USDInteropAdvancedWorkflows", package: "USDInteropAdvanced"),
+				.product(name: "USDInteropAdvancedWorkflows", package: "USDInteropAdvanced-binaries"),
 			],
 			path: "Packages/DeconstructedLibrary/Sources/DeconstructedUSDPipeline",
 			swiftSettings: [.interoperabilityMode(.Cxx)]
@@ -213,7 +213,7 @@ let package = Package(
 				"InspectorModels",
 				.product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
 				.product(name: "USDInterfaces", package: "USDInterop"),
-				.product(name: "USDInteropAdvancedInspection", package: "USDInteropAdvanced"),
+				.product(name: "USDInteropAdvancedInspection", package: "USDInteropAdvanced-binaries"),
 			],
 			path: "Packages/DeconstructedLibrary/Sources/InspectorFeature"
 		),
