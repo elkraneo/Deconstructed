@@ -174,6 +174,28 @@ public enum DeconstructedUSDInterop {
 		}
 	}
 
+	public static func materialBindingStrength(url: URL, primPath: String) -> USDMaterialBindingStrength? {
+		advancedClient.materialBindingStrength(url: url, path: primPath)
+	}
+
+	public static func setMaterialBindingStrength(
+		url: URL,
+		primPath: String,
+		strength: USDMaterialBindingStrength,
+		editTarget: USDLayerEditTarget = .rootLayer
+	) throws {
+		do {
+			try advancedClient.setMaterialBindingStrength(
+				url: url,
+				primPath: primPath,
+				strength: strength,
+				editTarget: editTarget
+			)
+		} catch {
+			throw mapAdvancedError(error, url: url, primPath: primPath, schema: nil)
+		}
+	}
+
 	public static func setDefaultPrim(url: URL, primPath: String) throws {
 		do {
 			try advancedClient.setDefaultPrim(url: url, primPath: primPath)

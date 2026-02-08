@@ -90,9 +90,11 @@ public struct InspectorView: View {
 
 									MaterialBindingsSection(
 										currentBindingPath: store.primMaterialBinding,
+										currentStrength: store.primMaterialBindingStrength,
 										boundMaterial: store.boundMaterial,
 										materials: store.availableMaterials,
-										onSetBinding: { store.send(.setMaterialBinding($0)) }
+										onSetBinding: { store.send(.setMaterialBinding($0)) },
+										onSetStrength: { store.send(.setMaterialBindingStrength($0)) }
 									)
 
 									if store.primIsLoading {
@@ -281,11 +283,14 @@ struct PrimAttributesSection: View {
 
 struct MaterialBindingsSection: View {
 	let currentBindingPath: String?
+	let currentStrength: USDMaterialBindingStrength?
 	let boundMaterial: USDMaterialInfo?
 	let materials: [USDMaterialInfo]
 	let onSetBinding: (String?) -> Void
+	let onSetStrength: (USDMaterialBindingStrength) -> Void
 	@State private var isExpanded: Bool = true
 	@State private var selection: String = ""
+	@State private var strengthSelection: USDMaterialBindingStrength = .fallbackStrength
 
 	var body: some View {
 		InspectorGroupBox(title: "Material Bindings", isExpanded: $isExpanded) {
@@ -319,6 +324,20 @@ struct MaterialBindingsSection: View {
 				}
 
 				if let currentBindingPath, !currentBindingPath.isEmpty {
+					InspectorRow(label: "Strength") {
+						Picker("", selection: $strengthSelection) {
+							ForEach(USDMaterialBindingStrength.allCases, id: \.self) { strength in
+								Text(strength.displayName).tag(strength)
+							}
+						}
+						.labelsHidden()
+						.pickerStyle(.menu)
+						.onChange(of: strengthSelection) { _, newValue in
+							if newValue == (currentStrength ?? .fallbackStrength) { return }
+							onSetStrength(newValue)
+						}
+					}
+
 					Text(currentBindingPath)
 						.font(.system(size: 11))
 						.foregroundStyle(.secondary)
@@ -356,9 +375,13 @@ struct MaterialBindingsSection: View {
 			}
 			.onAppear {
 				selection = currentBindingPath ?? ""
+				strengthSelection = currentStrength ?? .fallbackStrength
 			}
 			.onChange(of: currentBindingPath) { _, newValue in
 				selection = newValue ?? ""
+			}
+			.onChange(of: currentStrength) { _, newValue in
+				strengthSelection = newValue ?? .fallbackStrength
 			}
 		}
 	}

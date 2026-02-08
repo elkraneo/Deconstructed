@@ -16,6 +16,7 @@ import USDInterfaces
 			public var primAttributes: USDPrimAttributes?
 			public var primTransform: USDTransformData?
 			public var primMaterialBinding: String?
+			public var primMaterialBindingStrength: USDMaterialBindingStrength?
 			public var boundMaterial: USDMaterialInfo?
 			public var availableMaterials: [USDMaterialInfo]
 			public var sceneNodes: [SceneNode]
@@ -36,6 +37,7 @@ import USDInterfaces
 				primAttributes: USDPrimAttributes? = nil,
 				primTransform: USDTransformData? = nil,
 				primMaterialBinding: String? = nil,
+				primMaterialBindingStrength: USDMaterialBindingStrength? = nil,
 				boundMaterial: USDMaterialInfo? = nil,
 				availableMaterials: [USDMaterialInfo] = [],
 				sceneNodes: [SceneNode] = [],
@@ -55,6 +57,7 @@ import USDInterfaces
 				self.primAttributes = primAttributes
 				self.primTransform = primTransform
 				self.primMaterialBinding = primMaterialBinding
+				self.primMaterialBindingStrength = primMaterialBindingStrength
 				self.boundMaterial = boundMaterial
 				self.availableMaterials = availableMaterials
 				self.sceneNodes = sceneNodes
@@ -97,11 +100,14 @@ import USDInterfaces
 			case primTransformChanged(USDTransformData)
 			case primTransformSaveSucceeded
 			case primTransformSaveFailed(String)
-			case primMaterialBindingLoaded(String?)
+			case primMaterialBindingLoaded(String?, USDMaterialBindingStrength?)
 			case availableMaterialsLoaded([USDMaterialInfo])
 			case setMaterialBinding(String?)
 			case setMaterialBindingSucceeded
 			case setMaterialBindingFailed(String)
+			case setMaterialBindingStrength(USDMaterialBindingStrength)
+			case setMaterialBindingStrengthSucceeded
+			case setMaterialBindingStrengthFailed(String)
 			case refreshLayerData
 
 		case defaultPrimChanged(String)
@@ -140,6 +146,7 @@ import USDInterfaces
 					state.primAttributes = nil
 					state.primTransform = nil
 					state.primMaterialBinding = nil
+					state.primMaterialBindingStrength = nil
 					state.boundMaterial = nil
 					state.availableMaterials = []
 					state.primIsLoading = false
@@ -165,6 +172,7 @@ import USDInterfaces
 					state.primAttributes = nil
 					state.primTransform = nil
 					state.primMaterialBinding = nil
+					state.primMaterialBindingStrength = nil
 					state.boundMaterial = nil
 					state.primErrorMessage = nil
 					guard let nodeID, let url = state.sceneURL else {
@@ -195,7 +203,8 @@ import USDInterfaces
 						}
 
 						let binding = DeconstructedUSDInterop.materialBinding(url: url, primPath: nodeID)
-						await send(.primMaterialBindingLoaded(binding))
+						let strength = DeconstructedUSDInterop.materialBindingStrength(url: url, primPath: nodeID)
+						await send(.primMaterialBindingLoaded(binding, strength))
 					}
 				.cancellable(
 					id: PrimAttributesLoadCancellationID.load,
@@ -264,8 +273,9 @@ import USDInterfaces
 					state.primErrorMessage = message
 					return .none
 
-					case let .primMaterialBindingLoaded(binding):
+					case let .primMaterialBindingLoaded(binding, strength):
 						state.primMaterialBinding = binding
+						state.primMaterialBindingStrength = strength
 						updateBoundMaterial(state: &state)
 						return .none
 
@@ -295,7 +305,8 @@ import USDInterfaces
 								)
 							}
 							let refreshed = DeconstructedUSDInterop.materialBinding(url: url, primPath: primPath)
-							await send(.primMaterialBindingLoaded(refreshed))
+							let refreshedStrength = DeconstructedUSDInterop.materialBindingStrength(url: url, primPath: primPath)
+							await send(.primMaterialBindingLoaded(refreshed, refreshedStrength))
 							await send(.setMaterialBindingSucceeded)
 						} catch {
 							await send(.setMaterialBindingFailed(error.localizedDescription))
@@ -306,6 +317,32 @@ import USDInterfaces
 					return .none
 
 				case let .setMaterialBindingFailed(message):
+					state.primErrorMessage = message
+					return .none
+
+				case let .setMaterialBindingStrength(strength):
+					guard let url = state.sceneURL, let primPath = state.selectedNodeID else {
+						return .none
+					}
+					state.primMaterialBindingStrength = strength
+					return .run { send in
+						do {
+							try DeconstructedUSDInterop.setMaterialBindingStrength(
+								url: url,
+								primPath: primPath,
+								strength: strength,
+								editTarget: .rootLayer
+							)
+							await send(.setMaterialBindingStrengthSucceeded)
+						} catch {
+							await send(.setMaterialBindingStrengthFailed(error.localizedDescription))
+						}
+					}
+
+				case .setMaterialBindingStrengthSucceeded:
+					return .none
+
+				case let .setMaterialBindingStrengthFailed(message):
 					state.primErrorMessage = message
 					return .none
 

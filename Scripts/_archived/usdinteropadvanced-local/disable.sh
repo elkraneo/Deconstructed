@@ -15,9 +15,10 @@ version = sys.argv[2]
 text = path.read_text()
 
 # Replace the local path dependency with the binaries wrapper dependency.
+# Match across arbitrary formatting (tabs/spaces/newlines).
 pat = re.compile(
-  r'\\.package\\(\\s*\\n\\s*path:\\s*\"/Volumes/Plutonian/_Developer/USDInteropAdvanced\"\\s*\\n\\s*\\),',
-  re.M
+  r'\.package\(\s*path:\s*"/Volumes/Plutonian/_Developer/USDInteropAdvanced"\s*\),',
+  re.S
 )
 
 repl = (
@@ -29,10 +30,17 @@ repl = (
 )
 
 new_text, n = pat.subn(repl, text)
+if n == 0:
+  # Already disabled?
+  already = re.search(r'\.package\(\s*name:\s*"USDInteropAdvanced"\s*,\s*url:\s*"https://github\.com/Reality2713/USDInteropAdvanced-binaries"\s*,\s*from:\s*"[^"]+"\s*\),', text, re.S)
+  if already:
+    print(f"Already disabled: {path}")
+    raise SystemExit(0)
+  raise SystemExit(f"Expected to patch 1 USDInteropAdvanced dependency in {path}, patched {n}.")
 if n != 1:
-  raise SystemExit(f\"Expected to patch 1 USDInteropAdvanced dependency in {path}, patched {n}.\")
+  raise SystemExit(f"Expected to patch 1 USDInteropAdvanced dependency in {path}, patched {n}.")
 path.write_text(new_text)
-print(f\"Patched {path}\")
+print(f"Patched {path}")
 PY
 }
 
@@ -41,4 +49,3 @@ patch_file "$ROOT_DIR/Packages/DeconstructedLibrary/Package.swift"
 
 echo ""
 echo "Disabled local source dependency. Using USDInteropAdvanced-binaries from: $VERSION"
-

@@ -42,7 +42,11 @@ let package = Package(
 		.package(url: "https://github.com/pointfreeco/swift-composable-architecture", from: "1.23.1"),
 		.package(url: "https://github.com/pointfreeco/swift-sharing", from: "2.3.0"),
 		.package(url: "https://github.com/Reality2713/USDInterop", revision: "9a51edd955db053813d8467d088d07639d7aa46c"),
-		.package(url: "https://github.com/Reality2713/USDInteropAdvanced-binaries", from: "0.2.15"),
+		.package(
+            name: "USDInteropAdvanced",
+            url: "https://github.com/Reality2713/USDInteropAdvanced-binaries",
+            from: "0.2.15"
+        ),
 	],
 	targets: [
 		.target(
@@ -147,7 +151,7 @@ let package = Package(
 		),
 		.target(
 			name: "ViewportUI",
-			dependencies: ["ViewportModels", .product(name: "USDInterfaces", package: "USDInterop")],
+			dependencies: ["ViewportModels", "SelectionOutline", .product(name: "USDInterfaces", package: "USDInterop")],
 			path: "Packages/DeconstructedLibrary/Sources/ViewportUI",
 			swiftSettings: [.interoperabilityMode(.Cxx)]
 		),
@@ -164,9 +168,9 @@ let package = Package(
 				.product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
 				.product(name: "USDInterfaces", package: "USDInterop"),
 				.product(name: "USDInteropCxx", package: "USDInterop"),
-				.product(name: "USDInteropAdvancedCore", package: "USDInteropAdvanced-binaries"),
-				.product(name: "USDInteropAdvancedUtils", package: "USDInteropAdvanced-binaries"),
-				.product(name: "USDInteropAdvancedInspection", package: "USDInteropAdvanced-binaries"),
+				.product(name: "USDInteropAdvancedCore", package: "USDInteropAdvanced"),
+				.product(name: "USDInteropAdvancedUtils", package: "USDInteropAdvanced"),
+				.product(name: "USDInteropAdvancedInspection", package: "USDInteropAdvanced"),
 			],
 			path: "Packages/DeconstructedLibrary/Sources/SceneGraphClients",
 			swiftSettings: [.interoperabilityMode(.Cxx)]
@@ -197,11 +201,11 @@ let package = Package(
 				.product(name: "USDInterop", package: "USDInterop"),
 				.product(name: "USDInterfaces", package: "USDInterop"),
 				.product(name: "USDInteropCxx", package: "USDInterop"),
-				.product(name: "USDInteropAdvanced", package: "USDInteropAdvanced-binaries"),
-				.product(name: "USDInteropAdvancedCore", package: "USDInteropAdvanced-binaries"),
-				.product(name: "USDInteropAdvancedUtils", package: "USDInteropAdvanced-binaries"),
-				.product(name: "USDInteropAdvancedEditing", package: "USDInteropAdvanced-binaries"),
-				.product(name: "USDInteropAdvancedInspection", package: "USDInteropAdvanced-binaries"),
+				.product(name: "USDInteropAdvanced", package: "USDInteropAdvanced"),
+				.product(name: "USDInteropAdvancedCore", package: "USDInteropAdvanced"),
+				.product(name: "USDInteropAdvancedUtils", package: "USDInteropAdvanced"),
+				.product(name: "USDInteropAdvancedEditing", package: "USDInteropAdvanced"),
+				.product(name: "USDInteropAdvancedInspection", package: "USDInteropAdvanced"),
 			],
 			path: "Packages/DeconstructedLibrary/Sources/DeconstructedUSDInterop",
 			swiftSettings: [.interoperabilityMode(.Cxx)]
@@ -210,16 +214,16 @@ let package = Package(
 			name: "DeconstructedUSDPipeline",
 			dependencies: [
 				.product(name: "USDInteropCxx", package: "USDInterop"),
-				.product(name: "USDInteropAdvanced", package: "USDInteropAdvanced-binaries"),
-				.product(name: "USDInteropAdvancedAppleTools", package: "USDInteropAdvanced-binaries"),
-				.product(name: "USDInteropAdvancedCore", package: "USDInteropAdvanced-binaries"),
-				.product(name: "USDInteropAdvancedEditing", package: "USDInteropAdvanced-binaries"),
-				.product(name: "USDInteropAdvancedInspection", package: "USDInteropAdvanced-binaries"),
-				.product(name: "USDInteropAdvancedPlugins", package: "USDInteropAdvanced-binaries"),
-				.product(name: "USDInteropAdvancedSession", package: "USDInteropAdvanced-binaries"),
-				.product(name: "USDInteropAdvancedSurgery", package: "USDInteropAdvanced-binaries"),
-				.product(name: "USDInteropAdvancedUtils", package: "USDInteropAdvanced-binaries"),
-				.product(name: "USDInteropAdvancedWorkflows", package: "USDInteropAdvanced-binaries"),
+				.product(name: "USDInteropAdvanced", package: "USDInteropAdvanced"),
+				.product(name: "USDInteropAdvancedAppleTools", package: "USDInteropAdvanced"),
+				.product(name: "USDInteropAdvancedCore", package: "USDInteropAdvanced"),
+				.product(name: "USDInteropAdvancedEditing", package: "USDInteropAdvanced"),
+				.product(name: "USDInteropAdvancedInspection", package: "USDInteropAdvanced"),
+				.product(name: "USDInteropAdvancedPlugins", package: "USDInteropAdvanced"),
+				.product(name: "USDInteropAdvancedSession", package: "USDInteropAdvanced"),
+				.product(name: "USDInteropAdvancedSurgery", package: "USDInteropAdvanced"),
+				.product(name: "USDInteropAdvancedUtils", package: "USDInteropAdvanced"),
+				.product(name: "USDInteropAdvancedWorkflows", package: "USDInteropAdvanced"),
 			],
 			path: "Packages/DeconstructedLibrary/Sources/DeconstructedUSDPipeline",
 			swiftSettings: [.interoperabilityMode(.Cxx)]
@@ -239,9 +243,9 @@ let package = Package(
 				.product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
 				.product(name: "USDInterfaces", package: "USDInterop"),
 				.product(name: "USDInteropCxx", package: "USDInterop"),
-				.product(name: "USDInteropAdvancedCore", package: "USDInteropAdvanced-binaries"),
-				.product(name: "USDInteropAdvancedUtils", package: "USDInteropAdvanced-binaries"),
-				.product(name: "USDInteropAdvancedInspection", package: "USDInteropAdvanced-binaries"),
+				.product(name: "USDInteropAdvancedCore", package: "USDInteropAdvanced"),
+				.product(name: "USDInteropAdvancedUtils", package: "USDInteropAdvanced"),
+				.product(name: "USDInteropAdvancedInspection", package: "USDInteropAdvanced"),
 			],
 			path: "Packages/DeconstructedLibrary/Sources/InspectorFeature",
 			swiftSettings: [.interoperabilityMode(.Cxx)]
@@ -255,6 +259,13 @@ let package = Package(
 			],
 			path: "Packages/DeconstructedLibrary/Sources/InspectorUI",
 			swiftSettings: [.interoperabilityMode(.Cxx)]
+		),
+		.target(
+			name: "SelectionOutline",
+			path: "Packages/DeconstructedLibrary/Sources/SelectionOutline",
+			resources: [
+				.process("Shaders"),
+			]
 		),
 	]
 )

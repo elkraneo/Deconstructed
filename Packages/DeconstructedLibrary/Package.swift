@@ -109,14 +109,28 @@ let package = Package(
 			from: "2.3.0"
 		),
 		// Keep USDInterop pinned to avoid SwiftPM conflicts between transitive requirements.
-		.package(url: "https://github.com/Reality2713/USDInterop", revision: "9a51edd955db053813d8467d088d07639d7aa46c"),
+		//
+		// .package(url: "https://github.com/Reality2713/USDInterop", revision: "9a51edd955db053813d8467d088d07639d7aa46c"),
+		// .package(
+		// 	url: "https://github.com/Reality2713/USDInterop",
+		// 	revision: "9a51edd955db053813d8467d088d07639d7aa46c"
+		// ),
+		.package(
+			url: "https://github.com/Reality2713/USDInterop",
+			branch: "main"
+		),
 
 		// Private source is not accessible from this open-code repo. Use the public
 		// binary wrapper.
+		//
+		// .package(
+		//         name: "USDInteropAdvanced",
+		//         url: "https://github.com/Reality2713/USDInteropAdvanced-binaries",
+		//         from: "0.2.15"
+		//     ),
 		.package(
-			name: "USDInteropAdvanced",
-			url: "https://github.com/Reality2713/USDInteropAdvanced-binaries",
-			from: "0.2.15"
+			url: "https://github.com/Reality2713/USDInteropAdvanced",
+			branch: "main"
 		),
 	],
 	targets: [
@@ -248,6 +262,7 @@ let package = Package(
 			name: "ViewportUI",
 			dependencies: [
 				"ViewportModels",
+				"SelectionOutline",
 				.product(name: "USDInterfaces", package: "USDInterop"),
 			],
 			swiftSettings: [
@@ -270,8 +285,14 @@ let package = Package(
 				.product(name: "USDInterfaces", package: "USDInterop"),
 				.product(name: "USDInteropCxx", package: "USDInterop"),
 				.product(name: "USDInteropAdvancedCore", package: "USDInteropAdvanced"),
-				.product(name: "USDInteropAdvancedUtils", package: "USDInteropAdvanced"),
-				.product(name: "USDInteropAdvancedInspection", package: "USDInteropAdvanced"),
+				.product(
+					name: "USDInteropAdvancedUtils",
+					package: "USDInteropAdvanced"
+				),
+				.product(
+					name: "USDInteropAdvancedInspection",
+					package: "USDInteropAdvanced"
+				),
 			],
 			swiftSettings: [
 				.interoperabilityMode(.Cxx)
@@ -311,9 +332,18 @@ let package = Package(
 				.product(name: "USDInteropAdvanced", package: "USDInteropAdvanced"),
 				.product(name: "USDInteropCxx", package: "USDInterop"),
 				.product(name: "USDInteropAdvancedCore", package: "USDInteropAdvanced"),
-				.product(name: "USDInteropAdvancedUtils", package: "USDInteropAdvanced"),
-				.product(name: "USDInteropAdvancedEditing", package: "USDInteropAdvanced"),
-				.product(name: "USDInteropAdvancedInspection", package: "USDInteropAdvanced"),
+				.product(
+					name: "USDInteropAdvancedUtils",
+					package: "USDInteropAdvanced"
+				),
+				.product(
+					name: "USDInteropAdvancedEditing",
+					package: "USDInteropAdvanced"
+				),
+				.product(
+					name: "USDInteropAdvancedInspection",
+					package: "USDInteropAdvanced"
+				),
 			],
 			swiftSettings: [
 				.interoperabilityMode(.Cxx),
@@ -325,14 +355,35 @@ let package = Package(
 			dependencies: [
 				.product(name: "USDInteropCxx", package: "USDInterop"),
 				.product(name: "USDInteropAdvanced", package: "USDInteropAdvanced"),
-				.product(name: "USDInteropAdvancedAppleTools", package: "USDInteropAdvanced"),
+				.product(
+					name: "USDInteropAdvancedAppleTools",
+					package: "USDInteropAdvanced"
+				),
 				.product(name: "USDInteropAdvancedCore", package: "USDInteropAdvanced"),
-				.product(name: "USDInteropAdvancedEditing", package: "USDInteropAdvanced"),
-				.product(name: "USDInteropAdvancedInspection", package: "USDInteropAdvanced"),
-				.product(name: "USDInteropAdvancedPlugins", package: "USDInteropAdvanced"),
-				.product(name: "USDInteropAdvancedSession", package: "USDInteropAdvanced"),
-				.product(name: "USDInteropAdvancedSurgery", package: "USDInteropAdvanced"),
-				.product(name: "USDInteropAdvancedUtils", package: "USDInteropAdvanced"),
+				.product(
+					name: "USDInteropAdvancedEditing",
+					package: "USDInteropAdvanced"
+				),
+				.product(
+					name: "USDInteropAdvancedInspection",
+					package: "USDInteropAdvanced"
+				),
+				.product(
+					name: "USDInteropAdvancedPlugins",
+					package: "USDInteropAdvanced"
+				),
+				.product(
+					name: "USDInteropAdvancedSession",
+					package: "USDInteropAdvanced"
+				),
+				.product(
+					name: "USDInteropAdvancedSurgery",
+					package: "USDInteropAdvanced"
+				),
+				.product(
+					name: "USDInteropAdvancedUtils",
+					package: "USDInteropAdvanced"
+				),
 				.product(
 					name: "USDInteropAdvancedWorkflows",
 					package: "USDInteropAdvanced"
@@ -340,7 +391,7 @@ let package = Package(
 			],
 			swiftSettings: [
 				.interoperabilityMode(.Cxx),
-				.unsafeFlags(["-disable-cmo"], .when(configuration: .release))
+				.unsafeFlags(["-disable-cmo"], .when(configuration: .release)),
 			]
 		),
 		.target(
@@ -362,8 +413,14 @@ let package = Package(
 				.product(name: "USDInterfaces", package: "USDInterop"),
 				.product(name: "USDInteropCxx", package: "USDInterop"),
 				.product(name: "USDInteropAdvancedCore", package: "USDInteropAdvanced"),
-				.product(name: "USDInteropAdvancedUtils", package: "USDInteropAdvanced"),
-				.product(name: "USDInteropAdvancedInspection", package: "USDInteropAdvanced"),
+				.product(
+					name: "USDInteropAdvancedUtils",
+					package: "USDInteropAdvanced"
+				),
+				.product(
+					name: "USDInteropAdvancedInspection",
+					package: "USDInteropAdvanced"
+				),
 			],
 			swiftSettings: [
 				.interoperabilityMode(.Cxx)
@@ -400,6 +457,12 @@ let package = Package(
 			],
 			swiftSettings: [
 				.interoperabilityMode(.Cxx)
+			]
+		),
+		.target(
+			name: "SelectionOutline",
+			resources: [
+				.process("Shaders"),
 			]
 		),
 	],

@@ -1,6 +1,7 @@
 import CoreGraphics
 import ImageIO
 import RealityKit
+import SelectionOutline
 import SwiftUI
 import USDInterfaces
 import ViewportModels
@@ -44,6 +45,7 @@ public struct ViewportView: View {
 	@State private var appliedModelReloadRequestID: UUID?
 	@State private var gridEntity: Entity?
 	@State private var appliedLivePrimTransformRequestID: UUID?
+	@State private var outlinedEntityID: Entity.ID?
 
 	// IBL state
 	@State private var iblEntity: Entity?
@@ -164,12 +166,17 @@ public struct ViewportView: View {
 		.onChange(of: configuration.environment.backgroundColor) { _, _ in
 			updateBackgroundColor()
 		}
+		.onChange(of: selectedPrimPath) { oldPath, newPath in
+			updateSelectionOutline(oldPrimPath: oldPath, newPrimPath: newPath)
+		}
 	}
 
 	// MARK: - Scene Setup
 
 	@MainActor
 	private func makeSceneRoot() -> Entity {
+		SelectionOutlineSystem.registerSystem()
+
 		isZUp = configuration.isZUp
 
 		let root = Entity()
@@ -262,6 +269,11 @@ public struct ViewportView: View {
 
 			// Tag imported entities with USD prim paths using a best-effort name match.
 			tagEntitiesWithUSDPrimPaths(root: newEntity)
+
+			// Apply selection outline if a prim is already selected.
+			if let primPath = selectedPrimPath {
+				updateSelectionOutline(oldPrimPath: nil, newPrimPath: primPath)
+			}
 
 			// Update scene bounds
 			let bounds = newEntity.visualBounds(relativeTo: nil)
@@ -475,6 +487,36 @@ public struct ViewportView: View {
 		let rz = simd_quatf(angle: z * .pi / 180.0, axis: SIMD3<Float>(0, 0, 1))
 		// XYZ order (apply X, then Y, then Z).
 		return rz * ry * rx
+	}
+
+	// MARK: - Selection Outline
+
+	@MainActor
+	private func updateSelectionOutline(oldPrimPath: String?, newPrimPath: String?) {
+		// Remove outline from previously selected entity.
+		if let oldID = outlinedEntityID,
+		   let root = rootEntity {
+			func findByID(_ entity: Entity) -> Entity? {
+				if entity.id == oldID { return entity }
+				for child in entity.children {
+					if let found = findByID(child) { return found }
+				}
+				return nil
+			}
+			if let oldEntity = findByID(root) {
+				oldEntity.components.remove(SelectionOutlineComponent.self)
+			}
+			outlinedEntityID = nil
+		}
+
+		// Add outline to newly selected entity.
+		guard let primPath = newPrimPath else { return }
+		guard let entity = resolveEntity(forPrimPath: primPath) else { return }
+
+		entity.components.set(SelectionOutlineComponent(
+			configuration: .init(color: .systemOrange, width: 0.003)
+		))
+		outlinedEntityID = entity.id
 	}
 
 	// MARK: - Environment / IBL
