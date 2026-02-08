@@ -112,11 +112,11 @@ let package = Package(
 		.package(url: "https://github.com/Reality2713/USDInterop", revision: "c939ac54807e6d067ca09cb7e37d4ddd367c4168"),
 
 		// Private source is not accessible from this open-code repo. Use the public
-		// binary wrapper, and rely on SwiftPM mirrors for local-source development.
+		// binary wrapper.
 		.package(
 			name: "USDInteropAdvanced",
 			url: "https://github.com/Reality2713/USDInteropAdvanced-binaries",
-			branch: "main"
+			from: "0.2.15"
 		),
 	],
 	targets: [

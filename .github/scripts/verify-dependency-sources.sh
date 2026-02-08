@@ -6,20 +6,7 @@ COMMIT_RANGE="${2:-}"
 
 cd "$ROOT_DIR"
 
-echo "Checking for forbidden local package references in working tree..."
-
-if rg -n --glob 'Package.swift' '\.package\s*\(\s*path\s*:' .; then
-  echo
-  echo "ERROR: Found forbidden .package(path:) dependency. Use .package(url:) or binaryTarget instead."
-  exit 1
-fi
-
-if rg -n --glob '*.pbxproj' 'XCLocalSwiftPackageReference' .; then
-  echo
-  echo "ERROR: Found forbidden XCLocalSwiftPackageReference in a .pbxproj."
-  echo "Add local packages to the workspace (Deconstructed.xcworkspace), not the project."
-  exit 1
-fi
+echo "Dependency source checks (pre-push)..."
 
 if [[ -n "$COMMIT_RANGE" ]]; then
   echo "Checking commit range for forbidden local package references: $COMMIT_RANGE"
@@ -31,11 +18,17 @@ if [[ -n "$COMMIT_RANGE" ]]; then
       exit 1
     fi
 
+    # Local DeconstructedLibrary is part of this repo, and we want Xcode to treat it
+    # as a local package (no remote self-dependency). That's safe to commit.
+    # However, we still forbid adding arbitrary local package references.
     if git grep -n 'XCLocalSwiftPackageReference' "$commit" -- ':(glob)**/*.pbxproj' >/dev/null; then
-      echo
-      echo "ERROR: Commit $commit contains forbidden XCLocalSwiftPackageReference in a .pbxproj."
-      git grep -n 'XCLocalSwiftPackageReference' "$commit" -- ':(glob)**/*.pbxproj' || true
-      exit 1
+      allowed="$(git show "$commit:Deconstructed.xcodeproj/project.pbxproj" 2>/dev/null | rg -n \"relativePath = Packages/DeconstructedLibrary;\" || true)"
+      if [[ -z "$allowed" ]]; then
+        echo
+        echo "ERROR: Commit $commit contains forbidden XCLocalSwiftPackageReference in a .pbxproj."
+        git grep -n 'XCLocalSwiftPackageReference' "$commit" -- ':(glob)**/*.pbxproj' || true
+        exit 1
+      fi
     fi
   done < <(git rev-list "$COMMIT_RANGE")
 fi

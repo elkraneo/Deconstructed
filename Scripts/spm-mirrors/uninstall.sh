@@ -7,10 +7,8 @@ function unset_mirror() {
   swift package config unset-mirror --original "$original" || true
 }
 
-unset_mirror "https://github.com/reality2713/USDInteropAdvanced"
 unset_mirror "https://github.com/Reality2713/USDInterop"
 unset_mirror "https://github.com/reality2713/AppleUSDSchemas"
-unset_mirror "https://github.com/elkraneo/Deconstructed.git"
 
 unset_mirror "https://github.com/Reality2713/USDInteropAdvanced-binaries"
 unset_mirror "usdinteropadvanced-binaries"

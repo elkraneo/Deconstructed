@@ -45,10 +45,7 @@ let package = Package(
 		.package(
 			name: "USDInteropAdvanced",
 			url: "https://github.com/Reality2713/USDInteropAdvanced-binaries",
-			// Local dev override: with a SwiftPM mirror in place, this resolves against the
-			// *source* repo (which uses branch/revision deps), so we must use an unstable
-			// requirement here instead of `from:`.
-			branch: "main"
+			from: "0.2.15"
 		),
 	],
 	targets: [

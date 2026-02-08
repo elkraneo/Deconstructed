@@ -38,7 +38,10 @@ Reverse-engineer and clone Reality Composer Pro's functionality:
 - This public repo depends on the binary wrapper package:
   - `https://github.com/Reality2713/USDInteropAdvanced-binaries`
   - Current version: `0.2.15`
-- For local development against the private source, use SwiftPM mirrors as documented in this repo (so you can point the dependency at your local checkout instead of the binaries).
+- For local development against the private source:
+  - Run `Scripts/usdinteropadvanced-local/enable.sh` to switch to your local checkout.
+  - Run `Scripts/usdinteropadvanced-local/disable.sh` to switch back to the public binaries.
+  - Pre-push checks will block commits that accidentally include `.package(path:)`.
 
 ## Reference Implementation
 

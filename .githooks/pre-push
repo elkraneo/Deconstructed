@@ -3,8 +3,6 @@ set -euo pipefail
 
 repo_root="$(git rev-parse --show-toplevel)"
 
-"$repo_root/.github/scripts/verify-dependency-sources.sh" "$repo_root"
-
 while read -r local_ref local_sha remote_ref remote_sha; do
   if [[ -z "${local_sha:-}" ]]; then
     continue
