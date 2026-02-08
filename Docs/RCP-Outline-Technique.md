@@ -1,4 +1,4 @@
-# RCP Selection Outline Technique — Reverse Engineering Findings
+# RCP Outline Rendering — Reverse Engineering Findings
 
 ## Overview
 
@@ -138,7 +138,7 @@ class VisualCueManager {
 4. **No per-entity render effects**: `EntityRenderEffect` and `set(renderEffects:)` are private
 5. **No pixel-space outline width**: Public CustomMaterial geometry modifiers work in model space
 
-## Potential Private API Access
+## Reproduction Options
 
 ### Option A: `dlopen` + `dlsym` RealityToolsFoundation
 The framework lives in the RCP app bundle. Could potentially:
@@ -163,123 +163,6 @@ Since we know the exact Metal shader technique:
 
 **Challenge**: Performance cost of two RealityView instances, synchronization.
 
-### Option D: CustomMaterial geometry modifier (current best public approach)
+### Option D: CustomMaterial geometry modifier (current implementation)
 Per-vertex normal extrusion + front-face culling. Not pixel-perfect but functional.
-
-## Entity-to-USD-Prim Mapping (Private)
-
-RCP maintains a **bidirectional mapping** between RealityKit entities and USD prim paths. This is critical for stable selection — knowing exactly which entity corresponds to which prim path, rather than best-effort name matching.
-
-### Three-Layer Architecture
-
-```
-USD Layer (RealityIO)
-  │  RealityIO.Prim, SceneDescriptionFoundations.Path, Stage
-  │
-  ▼
-Bridge Layer (RealityToolsFoundation)
-  │  EditorObject — central registry holding both sides
-  │
-  ▼
-Runtime Layer (RealityKit/RealityFoundation)
-     Entity with localId: UInt64, components
-```
-
-### `EditorObject` — The Bridge Type
-
-```swift
-struct EditorObject {
-    var prim: RealityIO.Prim?              // USD prim reference
-    var identifierPath: [String]           // Hierarchical path [sceneID, name1, name2, ...]
-    var objectPath: String                 // String path representation
-    var coreEntity: OpaquePointer?         // Direct RealityKit entity pointer
-    var coreEntityID: UInt64?              // Entity ID for fast lookups
-}
-```
-
-`EditorObject` is the **primary abstraction** that connects the USD world to the RealityKit world. Every selectable object in RCP has an `EditorObject`.
-
-### `CustomComponentRIOPrimPathComponent`
-
-A private component type that stores the prim path directly on RealityKit entities. This is likely how the runtime can quickly look up which prim an entity represents without going through `EditorObject`.
-
-### Key Mapping Functions (from symbol analysis)
-
-| Function | Signature | Purpose |
-|----------|-----------|---------|
-| `ImportSession.primPath(of:)` | `Entity → String?` | **Get prim path from entity** |
-| `ImportSession.primPathMetadataKey` | `String` (static) | Metadata key used to store prim path |
-| `CDM.coreEntity(with:)` | `String → OpaquePointer?` | Get entity by identifier path |
-| `CDMDataStore.identifierPath(from:primPath:)` | `(String, Path) → [String]` | Convert prim path to identifier path |
-| `CDMDataStore.addComponent(typeName:to:with:cdm:)` | `(String, Prim?, CDM) → Result<Prim, Error>` | Add component to prim |
-| `CDMDataStore.findComponentTypeName(of:packageName:)` | `(Prim, String?) → String` | Find component type on prim |
-
-### Identifier Path System
-
-RCP uses hierarchical string arrays for lookups, not raw USD prim paths:
-
-- Format: `[sceneID, objectName1, objectName2, ...]`
-- Error strings confirm: `"EditorObject identifierPath does not contain sceneID:"`
-- Conversion: `CDMDataStore.identifierPath(from:primPath:)` bridges between the two
-
-### Path-Related Properties Found in Strings
-
-```
-primPath, primPathString, storedPrimPath
-objectPath, identifierPath, parentPrimPaths
-libraryOwnerPrimPath
-existingComponentPrimPath, newComponentPrimPath
-instanceComponentPrimPath
-relativeAttributePrimPathComponents
-```
-
-### Error Messages (revealing internal behavior)
-
-- `"Requested entity before creation for prim at path"` — entities are **lazily created** from prims
-- `"Prim not found at identifier path:"` — identifier path lookup failure
-- `"Failed to get EditorObject for identifier path:"` — EditorObject is the canonical lookup
-
-### RealityFoundation Public Surface
-
-RealityFoundation exposes some related types publicly:
-
-```swift
-// USD encoding (public but limited)
-protocol __USDEncodablePublic {
-    func encode(to encoder: __USDEncoder, at parentPath: __USKObjectPathWrapper) throws -> __USKNodeWrapper
-}
-
-// Entity path navigation (public)
-struct EntityPath {
-    func entity(_ name: String) -> BindTarget.EntityPath
-}
-
-extension Entity {
-    subscript(entityPath: BindTarget.EntityPath) -> Entity?
-}
-```
-
-### Implications for Deconstructed
-
-The current approach in `ViewportView.resolveEntity(forPrimPath:)` uses best-effort name matching to walk the entity tree. RCP instead:
-
-1. Maintains `EditorObject` registry with bidirectional entity↔prim references
-2. Stores prim paths on entities via `CustomComponentRIOPrimPathComponent`
-3. Uses `ImportSession.primPath(of:)` to go from entity → prim path
-4. Uses `CDM.coreEntity(with:)` to go from identifier path → entity
-
-For a more robust implementation, Deconstructed could:
-1. Create a similar registry populated during USD scene loading
-2. Use a custom `PrimPathComponent` to store the prim path on each entity
-3. Build a `[String: Entity.ID]` dictionary (primPath → entityID) at load time
-4. Use `ImportSession.primPathMetadataKey` if accessible, or walk the entity tree once after load to build the mapping
-
-## Conclusion
-
-RCP's outline quality comes from a **multi-pass render graph technique** using private RealityKit APIs that are not exposed to third-party developers. The `EntityRenderEffect` system and `.rerendergraph` format are the key private components.
-
-RCP's selection stability comes from `EditorObject` — a bridge type maintaining bidirectional entity↔prim references, augmented by `CustomComponentRIOPrimPathComponent` on entities and `ImportSession.primPath(of:)` for runtime lookups.
-
-For a research/non-commercial project, the most promising paths are:
-- **Outlines**: Reproduce the mask+edge technique using `PostProcessEffect` with `CustomMaterial` to encode selection state
-- **Selection mapping**: Build an `EditorObject`-like registry during scene load, or explore accessing `ImportSession.primPath(of:)` via private API
+See `Packages/DeconstructedLibrary/Sources/SelectionOutline/`.
