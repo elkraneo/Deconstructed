@@ -22,8 +22,10 @@ if [[ -n "$COMMIT_RANGE" ]]; then
     # as a local package (no remote self-dependency). That's safe to commit.
     # However, we still forbid adding arbitrary local package references.
     if git grep -n 'XCLocalSwiftPackageReference' "$commit" -- ':(glob)**/*.pbxproj' >/dev/null; then
-      allowed="$(git show "$commit:Deconstructed.xcodeproj/project.pbxproj" 2>/dev/null | rg -n \"relativePath = Packages/DeconstructedLibrary;\" || true)"
-      if [[ -z "$allowed" ]]; then
+      pbx="$(git show "$commit:Deconstructed.xcodeproj/project.pbxproj" 2>/dev/null || true)"
+      local_count="$(printf '%s' "$pbx" | grep -c 'isa = XCLocalSwiftPackageReference;' || true)"
+      allowed_count="$(printf '%s' "$pbx" | grep -c 'relativePath = Packages/DeconstructedLibrary;' || true)"
+      if [[ "$local_count" != "1" || "$allowed_count" != "1" ]]; then
         echo
         echo "ERROR: Commit $commit contains forbidden XCLocalSwiftPackageReference in a .pbxproj."
         git grep -n 'XCLocalSwiftPackageReference' "$commit" -- ':(glob)**/*.pbxproj' || true
