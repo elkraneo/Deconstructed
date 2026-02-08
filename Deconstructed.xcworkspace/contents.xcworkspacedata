@@ -2,7 +2,4 @@
 <Workspace version="1.0">
   <FileRef location="group:Deconstructed.xcodeproj">
   </FileRef>
-  <FileRef location="group:Packages/DeconstructedLibrary">
-  </FileRef>
 </Workspace>
-
