@@ -45,7 +45,7 @@ public struct ViewportView: View {
 	@State private var appliedModelReloadRequestID: UUID?
 	@State private var gridEntity: Entity?
 	@State private var appliedLivePrimTransformRequestID: UUID?
-	@State private var outlinedEntityID: Entity.ID?
+	@State private var outlinedEntityIDs: Set<Entity.ID> = []
 
 	// IBL state
 	@State private var iblEntity: Entity?
@@ -493,30 +493,39 @@ public struct ViewportView: View {
 
 	@MainActor
 	private func updateSelectionOutline(oldPrimPath: String?, newPrimPath: String?) {
-		// Remove outline from previously selected entity.
-		if let oldID = outlinedEntityID,
-		   let root = rootEntity {
-			func findByID(_ entity: Entity) -> Entity? {
-				if entity.id == oldID { return entity }
-				for child in entity.children {
-					if let found = findByID(child) { return found }
+		// Remove outlines from previously selected entities.
+		if !outlinedEntityIDs.isEmpty, let root = rootEntity {
+			func removeOutlines(from entity: Entity) {
+				if outlinedEntityIDs.contains(entity.id) {
+					entity.components.remove(SelectionOutlineComponent.self)
 				}
-				return nil
+				for child in entity.children {
+					removeOutlines(from: child)
+				}
 			}
-			if let oldEntity = findByID(root) {
-				oldEntity.components.remove(SelectionOutlineComponent.self)
-			}
-			outlinedEntityID = nil
+			removeOutlines(from: root)
+			outlinedEntityIDs = []
 		}
 
-		// Add outline to newly selected entity.
+		// Add outline to newly selected entity (and its mesh descendants).
 		guard let primPath = newPrimPath else { return }
 		guard let entity = resolveEntity(forPrimPath: primPath) else { return }
 
-		entity.components.set(SelectionOutlineComponent(
-			configuration: .init(color: .systemOrange, width: 0.003)
-		))
-		outlinedEntityID = entity.id
+		let config = OutlineConfiguration(color: .systemOrange, width: 0.008)
+
+		// If the entity itself has a mesh, outline it directly.
+		// Also walk all descendants for Xform/reference entities (e.g. USDZ).
+		func applyOutline(to target: Entity) {
+			if target.components[ModelComponent.self] != nil {
+				target.components.set(SelectionOutlineComponent(configuration: config))
+				outlinedEntityIDs.insert(target.id)
+			}
+			for child in target.children {
+				applyOutline(to: child)
+			}
+		}
+
+		applyOutline(to: entity)
 	}
 
 	// MARK: - Environment / IBL

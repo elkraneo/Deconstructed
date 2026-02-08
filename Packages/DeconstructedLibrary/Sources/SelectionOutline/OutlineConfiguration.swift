@@ -16,7 +16,7 @@ public struct OutlineConfiguration: Sendable, Equatable {
 
 	public init(
 		color: NSColor = .systemOrange,
-		width: Float = 0.003,
+		width: Float = 0.008,
 		referenceDistance: Float = 2.0
 	) {
 		self.color = color
