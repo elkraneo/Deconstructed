@@ -109,7 +109,7 @@ let package = Package(
 			from: "2.3.0"
 		),
 		// Keep USDInterop pinned to avoid SwiftPM conflicts between transitive requirements.
-		.package(url: "https://github.com/Reality2713/USDInterop", revision: "c939ac54807e6d067ca09cb7e37d4ddd367c4168"),
+		.package(url: "https://github.com/Reality2713/USDInterop", revision: "9a51edd955db053813d8467d088d07639d7aa46c"),
 
 		// Private source is not accessible from this open-code repo. Use the public
 		// binary wrapper.

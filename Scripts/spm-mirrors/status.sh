@@ -14,5 +14,6 @@ function show_mirror() {
 
 show_mirror "https://github.com/Reality2713/USDInterop"
 show_mirror "https://github.com/reality2713/AppleUSDSchemas"
+show_mirror "https://github.com/Reality2713/USDInteropAdvanced-binaries"
 show_mirror "usdinterop"
-
+show_mirror "usdinteropadvanced-binaries"
