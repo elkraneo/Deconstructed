@@ -494,10 +494,20 @@ public struct ViewportView: View {
 	@MainActor
 	private func updateSelectionOutline(oldPrimPath: String?, newPrimPath: String?) {
 		// Remove outlines from previously selected entities.
+		// Must remove both the component AND the outline child entity directly,
+		// because once the component is removed the System no longer sees the entity
+		// and cannot clean up its children.
 		if !outlinedEntityIDs.isEmpty, let root = rootEntity {
 			func removeOutlines(from entity: Entity) {
 				if outlinedEntityIDs.contains(entity.id) {
 					entity.components.remove(SelectionOutlineComponent.self)
+					// Directly remove orphaned outline children.
+					let outlineChildren = entity.children.filter {
+						$0.name == "__selectionOutline__"
+					}
+					for child in outlineChildren {
+						child.removeFromParent()
+					}
 				}
 				for child in entity.children {
 					removeOutlines(from: child)
@@ -511,11 +521,12 @@ public struct ViewportView: View {
 		guard let primPath = newPrimPath else { return }
 		guard let entity = resolveEntity(forPrimPath: primPath) else { return }
 
-		let config = OutlineConfiguration(color: .systemOrange, width: 0.008)
+		let config = OutlineConfiguration(color: .systemOrange, width: 0.05)
 
-		// If the entity itself has a mesh, outline it directly.
-		// Also walk all descendants for Xform/reference entities (e.g. USDZ).
+		// Walk all descendants for Xform/reference entities (e.g. USDZ).
 		func applyOutline(to target: Entity) {
+			// Skip outline children from previous selections.
+			guard target.name != "__selectionOutline__" else { return }
 			if target.components[ModelComponent.self] != nil {
 				target.components.set(SelectionOutlineComponent(configuration: config))
 				outlinedEntityIDs.insert(target.id)

@@ -9,7 +9,7 @@ import simd
 /// SelectionOutlineSystem.registerSystem()
 /// ```
 public final class SelectionOutlineSystem: System {
-	private static let outlineEntityName = "__selectionOutline__"
+	static let outlineEntityName = "__selectionOutline__"
 	private static let baseScaleBias: Float = 1.0
 
 	static let query = EntityQuery(where: .has(SelectionOutlineComponent.self))
@@ -58,6 +58,7 @@ public final class SelectionOutlineSystem: System {
 				entity.components.set(component)
 			}
 
+			// Update the outline scale based on distance to camera.
 			let noRef: Entity? = nil
 			let entityWorldPos = entity.position(relativeTo: noRef)
 			let distance: Float
@@ -70,18 +71,6 @@ public final class SelectionOutlineSystem: System {
 			let distanceScale = distance / config.referenceDistance
 			let shellScale = Self.baseScaleBias + config.width * distanceScale
 			outlineEntity.scale = SIMD3<Float>(repeating: shellScale)
-
-			// Update material if configuration changed (color).
-			if let existingModel = outlineEntity.components[ModelComponent.self] {
-				do {
-					let newMaterial = try OutlineMaterial.make(configuration: config)
-					var updatedModel = existingModel
-					updatedModel.materials = [newMaterial]
-					outlineEntity.components.set(updatedModel)
-				} catch {
-					// Keep existing material on failure.
-				}
-			}
 		}
 	}
 
