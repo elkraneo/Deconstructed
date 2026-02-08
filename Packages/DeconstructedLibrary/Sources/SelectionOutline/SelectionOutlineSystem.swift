@@ -9,7 +9,7 @@ import simd
 /// SelectionOutlineSystem.registerSystem()
 /// ```
 public final class SelectionOutlineSystem: System {
-	static let outlineEntityName = "__selectionOutline__"
+	public static let outlineEntityName = "__selectionOutline__"
 	private static let baseScaleBias: Float = 1.0
 
 	static let query = EntityQuery(where: .has(SelectionOutlineComponent.self))

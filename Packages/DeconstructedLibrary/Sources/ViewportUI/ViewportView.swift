@@ -7,9 +7,17 @@ import USDInterfaces
 import ViewportModels
 import simd
 
+/// Stores the reconstructed USD prim path on each imported entity.
+/// Built once after `Entity(contentsOf:)` by walking the entity hierarchy,
+/// which is a 1:1 structural mirror of the USD prim tree.
 private struct USDPrimPathComponent: Component, Sendable {
 	let primPath: String
 }
+
+/// Names injected by RealityKit during USD import that don't correspond to prims.
+private let realityKitInternalNames: Set<String> = [
+	"usdPrimitiveAxis",
+]
 
 /// RealityKit viewport view with arcball camera controls and grid.
 public struct ViewportView: View {
@@ -32,10 +40,6 @@ public struct ViewportView: View {
 	let livePrimTransform: USDTransformData?
 	/// Changes to this value request applying `livePrimTransform` to the selected prim entity.
 	let livePrimTransformRequestID: UUID?
-	/// Best-effort mapping from entity leaf name -> full USD prim path, for tagging entities after import.
-	/// Only includes leaf names that are unique in the USD scene.
-	let uniquePrimPathByLeafName: [String: String]
-
 	// Internal state
 	@State private var rootEntity: Entity?
 	@State private var cameraState = ArcballCameraState()
@@ -46,6 +50,10 @@ public struct ViewportView: View {
 	@State private var gridEntity: Entity?
 	@State private var appliedLivePrimTransformRequestID: UUID?
 	@State private var outlinedEntityIDs: Set<Entity.ID> = []
+
+	/// Bidirectional prim path ↔ entity mapping, built once per model load.
+	@State private var primPathToEntityID: [String: Entity.ID] = [:]
+	@State private var entityIDToPrimPath: [Entity.ID: String] = [:]
 
 	// IBL state
 	@State private var iblEntity: Entity?
@@ -58,13 +66,11 @@ public struct ViewportView: View {
 		onCameraStateChanged: (([Float]) -> Void)? = nil,
 		cameraTransform: [Float]? = nil,
 		cameraTransformRequestID: UUID? = nil,
-		frameRequestID: UUID? = nil
-		,
+		frameRequestID: UUID? = nil,
 		modelReloadRequestID: UUID? = nil,
 		selectedPrimPath: String? = nil,
 		livePrimTransform: USDTransformData? = nil,
-		livePrimTransformRequestID: UUID? = nil,
-		uniquePrimPathByLeafName: [String: String] = [:]
+		livePrimTransformRequestID: UUID? = nil
 	) {
 		self.modelURL = modelURL
 		self.configuration = configuration
@@ -76,7 +82,6 @@ public struct ViewportView: View {
 		self.selectedPrimPath = selectedPrimPath
 		self.livePrimTransform = livePrimTransform
 		self.livePrimTransformRequestID = livePrimTransformRequestID
-		self.uniquePrimPathByLeafName = uniquePrimPathByLeafName
 	}
 
 	public var body: some View {
@@ -267,8 +272,8 @@ public struct ViewportView: View {
 			modelAnchor.addChild(newEntity)
 			oldEntity?.removeFromParent()
 
-			// Tag imported entities with USD prim paths using a best-effort name match.
-			tagEntitiesWithUSDPrimPaths(root: newEntity)
+			// Build bidirectional prim path ↔ entity mapping from the imported hierarchy.
+			buildPrimPathMapping(root: newEntity)
 
 			// Apply selection outline if a prim is already selected.
 			if let primPath = selectedPrimPath {
@@ -342,141 +347,91 @@ public struct ViewportView: View {
 	}
 
 	@MainActor
+	// MARK: - Prim Path ↔ Entity Mapping
+
+	/// Resolve a USD prim path to its RealityKit entity via the cached mapping.
 	private func resolveEntity(forPrimPath primPath: String) -> Entity? {
 		guard let root = rootEntity else { return nil }
-
-		// Prefer explicit tags if we were able to assign them.
-		if let tagged = findEntity(withUSDPrimPath: primPath, in: root) { return tagged }
-
-		// 1) Exact match: some importers use full prim path as the entity name.
-		if let exact = root.findEntity(named: primPath) { return exact }
-
-		// 2) Leaf match: many importers use the prim name.
-		let leaf = primPath.split(separator: "/").last.map(String.init) ?? primPath
-		// If multiple candidates exist (duplicate leaf names), use the full prim path to disambiguate.
-		if let byStructure = resolveEntityByUSDPathStructure(primPath: primPath, in: root) {
-			byStructure.components.set(USDPrimPathComponent(primPath: primPath))
-			return byStructure
-		}
-		if let byLeaf = root.findEntity(named: leaf) { return byLeaf }
-
-		// 3) Fallback: first entity with a matching leaf name in hierarchy.
-		return firstEntity(where: { $0.name == leaf }, in: root)
+		guard let entityID = primPathToEntityID[primPath] else { return nil }
+		return findEntity(byID: entityID, in: root)
 	}
 
+	/// Build bidirectional prim path ↔ entity mappings by walking the imported entity tree.
+	///
+	/// Entity(contentsOf:) produces a hierarchy that is a 1:1 structural mirror of
+	/// the USD prim tree. The anonymous root wrapper (empty name) is not a prim.
+	/// RealityKit appends `_N` suffixes for sibling name collisions.
 	@MainActor
-	private func resolveEntityByUSDPathStructure(primPath: String, in root: Entity) -> Entity? {
-		let primComponents = primPath.split(separator: "/").map(String.init)
-		guard let leaf = primComponents.last else { return nil }
+	private func buildPrimPathMapping(root: Entity) {
+		var pathToID: [String: Entity.ID] = [:]
+		var idToPath: [Entity.ID: String] = [:]
 
-		let candidates = findEntities(named: leaf, in: root)
-		guard candidates.count > 1 else {
-			// If there is only one match, we don't need structural scoring.
-			return candidates.first?.entity
-		}
+		func walk(_ entity: Entity, parentPrimPath: String) {
+			// Skip the outline system's child entities.
+			guard entity.name != SelectionOutlineSystem.outlineEntityName else { return }
+			// Skip RealityKit-injected internal entities (e.g. usdPrimitiveAxis).
+			guard !realityKitInternalNames.contains(entity.name) else { return }
 
-		let scored = candidates.map { candidate -> (Entity, Int) in
-			let chain = normalizeEntityNameChain(candidate.nameChain)
-			return (candidate.entity, scoreEntityChain(chain, againstUSDPathComponents: primComponents))
-		}
-
-		// Pick the best score; require at least 2 matching components to avoid random selection.
-		guard let best = scored.max(by: { $0.1 < $1.1 }), best.1 >= 2 else { return nil }
-		return best.0
-	}
-
-	@MainActor
-	private func findEntities(named name: String, in root: Entity) -> [(entity: Entity, nameChain: [String])] {
-		var results: [(Entity, [String])] = []
-		results.reserveCapacity(8)
-
-		func walk(_ entity: Entity, chain: [String]) {
-			let nextChain = chain + [entity.name]
-			if entity.name == name {
-				results.append((entity, nextChain))
-			}
-			for child in entity.children {
-				walk(child, chain: nextChain)
-			}
-		}
-
-		walk(root, chain: [])
-		return results
-	}
-
-	private func normalizeEntityNameChain(_ chain: [String]) -> [String] {
-		// RealityKit wrapper names we add during viewport setup.
-		let ignored: Set<String> = [
-			"",
-			"SceneRoot",
-			"ModelAnchor",
-			"LoadedModel",
-			"MainCamera",
-			"KeyLight",
-			"FillLight",
-			"ImageBasedLight",
-			"Skybox",
-			"Grid",
-		]
-		return chain.filter { !ignored.contains($0) }
-	}
-
-	private func scoreEntityChain(_ chain: [String], againstUSDPathComponents usd: [String]) -> Int {
-		// Score by matching from the leaf upwards:
-		// USD: ["Root", "Group", "Cube"]
-		// Entity chain might be ["Root", "Group", "Cube"] (after normalization)
-		var score = 0
-		var i = chain.count - 1
-		var j = usd.count - 1
-		while i >= 0 && j >= 0 {
-			if chain[i] == usd[j] {
-				score += 1
-				i -= 1
-				j -= 1
+			let primPath: String
+			if entity.name.isEmpty {
+				// Anonymous root wrapper — not a USD prim, just pass through.
+				primPath = parentPrimPath
 			} else {
-				// Allow entity chain to have extra nodes (e.g. intermediate groups).
-				i -= 1
+				// Entity name = prim name. RealityKit may suffix with _N for duplicates.
+				// Strip the _N suffix to recover the original prim name.
+				let primName = stripDuplicateSuffix(entity.name, amongSiblingsOf: entity)
+				primPath = parentPrimPath == "/" ? "/\(primName)" : "\(parentPrimPath)/\(primName)"
 			}
-		}
-		return score
-	}
 
-	@MainActor
-	private func findEntity(withUSDPrimPath primPath: String, in root: Entity) -> Entity? {
-		if let comp = root.components[USDPrimPathComponent.self],
-		   comp.primPath == primPath {
-			return root
-		}
-		for child in root.children {
-			if let found = findEntity(withUSDPrimPath: primPath, in: child) { return found }
-		}
-		return nil
-	}
-
-	@MainActor
-	private func tagEntitiesWithUSDPrimPaths(root: Entity) {
-		// Name matching is the only stable join we have with RealityKit's importer.
-		// We only tag entities whose name is unique in the USD prim hierarchy.
-		let map = uniquePrimPathByLeafName
-		guard !map.isEmpty else { return }
-
-		func walk(_ entity: Entity) {
-			if let path = map[entity.name], !path.isEmpty {
-				entity.components.set(USDPrimPathComponent(primPath: path))
+			if !entity.name.isEmpty {
+				pathToID[primPath] = entity.id
+				idToPath[entity.id] = primPath
+				entity.components.set(USDPrimPathComponent(primPath: primPath))
 			}
+
 			for child in entity.children {
-				walk(child)
+				walk(child, parentPrimPath: primPath)
 			}
 		}
 
-		walk(root)
+		// The loaded entity has name = "LoadedModel" (we renamed it).
+		// Its children are the USD root prims.
+		for child in root.children {
+			walk(child, parentPrimPath: "")
+		}
+
+		primPathToEntityID = pathToID
+		entityIDToPrimPath = idToPath
+	}
+
+	/// Strip RealityKit's `_N` duplicate suffix if it was added for sibling collisions.
+	///
+	/// RealityKit appends `_1`, `_2`, etc. when multiple sibling prims share a name.
+	/// We detect this by checking if other siblings share the base name.
+	@MainActor
+	private func stripDuplicateSuffix(_ name: String, amongSiblingsOf entity: Entity) -> String {
+		// Quick check: does the name end with _N pattern?
+		guard let lastUnderscore = name.lastIndex(of: "_") else { return name }
+		let suffixStart = name.index(after: lastUnderscore)
+		guard suffixStart < name.endIndex,
+		      name[suffixStart...].allSatisfy(\.isNumber) else { return name }
+
+		let baseName = String(name[..<lastUnderscore])
+
+		// Only strip if a sibling has the same base name (confirming it's a RealityKit suffix).
+		guard let parent = entity.parent else { return name }
+		let hasSiblingWithBaseName = parent.children.contains { sibling in
+			sibling.id != entity.id && (sibling.name == baseName || sibling.name.hasPrefix(baseName + "_"))
+		}
+
+		return hasSiblingWithBaseName ? baseName : name
 	}
 
 	@MainActor
-	private func firstEntity(where predicate: (Entity) -> Bool, in root: Entity) -> Entity? {
-		if predicate(root) { return root }
+	private func findEntity(byID id: Entity.ID, in root: Entity) -> Entity? {
+		if root.id == id { return root }
 		for child in root.children {
-			if let found = firstEntity(where: predicate, in: child) { return found }
+			if let found = findEntity(byID: id, in: child) { return found }
 		}
 		return nil
 	}
