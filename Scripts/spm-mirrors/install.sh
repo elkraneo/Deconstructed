@@ -21,10 +21,15 @@ function set_mirror() {
   swift package config set-mirror --original "$original" --mirror "$mirror"
 }
 
-set_mirror "https://github.com/reality2713/USDInteropAdvanced" "/Volumes/Plutonian/_Developer/USDInteropAdvanced"
+set_mirror "https://github.com/Reality2713/USDInteropAdvanced-binaries" "/Volumes/Plutonian/_Developer/USDInteropAdvanced"
 set_mirror "https://github.com/Reality2713/USDInterop" "/Volumes/Plutonian/_Developer/USDInterop"
 set_mirror "https://github.com/reality2713/AppleUSDSchemas" "/Volumes/Plutonian/_Developer/AppleUSDSchemas"
 set_mirror "https://github.com/elkraneo/Deconstructed.git" "/Volumes/Plutonian/_Developer/Deconstructed/source/Deconstructed"
+
+# Some tooling resolves mirrors by package identity rather than URL. Set both.
+set_mirror "usdinteropadvanced-binaries" "/Volumes/Plutonian/_Developer/USDInteropAdvanced"
+set_mirror "usdinterop" "/Volumes/Plutonian/_Developer/USDInterop"
+set_mirror "deconstructed" "/Volumes/Plutonian/_Developer/Deconstructed/source/Deconstructed"
 
 echo ""
 echo "Mirrors installed. Current mirror status:"

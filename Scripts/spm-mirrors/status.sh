@@ -16,3 +16,8 @@ show_mirror "https://github.com/reality2713/USDInteropAdvanced"
 show_mirror "https://github.com/Reality2713/USDInterop"
 show_mirror "https://github.com/reality2713/AppleUSDSchemas"
 show_mirror "https://github.com/elkraneo/Deconstructed.git"
+
+show_mirror "https://github.com/Reality2713/USDInteropAdvanced-binaries"
+show_mirror "usdinteropadvanced-binaries"
+show_mirror "usdinterop"
+show_mirror "deconstructed"
