@@ -55,16 +55,19 @@ Use:
 These configure per-user mirrors (stored under `~/.swiftpm`) so local builds use:
 
 - `/Volumes/Plutonian/_Developer/USDInterop`
-- `/Volumes/Plutonian/_Developer/USDInteropAdvanced`
 - `/Volumes/Plutonian/_Developer/AppleUSDSchemas`
 
 without committing any `.package(path: ...)` or `XCLocalSwiftPackageReference` artifacts.
 
+Note:
+
+- Mirrors are appropriate for `USDInterop` and `AppleUSDSchemas` (same repo content, different location).
+- To develop against local `USDInteropAdvanced` source (instead of the public `USDInteropAdvanced-binaries` wrapper), use `Scripts/usdinteropadvanced-local/enable.sh` and switch back with `Scripts/usdinteropadvanced-local/disable.sh` before pushing.
+
 ## Known Limitations / Next Steps
 
 - **Deconstructed UI wiring for Strength** depends on an updated `USDInteropAdvanced-binaries` release.
-  - Until the binaries wrapper is bumped, Strength is available locally via mirrors but cannot ship in CI off `0.2.15`.
+  - Until the binaries wrapper is bumped, Strength is available locally via `Scripts/usdinteropadvanced-local/enable.sh` but cannot ship in CI off `0.2.15`.
 - **Viewport updates**:
   - Current approach uses "reload the scene asset" semantics to pick up USD edits.
   - To match RCP's smooth experience, we likely need a prim-path-to-entity mapping and apply changes directly to RealityKit entities (best-effort), while authoring USD on commit.
-

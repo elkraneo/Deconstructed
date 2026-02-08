@@ -13,6 +13,10 @@ This means:
 - CI uses remote URLs (no mirrors configured)
 - Your machine can route specific packages to `file://...` URLs
 
+Important limitation:
+
+- Mirrors only work when the mirror points at the *same package content* (same tags/versions/commit history), just hosted at a different location. They cannot be used to swap a versioned binaries wrapper package to an unrelated source repo with different tags.
+
 ## Use The Repo Scripts
 
 Install mirrors:
@@ -40,3 +44,18 @@ Remove mirrors:
   - `.package(path: ...)`
   - `XCLocalSwiftPackageReference` in `.pbxproj`
 
+## Local USDInteropAdvanced Source
+
+To develop against local `USDInteropAdvanced` source instead of `USDInteropAdvanced-binaries`, use:
+
+```sh
+./Scripts/usdinteropadvanced-local/enable.sh
+```
+
+and then switch back before pushing:
+
+```sh
+./Scripts/usdinteropadvanced-local/disable.sh 0.2.15
+```
+
+These scripts are intentionally local-dev only and must not be committed.

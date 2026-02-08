@@ -25,13 +25,8 @@ function set_mirror() {
 set_mirror "https://github.com/Reality2713/USDInterop" "/Volumes/Plutonian/_Developer/USDInterop"
 set_mirror "https://github.com/reality2713/AppleUSDSchemas" "/Volumes/Plutonian/_Developer/AppleUSDSchemas"
 
-# Route the public binaries wrapper to the private source checkout for local dev.
-# This keeps manifests CI-safe (`.package(url: ...)`) while letting you iterate locally.
-set_mirror "https://github.com/Reality2713/USDInteropAdvanced-binaries" "/Volumes/Plutonian/_Developer/USDInteropAdvanced"
-
 # Some tooling resolves mirrors by package identity rather than URL. Set both.
 set_mirror "usdinterop" "/Volumes/Plutonian/_Developer/USDInterop"
-set_mirror "usdinteropadvanced-binaries" "/Volumes/Plutonian/_Developer/USDInteropAdvanced"
 
 echo ""
 echo "Mirrors installed. Current mirror status:"
