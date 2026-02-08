@@ -108,9 +108,14 @@ let package = Package(
 			url: "https://github.com/pointfreeco/swift-sharing",
 			from: "2.3.0"
 		),
-		.package(url: "https://github.com/Reality2713/USDInterop", branch: "main"),
+		// Keep USDInterop pinned to avoid SwiftPM conflicts between transitive requirements.
+		.package(url: "https://github.com/Reality2713/USDInterop", revision: "c939ac54807e6d067ca09cb7e37d4ddd367c4168"),
+
+		// Private source is not accessible from this open-code repo. Use the public
+		// binary wrapper, and rely on SwiftPM mirrors for local-source development.
 		.package(
-			url: "https://github.com/reality2713/USDInteropAdvanced",
+			name: "USDInteropAdvanced",
+			url: "https://github.com/Reality2713/USDInteropAdvanced-binaries",
 			branch: "main"
 		),
 	],
@@ -242,7 +247,11 @@ let package = Package(
 		.target(
 			name: "ViewportUI",
 			dependencies: [
-				"ViewportModels"
+				"ViewportModels",
+				.product(name: "USDInterfaces", package: "USDInterop"),
+			],
+			swiftSettings: [
+				.interoperabilityMode(.Cxx)
 			]
 		),
 		.target(
@@ -252,11 +261,17 @@ let package = Package(
 			name: "SceneGraphClients",
 			dependencies: [
 				"SceneGraphModels",
+				"DeconstructedModels",
 				"DeconstructedUSDInterop",
 				.product(
 					name: "ComposableArchitecture",
 					package: "swift-composable-architecture"
 				),
+				.product(name: "USDInterfaces", package: "USDInterop"),
+				.product(name: "USDInteropCxx", package: "USDInterop"),
+				.product(name: "USDInteropAdvancedCore", package: "USDInteropAdvanced"),
+				.product(name: "USDInteropAdvancedUtils", package: "USDInteropAdvanced"),
+				.product(name: "USDInteropAdvancedInspection", package: "USDInteropAdvanced"),
 			],
 			swiftSettings: [
 				.interoperabilityMode(.Cxx)
@@ -294,6 +309,11 @@ let package = Package(
 				.product(name: "USDInterfaces", package: "USDInterop"),
 				.product(name: "USDInterop", package: "USDInterop"),
 				.product(name: "USDInteropAdvanced", package: "USDInteropAdvanced"),
+				.product(name: "USDInteropCxx", package: "USDInterop"),
+				.product(name: "USDInteropAdvancedCore", package: "USDInteropAdvanced"),
+				.product(name: "USDInteropAdvancedUtils", package: "USDInteropAdvanced"),
+				.product(name: "USDInteropAdvancedEditing", package: "USDInteropAdvanced"),
+				.product(name: "USDInteropAdvancedInspection", package: "USDInteropAdvanced"),
 			],
 			swiftSettings: [
 				.interoperabilityMode(.Cxx),
@@ -303,12 +323,23 @@ let package = Package(
 		.target(
 			name: "DeconstructedUSDPipeline",
 			dependencies: [
+				.product(name: "USDInteropCxx", package: "USDInterop"),
+				.product(name: "USDInteropAdvanced", package: "USDInteropAdvanced"),
+				.product(name: "USDInteropAdvancedAppleTools", package: "USDInteropAdvanced"),
+				.product(name: "USDInteropAdvancedCore", package: "USDInteropAdvanced"),
+				.product(name: "USDInteropAdvancedEditing", package: "USDInteropAdvanced"),
+				.product(name: "USDInteropAdvancedInspection", package: "USDInteropAdvanced"),
+				.product(name: "USDInteropAdvancedPlugins", package: "USDInteropAdvanced"),
+				.product(name: "USDInteropAdvancedSession", package: "USDInteropAdvanced"),
+				.product(name: "USDInteropAdvancedSurgery", package: "USDInteropAdvanced"),
+				.product(name: "USDInteropAdvancedUtils", package: "USDInteropAdvanced"),
 				.product(
 					name: "USDInteropAdvancedWorkflows",
 					package: "USDInteropAdvanced"
-				)
+				),
 			],
 			swiftSettings: [
+				.interoperabilityMode(.Cxx),
 				.unsafeFlags(["-disable-cmo"], .when(configuration: .release))
 			]
 		),
@@ -328,6 +359,11 @@ let package = Package(
 					name: "ComposableArchitecture",
 					package: "swift-composable-architecture"
 				),
+				.product(name: "USDInterfaces", package: "USDInterop"),
+				.product(name: "USDInteropCxx", package: "USDInterop"),
+				.product(name: "USDInteropAdvancedCore", package: "USDInteropAdvanced"),
+				.product(name: "USDInteropAdvancedUtils", package: "USDInteropAdvanced"),
+				.product(name: "USDInteropAdvancedInspection", package: "USDInteropAdvanced"),
 			],
 			swiftSettings: [
 				.interoperabilityMode(.Cxx)

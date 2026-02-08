@@ -1,15 +1,6 @@
 {
-  "originHash" : "48b4afc275601d207c425120975db62337e1bc9278f6bc2ac56b536f1d45000c",
+  "originHash" : "faba2484954ffae20d26145bce120b5283c4c6d24242ae75501b8d75b74144b1",
   "pins" : [
-    {
-      "identity" : "appleusdschemas",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/reality2713/AppleUSDSchemas",
-      "state" : {
-        "branch" : "main",
-        "revision" : "1449bfae27990c2694ae4aecd85e9f786a88019b"
-      }
-    },
     {
       "identity" : "combine-schedulers",
       "kind" : "remoteSourceControl",
@@ -130,28 +121,27 @@
     {
       "identity" : "swiftusd",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/apple/SwiftUsd.git",
+      "location" : "https://github.com/Reality2713/SwiftUsd.git",
       "state" : {
-        "revision" : "0cc1c65b7832695e89608c915c35621222db62b9",
-        "version" : "5.2.0"
+        "branch" : "swift-syntax-602",
+        "revision" : "0d6d585427757ff1b80ec25ba65926fb618f9fc0"
       }
     },
     {
       "identity" : "usdinterop",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/elkraneo/USDInterop",
+      "location" : "https://github.com/Reality2713/USDInterop",
       "state" : {
-        "branch" : "main",
-        "revision" : "7490eeaac971976296575d93f9b5f61c0d79857e"
+        "revision" : "c939ac54807e6d067ca09cb7e37d4ddd367c4168"
       }
     },
     {
-      "identity" : "usdinteropadvanced",
+      "identity" : "usdinteropadvanced-binaries",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/reality2713/USDInteropAdvanced",
+      "location" : "https://github.com/Reality2713/USDInteropAdvanced-binaries",
       "state" : {
         "branch" : "main",
-        "revision" : "aeb03539f6e6265446e27ea5cb8c0704f4a32c77"
+        "revision" : "1ce00c69b015124227690ef9100aaac8c5a8cdc1"
       }
     },
     {

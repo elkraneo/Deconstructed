@@ -41,11 +41,14 @@ let package = Package(
 	dependencies: [
 		.package(url: "https://github.com/pointfreeco/swift-composable-architecture", from: "1.23.1"),
 		.package(url: "https://github.com/pointfreeco/swift-sharing", from: "2.3.0"),
-		.package(url: "https://github.com/Reality2713/USDInterop", revision: "25ce64a6dddeddfd20b3c7dc2b285a866a0fdb74"),
+		.package(url: "https://github.com/Reality2713/USDInterop", revision: "c939ac54807e6d067ca09cb7e37d4ddd367c4168"),
 		.package(
 			name: "USDInteropAdvanced",
 			url: "https://github.com/Reality2713/USDInteropAdvanced-binaries",
-			from: "0.2.15"
+			// Local dev override: with a SwiftPM mirror in place, this resolves against the
+			// *source* repo (which uses branch/revision deps), so we must use an unstable
+			// requirement here instead of `from:`.
+			branch: "main"
 		),
 	],
 	targets: [

@@ -1,6 +1,15 @@
 {
-  "originHash" : "4fd1a849216455d1cb839ce61f3279e0ca1437eb6d4ca194a84939b8cdd834fd",
+  "originHash" : "a7648feae7b20046fc535a8e37457efb28ded9b0e2ff0337a5b71ff46089d590",
   "pins" : [
+    {
+      "identity" : "appleusdschemas",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/reality2713/AppleUSDSchemas",
+      "state" : {
+        "branch" : "main",
+        "revision" : "5cb60c1e41bf05dc8b2f44d5490d5dfb4bdc6414"
+      }
+    },
     {
       "identity" : "combine-schedulers",
       "kind" : "remoteSourceControl",
@@ -132,16 +141,16 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Reality2713/USDInterop",
       "state" : {
-        "revision" : "25ce64a6dddeddfd20b3c7dc2b285a866a0fdb74"
+        "revision" : "c939ac54807e6d067ca09cb7e37d4ddd367c4168"
       }
     },
     {
-      "identity" : "usdinteropadvanced-binaries",
+      "identity" : "usdinteropadvanced",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Reality2713/USDInteropAdvanced-binaries",
       "state" : {
-        "revision" : "1ce00c69b015124227690ef9100aaac8c5a8cdc1",
-        "version" : "0.2.15"
+        "branch" : "main",
+        "revision" : "b9946edcf2dc5427eba41ce758a71558a57c5c3f"
       }
     },
     {
