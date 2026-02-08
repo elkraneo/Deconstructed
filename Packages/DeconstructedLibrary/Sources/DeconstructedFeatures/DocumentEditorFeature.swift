@@ -518,6 +518,16 @@ public struct DocumentEditorFeature {
 					return .none
 				}
 
+				// Material bindings are authored to USD. Until we have a robust prim->entity material bridge,
+				// force a viewport reload so changes are visible immediately.
+				if case .setMaterialBindingSucceeded = inspectorAction,
+				   case .scene(let tabID) = state.selectedTab,
+				   var tab = state.openScenes[id: tabID] {
+					tab.reloadTrigger = uuid()
+					state.openScenes[id: tabID] = tab
+					return .send(.projectBrowser(.sceneModified(tab.fileURL)))
+				}
+
 				// Keep thumbnails/scene graph in sync after inspector-authored USD edits.
 				if case .primTransformSaveSucceeded = inspectorAction,
 				   case .scene(let tabID) = state.selectedTab,

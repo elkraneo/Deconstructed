@@ -302,6 +302,8 @@ struct MaterialBindingsSection: View {
 						.labelsHidden()
 						.pickerStyle(.menu)
 						.onChange(of: selection) { _, newValue in
+							// Avoid re-authoring when we're just syncing to the latest loaded binding.
+							if newValue == (currentBindingPath ?? "") { return }
 							onSetBinding(newValue.isEmpty ? nil : newValue)
 						}
 
