@@ -1,4 +1,5 @@
 import ComposableArchitecture
+import AppKit
 import Foundation
 import InspectorFeature
 import InspectorModels
@@ -86,6 +87,13 @@ public struct InspectorView: View {
 											onTransformChanged: { store.send(.primTransformChanged($0)) }
 										)
 									}
+
+									MaterialBindingsSection(
+										currentBindingPath: store.primMaterialBinding,
+										boundMaterial: store.boundMaterial,
+										materials: store.availableMaterials,
+										onSetBinding: { store.send(.setMaterialBinding($0)) }
+									)
 
 									if store.primIsLoading {
 										ProgressView()
@@ -268,6 +276,164 @@ struct PrimAttributesSection: View {
 				}
 			}
 		}
+	}
+}
+
+struct MaterialBindingsSection: View {
+	let currentBindingPath: String?
+	let boundMaterial: USDMaterialInfo?
+	let materials: [USDMaterialInfo]
+	let onSetBinding: (String?) -> Void
+	@State private var isExpanded: Bool = true
+	@State private var selection: String = ""
+
+	var body: some View {
+		InspectorGroupBox(title: "Material Bindings", isExpanded: $isExpanded) {
+			VStack(alignment: .leading, spacing: 12) {
+				InspectorRow(label: "Binding") {
+					HStack(spacing: 8) {
+						Picker("", selection: $selection) {
+							Text("None").tag("")
+							ForEach(materials, id: \.path) { material in
+								Text(material.name.isEmpty ? material.path : material.name)
+									.tag(material.path)
+							}
+						}
+						.labelsHidden()
+						.pickerStyle(.menu)
+						.onChange(of: selection) { _, newValue in
+							onSetBinding(newValue.isEmpty ? nil : newValue)
+						}
+
+						Button {
+							onSetBinding(nil)
+						} label: {
+							Image(systemName: "xmark.circle.fill")
+								.foregroundStyle(.secondary)
+						}
+						.buttonStyle(.plain)
+						.help("Clear binding")
+					}
+				}
+
+				if let currentBindingPath, !currentBindingPath.isEmpty {
+					Text(currentBindingPath)
+						.font(.system(size: 11))
+						.foregroundStyle(.secondary)
+						.textSelection(.enabled)
+				} else {
+					Text("No material bound.")
+						.font(.system(size: 11))
+						.foregroundStyle(.secondary)
+				}
+
+				if let boundMaterial {
+					Divider()
+
+					Text(boundMaterial.name.isEmpty ? "Material Properties" : boundMaterial.name)
+						.font(.system(size: 11, weight: .semibold))
+						.foregroundStyle(.secondary)
+
+					if boundMaterial.properties.isEmpty {
+						Text("No authored material properties found.")
+							.font(.system(size: 11))
+							.foregroundStyle(.secondary)
+					} else {
+						ForEach(boundMaterial.properties, id: \.name) { property in
+							MaterialPropertyRow(property: property)
+						}
+					}
+				} else {
+					// Keep the section informative even if material discovery is empty.
+					if let currentBindingPath, !currentBindingPath.isEmpty {
+						Text("Material properties unavailable (material list did not include the bound path).")
+							.font(.system(size: 11))
+							.foregroundStyle(.secondary)
+					}
+				}
+			}
+			.onAppear {
+				selection = currentBindingPath ?? ""
+			}
+			.onChange(of: currentBindingPath) { _, newValue in
+				selection = newValue ?? ""
+			}
+		}
+	}
+}
+
+private struct MaterialPropertyRow: View {
+	let property: USDMaterialProperty
+
+	var body: some View {
+		InspectorRow(label: property.name) {
+			switch property.value {
+			case let .color(r, g, b):
+				HStack(spacing: 8) {
+					Color(red: Double(r), green: Double(g), blue: Double(b))
+						.frame(width: 14, height: 14)
+						.clipShape(RoundedRectangle(cornerRadius: 3))
+						.overlay(
+							RoundedRectangle(cornerRadius: 3)
+								.strokeBorder(.quaternary, lineWidth: 1)
+						)
+					Text(String(format: "%.3f, %.3f, %.3f", r, g, b))
+						.font(.system(size: 11))
+						.foregroundStyle(.secondary)
+				}
+			case let .float(v):
+				Text(v.formatted(.number.precision(.fractionLength(0...3))))
+					.font(.system(size: 11))
+					.foregroundStyle(.secondary)
+			case let .texture(url, resolvedPath):
+				TextureValueView(url: url, resolvedPath: resolvedPath)
+			@unknown default:
+				Text("Unsupported")
+					.font(.system(size: 11))
+					.foregroundStyle(.secondary)
+			}
+		}
+	}
+}
+
+private struct TextureValueView: View {
+	let url: String
+	let resolvedPath: String?
+
+	var body: some View {
+		HStack(spacing: 8) {
+			if let image = loadPreviewImage() {
+				Image(nsImage: image)
+					.resizable()
+					.scaledToFill()
+					.frame(width: 18, height: 18)
+					.clipShape(RoundedRectangle(cornerRadius: 4))
+			} else {
+				Image(systemName: "photo")
+					.font(.system(size: 12))
+					.foregroundStyle(.secondary)
+			}
+
+			Text(displayText)
+				.font(.system(size: 11))
+				.foregroundStyle(.secondary)
+				.lineLimit(1)
+				.truncationMode(.middle)
+				.textSelection(.enabled)
+		}
+	}
+
+	private var displayText: String {
+		if let resolvedPath, !resolvedPath.isEmpty {
+			return resolvedPath
+		}
+		return url
+	}
+
+	private func loadPreviewImage() -> NSImage? {
+		guard let resolvedPath, !resolvedPath.isEmpty else { return nil }
+		let fileURL = URL(fileURLWithPath: resolvedPath)
+		return NSImage(contentsOf: fileURL)
 	}
 }
 

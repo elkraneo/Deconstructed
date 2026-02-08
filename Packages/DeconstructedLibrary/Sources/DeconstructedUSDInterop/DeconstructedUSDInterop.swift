@@ -130,6 +130,50 @@ public struct USDSceneBounds: Sendable, Equatable {
 public enum DeconstructedUSDInterop {
 	private static let advancedClient = USDInteropAdvancedCore.USDAdvancedClient()
 
+	// MARK: - Materials
+
+	public static func allMaterials(url: URL) -> [USDMaterialInfo] {
+		advancedClient.allMaterials(url: url)
+	}
+
+	public static func materialBinding(url: URL, primPath: String) -> String? {
+		advancedClient.materialBinding(url: url, path: primPath)
+	}
+
+	public static func setMaterialBinding(
+		url: URL,
+		primPath: String,
+		materialPath: String,
+		editTarget: USDLayerEditTarget = .rootLayer
+	) throws {
+		do {
+			try advancedClient.setMaterialBinding(
+				url: url,
+				primPath: primPath,
+				materialPath: materialPath,
+				editTarget: editTarget
+			)
+		} catch {
+			throw mapAdvancedError(error, url: url, primPath: primPath, schema: nil)
+		}
+	}
+
+	public static func clearMaterialBinding(
+		url: URL,
+		primPath: String,
+		editTarget: USDLayerEditTarget = .rootLayer
+	) throws {
+		do {
+			try advancedClient.clearMaterialBinding(
+				url: url,
+				primPath: primPath,
+				editTarget: editTarget
+			)
+		} catch {
+			throw mapAdvancedError(error, url: url, primPath: primPath, schema: nil)
+		}
+	}
+
 	public static func setDefaultPrim(url: URL, primPath: String) throws {
 		do {
 			try advancedClient.setDefaultPrim(url: url, primPath: primPath)

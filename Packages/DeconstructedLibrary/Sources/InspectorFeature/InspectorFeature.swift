@@ -6,19 +6,22 @@ import SceneGraphModels
 import USDInterfaces
 
 @Reducer
-public struct InspectorFeature {
-	@ObservableState
-	public struct State: Equatable {
-		public var sceneURL: URL?
-		public var selectedNodeID: SceneNode.ID?
-		public var layerData: SceneLayerData?
-		public var playbackData: ScenePlaybackData?
-		public var primAttributes: USDPrimAttributes?
-		public var primTransform: USDTransformData?
-		public var sceneNodes: [SceneNode]
-		public var isLoading: Bool
-		public var errorMessage: String?
-		public var primIsLoading: Bool
+	public struct InspectorFeature {
+		@ObservableState
+		public struct State: Equatable {
+			public var sceneURL: URL?
+			public var selectedNodeID: SceneNode.ID?
+			public var layerData: SceneLayerData?
+			public var playbackData: ScenePlaybackData?
+			public var primAttributes: USDPrimAttributes?
+			public var primTransform: USDTransformData?
+			public var primMaterialBinding: String?
+			public var boundMaterial: USDMaterialInfo?
+			public var availableMaterials: [USDMaterialInfo]
+			public var sceneNodes: [SceneNode]
+			public var isLoading: Bool
+			public var errorMessage: String?
+			public var primIsLoading: Bool
 		public var primErrorMessage: String?
 		public var playbackIsPlaying: Bool
 		public var playbackCurrentTime: Double
@@ -29,13 +32,16 @@ public struct InspectorFeature {
 			sceneURL: URL? = nil,
 			selectedNodeID: SceneNode.ID? = nil,
 			layerData: SceneLayerData? = nil,
-			playbackData: ScenePlaybackData? = nil,
-			primAttributes: USDPrimAttributes? = nil,
-			primTransform: USDTransformData? = nil,
-			sceneNodes: [SceneNode] = [],
-			isLoading: Bool = false,
-			errorMessage: String? = nil,
-			primIsLoading: Bool = false,
+				playbackData: ScenePlaybackData? = nil,
+				primAttributes: USDPrimAttributes? = nil,
+				primTransform: USDTransformData? = nil,
+				primMaterialBinding: String? = nil,
+				boundMaterial: USDMaterialInfo? = nil,
+				availableMaterials: [USDMaterialInfo] = [],
+				sceneNodes: [SceneNode] = [],
+				isLoading: Bool = false,
+				errorMessage: String? = nil,
+				primIsLoading: Bool = false,
 			primErrorMessage: String? = nil,
 			playbackIsPlaying: Bool = false,
 			playbackCurrentTime: Double = 0,
@@ -45,13 +51,16 @@ public struct InspectorFeature {
 			self.sceneURL = sceneURL
 			self.selectedNodeID = selectedNodeID
 			self.layerData = layerData
-			self.playbackData = playbackData
-			self.primAttributes = primAttributes
-			self.primTransform = primTransform
-			self.sceneNodes = sceneNodes
-			self.isLoading = isLoading
-			self.errorMessage = errorMessage
-			self.primIsLoading = primIsLoading
+				self.playbackData = playbackData
+				self.primAttributes = primAttributes
+				self.primTransform = primTransform
+				self.primMaterialBinding = primMaterialBinding
+				self.boundMaterial = boundMaterial
+				self.availableMaterials = availableMaterials
+				self.sceneNodes = sceneNodes
+				self.isLoading = isLoading
+				self.errorMessage = errorMessage
+				self.primIsLoading = primIsLoading
 			self.primErrorMessage = primErrorMessage
 			self.playbackIsPlaying = playbackIsPlaying
 			self.playbackCurrentTime = playbackCurrentTime
@@ -74,7 +83,7 @@ public struct InspectorFeature {
 		}
 	}
 
-	public enum Action: BindableAction {
+		public enum Action: BindableAction {
 		case binding(BindingAction<State>)
 		case sceneURLChanged(URL?)
 		case selectionChanged(SceneNode.ID?)
@@ -83,12 +92,17 @@ public struct InspectorFeature {
 		case sceneMetadataLoadFailed(String)
 		case primAttributesLoaded(USDPrimAttributes)
 		case primAttributesLoadFailed(String)
-		case primTransformLoaded(USDTransformData)
-		case primTransformLoadFailed(String)
-		case primTransformChanged(USDTransformData)
-		case primTransformSaveSucceeded
-		case primTransformSaveFailed(String)
-		case refreshLayerData
+			case primTransformLoaded(USDTransformData)
+			case primTransformLoadFailed(String)
+			case primTransformChanged(USDTransformData)
+			case primTransformSaveSucceeded
+			case primTransformSaveFailed(String)
+			case primMaterialBindingLoaded(String?)
+			case availableMaterialsLoaded([USDMaterialInfo])
+			case setMaterialBinding(String?)
+			case setMaterialBindingSucceeded
+			case setMaterialBindingFailed(String)
+			case refreshLayerData
 
 		case defaultPrimChanged(String)
 		case metersPerUnitChanged(Double)
@@ -116,18 +130,21 @@ public struct InspectorFeature {
 			case .binding:
 				return .none
 
-			case let .sceneURLChanged(url):
+				case let .sceneURLChanged(url):
 				print("[InspectorFeature] sceneURLChanged: \(url?.lastPathComponent ?? "nil")")
 				state.sceneURL = url
 				state.selectedNodeID = nil
 				state.errorMessage = nil
 				state.layerData = nil
 				state.playbackData = nil
-				state.primAttributes = nil
-				state.primTransform = nil
-				state.primIsLoading = false
-				state.primErrorMessage = nil
-				state.sceneNodes = []
+					state.primAttributes = nil
+					state.primTransform = nil
+					state.primMaterialBinding = nil
+					state.boundMaterial = nil
+					state.availableMaterials = []
+					state.primIsLoading = false
+					state.primErrorMessage = nil
+					state.sceneNodes = []
 				state.playbackIsPlaying = false
 				state.playbackCurrentTime = 0
 				state.playbackIsScrubbing = false
@@ -143,35 +160,43 @@ public struct InspectorFeature {
 					.cancel(id: PlaybackTimerID.playback)
 				)
 
-			case let .selectionChanged(nodeID):
-				state.selectedNodeID = nodeID
-				state.primAttributes = nil
-				state.primTransform = nil
-				state.primErrorMessage = nil
-				guard let nodeID, let url = state.sceneURL else {
-					state.primIsLoading = false
-					return .none
-				}
-				state.primIsLoading = true
-				return .run { send in
-					if let attributes = DeconstructedUSDInterop.getPrimAttributes(
-						url: url,
-						primPath: nodeID
-					) {
-						await send(.primAttributesLoaded(attributes))
-					} else {
-						await send(.primAttributesLoadFailed("No prim data available."))
+				case let .selectionChanged(nodeID):
+					state.selectedNodeID = nodeID
+					state.primAttributes = nil
+					state.primTransform = nil
+					state.primMaterialBinding = nil
+					state.boundMaterial = nil
+					state.primErrorMessage = nil
+					guard let nodeID, let url = state.sceneURL else {
+						state.primIsLoading = false
+						return .none
 					}
+					state.primIsLoading = true
+					return .run { send in
+						let materials = DeconstructedUSDInterop.allMaterials(url: url)
+						await send(.availableMaterialsLoaded(materials))
 
-					if let transform = DeconstructedUSDInterop.getPrimTransform(
-						url: url,
-						primPath: nodeID
-					) {
-						await send(.primTransformLoaded(transform))
-					} else {
-						await send(.primTransformLoadFailed("No transform data available."))
+						if let attributes = DeconstructedUSDInterop.getPrimAttributes(
+							url: url,
+							primPath: nodeID
+						) {
+							await send(.primAttributesLoaded(attributes))
+						} else {
+							await send(.primAttributesLoadFailed("No prim data available."))
+						}
+
+						if let transform = DeconstructedUSDInterop.getPrimTransform(
+							url: url,
+							primPath: nodeID
+						) {
+							await send(.primTransformLoaded(transform))
+						} else {
+							await send(.primTransformLoadFailed("No transform data available."))
+						}
+
+						let binding = DeconstructedUSDInterop.materialBinding(url: url, primPath: nodeID)
+						await send(.primMaterialBindingLoaded(binding))
 					}
-				}
 				.cancellable(
 					id: PrimAttributesLoadCancellationID.load,
 					cancelInFlight: true
@@ -233,13 +258,58 @@ public struct InspectorFeature {
 				state.primErrorMessage = nil
 				return .none
 
-			case let .primTransformLoadFailed(message):
-				state.primTransform = nil
-				state.primIsLoading = false
-				state.primErrorMessage = message
-				return .none
+				case let .primTransformLoadFailed(message):
+					state.primTransform = nil
+					state.primIsLoading = false
+					state.primErrorMessage = message
+					return .none
 
-			case let .primTransformChanged(transform):
+					case let .primMaterialBindingLoaded(binding):
+						state.primMaterialBinding = binding
+						updateBoundMaterial(state: &state)
+						return .none
+
+					case let .availableMaterialsLoaded(materials):
+						state.availableMaterials = materials
+						updateBoundMaterial(state: &state)
+						return .none
+
+				case let .setMaterialBinding(materialPath):
+					guard let url = state.sceneURL, let primPath = state.selectedNodeID else {
+						return .none
+					}
+					return .run { send in
+						do {
+							if let materialPath {
+								try DeconstructedUSDInterop.setMaterialBinding(
+									url: url,
+									primPath: primPath,
+									materialPath: materialPath,
+									editTarget: .rootLayer
+								)
+							} else {
+								try DeconstructedUSDInterop.clearMaterialBinding(
+									url: url,
+									primPath: primPath,
+									editTarget: .rootLayer
+								)
+							}
+							let refreshed = DeconstructedUSDInterop.materialBinding(url: url, primPath: primPath)
+							await send(.primMaterialBindingLoaded(refreshed))
+							await send(.setMaterialBindingSucceeded)
+						} catch {
+							await send(.setMaterialBindingFailed(error.localizedDescription))
+						}
+					}
+
+				case .setMaterialBindingSucceeded:
+					return .none
+
+				case let .setMaterialBindingFailed(message):
+					state.primErrorMessage = message
+					return .none
+
+				case let .primTransformChanged(transform):
 				guard let url = state.sceneURL,
 				      let primPath = state.selectedNodeID else {
 					return .none
@@ -462,6 +532,14 @@ private func findNode(id: SceneNode.ID, in nodes: [SceneNode]) -> SceneNode? {
 		}
 	}
 	return nil
+}
+
+private func updateBoundMaterial(state: inout InspectorFeature.State) {
+	guard let binding = state.primMaterialBinding, !binding.isEmpty else {
+		state.boundMaterial = nil
+		return
+	}
+	state.boundMaterial = state.availableMaterials.first { $0.path == binding }
 }
 
 private enum PrimAttributesLoadCancellationID {
