@@ -132,6 +132,7 @@ let package = Package(
 			url: "https://github.com/Reality2713/USDInteropAdvanced",
 			branch: "main"
 		),
+		.package(url: "https://github.com/reality2713/StageView.git", branch: "main"),
 	],
 	targets: [
 		// Targets are the basic building blocks of a package, defining a module or a test suite.
@@ -204,6 +205,7 @@ let package = Package(
 					name: "ComposableArchitecture",
 					package: "swift-composable-architecture"
 				),
+				.product(name: "RealityKitStageView", package: "StageView"),
 			],
 			swiftSettings: [
 				.interoperabilityMode(.Cxx)
@@ -262,7 +264,7 @@ let package = Package(
 			name: "ViewportUI",
 			dependencies: [
 				"ViewportModels",
-				"SelectionOutline",
+				.product(name: "RealityKitStageView", package: "StageView"),
 				.product(name: "USDInterfaces", package: "USDInterop"),
 			],
 			swiftSettings: [
@@ -397,7 +399,9 @@ let package = Package(
 		.target(
 			name: "InspectorModels",
 			dependencies: [
-				.product(name: "Sharing", package: "swift-sharing")
+				.product(name: "Sharing", package: "swift-sharing"),
+				.product(name: "USDInterfaces", package: "USDInterop"),
+				.product(name: "USDInteropAdvancedCore", package: "USDInteropAdvanced"),
 			]
 		),
 		.target(
@@ -432,6 +436,7 @@ let package = Package(
 				"InspectorFeature",
 				"InspectorModels",
 				"SceneGraphModels",
+				.product(name: "USDInteropAdvancedCore", package: "USDInteropAdvanced"),
 			],
 			swiftSettings: [
 				.interoperabilityMode(.Cxx)
@@ -457,12 +462,6 @@ let package = Package(
 			],
 			swiftSettings: [
 				.interoperabilityMode(.Cxx)
-			]
-		),
-		.target(
-			name: "SelectionOutline",
-			resources: [
-				.process("Shaders"),
 			]
 		),
 	],

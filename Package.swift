@@ -42,7 +42,8 @@ let package = Package(
 		.package(url: "https://github.com/pointfreeco/swift-composable-architecture", from: "1.23.1"),
 		.package(url: "https://github.com/pointfreeco/swift-sharing", from: "2.3.0"),
 		.package(url: "https://github.com/Reality2713/USDInterop", revision: "9a51edd955db053813d8467d088d07639d7aa46c"),
-		.package(
+		.package(url: "https://github.com/reality2713/StageView.git", branch: "main"),
+        .package(
             name: "USDInteropAdvanced",
             url: "https://github.com/Reality2713/USDInteropAdvanced-binaries",
             from: "0.2.15"
@@ -105,6 +106,7 @@ let package = Package(
 				"InspectorFeature",
 				"ViewportModels",
 				.product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
+				.product(name: "RealityKitStageView", package: "StageView"),
 			],
 			path: "Packages/DeconstructedLibrary/Sources/DeconstructedFeatures",
 			swiftSettings: [.interoperabilityMode(.Cxx)]
@@ -151,7 +153,7 @@ let package = Package(
 		),
 		.target(
 			name: "ViewportUI",
-			dependencies: ["ViewportModels", "SelectionOutline", .product(name: "USDInterfaces", package: "USDInterop")],
+			dependencies: ["ViewportModels", .product(name: "RealityKitStageView", package: "StageView"), .product(name: "USDInterfaces", package: "USDInterop")],
 			path: "Packages/DeconstructedLibrary/Sources/ViewportUI",
 			swiftSettings: [.interoperabilityMode(.Cxx)]
 		),
@@ -232,6 +234,8 @@ let package = Package(
 			name: "InspectorModels",
 			dependencies: [
 				.product(name: "Sharing", package: "swift-sharing"),
+				.product(name: "USDInterfaces", package: "USDInterop"),
+				.product(name: "USDInteropAdvancedCore", package: "USDInteropAdvanced"),
 			],
 			path: "Packages/DeconstructedLibrary/Sources/InspectorModels"
 		),
@@ -256,16 +260,10 @@ let package = Package(
 				"InspectorFeature",
 				.product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
 				.product(name: "USDInterfaces", package: "USDInterop"),
+				.product(name: "USDInteropAdvancedCore", package: "USDInteropAdvanced"),
 			],
 			path: "Packages/DeconstructedLibrary/Sources/InspectorUI",
 			swiftSettings: [.interoperabilityMode(.Cxx)]
-		),
-		.target(
-			name: "SelectionOutline",
-			path: "Packages/DeconstructedLibrary/Sources/SelectionOutline",
-			resources: [
-				.process("Shaders"),
-			]
 		),
 	]
 )
