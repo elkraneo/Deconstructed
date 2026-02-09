@@ -355,6 +355,13 @@ public enum DeconstructedUSDInterop {
 		advancedClient.primTransform(url: url, path: primPath)
 	}
 
+	public static func getPrimReferences(
+		url: URL,
+		primPath: String
+	) -> [USDReference] {
+		advancedClient.primReferences(url: url, path: primPath)
+	}
+
 	public static func setPrimTransform(
 		url: URL,
 		primPath: String,

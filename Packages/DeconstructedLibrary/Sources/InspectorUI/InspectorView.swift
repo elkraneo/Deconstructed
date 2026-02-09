@@ -95,6 +95,10 @@ public struct InspectorView: View {
 										onSetStrength: { store.send(.setMaterialBindingStrength($0)) }
 									)
 
+									if !store.primReferences.isEmpty {
+										PrimReferencesSection(references: store.primReferences)
+									}
+
 									if store.primIsLoading {
 										ProgressView()
 											.frame(maxWidth: .infinity, alignment: .center)
@@ -523,6 +527,31 @@ struct TransformSection: View {
 						onTransformChanged(updated)
 					}
 				)
+			}
+		}
+	}
+}
+
+private struct PrimReferencesSection: View {
+	let references: [USDReference]
+	@State private var isExpanded: Bool = true
+
+	var body: some View {
+		InspectorGroupBox(title: "References", isExpanded: $isExpanded) {
+			VStack(alignment: .leading, spacing: 8) {
+				ForEach(Array(references.enumerated()), id: \.offset) { _, reference in
+					VStack(alignment: .leading, spacing: 2) {
+						Text(reference.assetPath)
+							.font(.system(size: 11))
+							.textSelection(.enabled)
+						if let primPath = reference.primPath, !primPath.isEmpty {
+							Text("Prim: \(primPath)")
+								.font(.system(size: 10))
+								.foregroundStyle(.secondary)
+								.textSelection(.enabled)
+						}
+					}
+				}
 			}
 		}
 	}

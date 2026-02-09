@@ -15,6 +15,7 @@ import USDInterfaces
 			public var playbackData: ScenePlaybackData?
 			public var primAttributes: USDPrimAttributes?
 			public var primTransform: USDTransformData?
+			public var primReferences: [USDReference]
 			public var primMaterialBinding: String?
 			public var primMaterialBindingStrength: USDMaterialBindingStrength?
 			public var boundMaterial: USDMaterialInfo?
@@ -36,6 +37,7 @@ import USDInterfaces
 				playbackData: ScenePlaybackData? = nil,
 				primAttributes: USDPrimAttributes? = nil,
 				primTransform: USDTransformData? = nil,
+				primReferences: [USDReference] = [],
 				primMaterialBinding: String? = nil,
 				primMaterialBindingStrength: USDMaterialBindingStrength? = nil,
 				boundMaterial: USDMaterialInfo? = nil,
@@ -56,6 +58,7 @@ import USDInterfaces
 				self.playbackData = playbackData
 				self.primAttributes = primAttributes
 				self.primTransform = primTransform
+				self.primReferences = primReferences
 				self.primMaterialBinding = primMaterialBinding
 				self.primMaterialBindingStrength = primMaterialBindingStrength
 				self.boundMaterial = boundMaterial
@@ -100,6 +103,8 @@ import USDInterfaces
 			case primTransformChanged(USDTransformData)
 			case primTransformSaveSucceeded
 			case primTransformSaveFailed(String)
+			case primReferencesLoaded([USDReference])
+			case primReferencesLoadFailed(String)
 			case primMaterialBindingLoaded(String?, USDMaterialBindingStrength?)
 			case availableMaterialsLoaded([USDMaterialInfo])
 			case setMaterialBinding(String?)
@@ -145,6 +150,7 @@ import USDInterfaces
 				state.playbackData = nil
 					state.primAttributes = nil
 					state.primTransform = nil
+					state.primReferences = []
 					state.primMaterialBinding = nil
 					state.primMaterialBindingStrength = nil
 					state.boundMaterial = nil
@@ -171,6 +177,7 @@ import USDInterfaces
 					state.selectedNodeID = nodeID
 					state.primAttributes = nil
 					state.primTransform = nil
+					state.primReferences = []
 					state.primMaterialBinding = nil
 					state.primMaterialBindingStrength = nil
 					state.boundMaterial = nil
@@ -201,6 +208,12 @@ import USDInterfaces
 						} else {
 							await send(.primTransformLoadFailed("No transform data available."))
 						}
+
+						let references = DeconstructedUSDInterop.getPrimReferences(
+							url: url,
+							primPath: nodeID
+						)
+						await send(.primReferencesLoaded(references))
 
 						let binding = DeconstructedUSDInterop.materialBinding(url: url, primPath: nodeID)
 						let strength = DeconstructedUSDInterop.materialBindingStrength(url: url, primPath: nodeID)
@@ -270,6 +283,15 @@ import USDInterfaces
 				case let .primTransformLoadFailed(message):
 					state.primTransform = nil
 					state.primIsLoading = false
+					state.primErrorMessage = message
+					return .none
+
+				case let .primReferencesLoaded(references):
+					state.primReferences = references
+					return .none
+
+				case let .primReferencesLoadFailed(message):
+					state.primReferences = []
 					state.primErrorMessage = message
 					return .none
 
