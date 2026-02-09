@@ -110,27 +110,27 @@ public struct ContentView: View {
 									}
 									return nil
 								}()
-									RealityKitStageView(
-										store: store.scope(state: \.viewport, action: \.viewport),
-										configuration: RealityKitConfiguration(
-											showGrid: store.viewportShowGrid,
-											showAxes: true,
-											metersPerUnit: store.inspector.layerData?.metersPerUnit
-												?? 1.0,
-											isZUp: store.inspector.layerData?.upAxis == .z,
-											environmentMapURL: store.environmentPath.map {
-												URL(fileURLWithPath: $0)
-											},
-											environmentExposure: store.environmentExposure,
-											environmentRotation: store.environmentRotation,
-											showEnvironmentBackground: store.environmentShowBackground,
-											outlineConfiguration: OutlineConfiguration(
-												color: .cyan,
-												width: 0.10,
-												referenceDistance: 2.0
-											)
+								RealityKitStageView(
+									store: store.scope(state: \.viewport, action: \.viewport),
+									configuration: RealityKitConfiguration(
+										showGrid: store.viewportShowGrid,
+										showAxes: true,
+										metersPerUnit: store.inspector.layerData?.metersPerUnit
+											?? 1.0,
+										isZUp: store.inspector.layerData?.upAxis == .z,
+										environmentMapURL: store.environmentPath.map {
+											URL(fileURLWithPath: $0)
+										},
+										environmentExposure: store.environmentExposure,
+										environmentRotation: store.environmentRotation,
+										showEnvironmentBackground: store.environmentShowBackground,
+										outlineConfiguration: OutlineConfiguration(
+											color: .orange,
+											width: 0.15,
+											referenceDistance: 2.0
 										)
 									)
+								)
 
 								ViewportFloatingToolbar(
 									context: viewportMenuContext(store: store)

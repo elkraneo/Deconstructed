@@ -77,9 +77,7 @@ public struct InspectorView: View {
 							}
 						case .prim:
 							if let selectedNode = store.selectedNode {
-								VStack(alignment: .leading, spacing: 16) {
-									PrimDataSection(node: selectedNode)
-
+								VStack(alignment: .leading) {
 									if let transform = store.primTransform {
 										TransformSection(
 											transform: transform,
@@ -106,6 +104,7 @@ public struct InspectorView: View {
 											.font(.caption)
 											.foregroundStyle(.secondary)
 									} else if let primAttributes = store.primAttributes {
+										PrimDataSection(node: selectedNode)
 										PrimAttributesSection(attributes: primAttributes)
 									} else {
 										Text("Select a prim to view its properties.")
@@ -657,13 +656,17 @@ private struct EditableAxisField: View {
 	let value: Double
 	let label: String
 	let onCommit: (Double) -> Void
+	
 	@State private var text: String = ""
+	@State private var isEditing: Bool = false
+	@FocusState private var isFocused: Bool
 
 	private static let numberFormat = FloatingPointFormatStyle<Double>.number
 		.precision(.fractionLength(0...3))
 
 	var body: some View {
 		TextField(label, text: $text)
+			.focused($isFocused)
 			.textFieldStyle(.plain)
 			.font(.system(size: 11, weight: .medium))
 			.multilineTextAlignment(.trailing)
@@ -684,10 +687,29 @@ private struct EditableAxisField: View {
 				text = value.formatted(Self.numberFormat)
 			}
 			.onChange(of: value) { _, newValue in
-				text = newValue.formatted(Self.numberFormat)
+				// Only sync external value if not currently editing to prevent overwriting user input
+				if !isEditing && !isFocused {
+					text = newValue.formatted(Self.numberFormat)
+				}
+			}
+			.onChange(of: isFocused) { wasFocused, nowFocused in
+				if wasFocused && !nowFocused {
+					// Lost focus - commit changes
+					commit()
+					isEditing = false
+				} else if nowFocused {
+					isEditing = true
+				}
 			}
 			.onSubmit {
 				commit()
+				isEditing = false
+			}
+			.onExitCommand {
+				// ESC pressed - revert to external value and unfocus
+				text = value.formatted(Self.numberFormat)
+				isEditing = false
+				isFocused = false
 			}
 	}
 
@@ -770,9 +792,6 @@ struct ScenePlaybackSection: View {
 						.foregroundStyle(.secondary)
 					}
 				}
-				.padding(8)
-				.background(.quaternary.opacity(0.4))
-				.clipShape(RoundedRectangle(cornerRadius: 8))
 				.disabled(!isEnabled)
 
 				if !isEnabled {
@@ -816,10 +835,6 @@ struct LayerDataSection: View {
 					}
 					.pickerStyle(.menu)
 					.labelsHidden()
-					.padding(.horizontal, 6)
-					.padding(.vertical, 4)
-					.background(.quaternary.opacity(0.5))
-					.clipShape(RoundedRectangle(cornerRadius: 6))
 				}
 
 				InspectorRow(label: "Meters Per Unit") {
@@ -834,10 +849,6 @@ struct LayerDataSection: View {
 					.textFieldStyle(.plain)
 					.multilineTextAlignment(.trailing)
 					.frame(width: 80)
-					.padding(.horizontal, 6)
-					.padding(.vertical, 4)
-					.background(.quaternary.opacity(0.5))
-					.clipShape(RoundedRectangle(cornerRadius: 6))
 				}
 
 				InspectorRow(label: "Up Axis") {
@@ -854,10 +865,6 @@ struct LayerDataSection: View {
 					}
 					.pickerStyle(.menu)
 					.labelsHidden()
-					.padding(.horizontal, 6)
-					.padding(.vertical, 4)
-					.background(.quaternary.opacity(0.5))
-					.clipShape(RoundedRectangle(cornerRadius: 6))
 				}
 
 				Button(action: onConvertVariantsTapped) {

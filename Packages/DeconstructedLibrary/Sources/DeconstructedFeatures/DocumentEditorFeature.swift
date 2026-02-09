@@ -19,21 +19,13 @@ public struct SceneTab: Equatable, Identifiable {
 	/// Trigger to force viewport reload when scene is modified
 	public var reloadTrigger: UUID?
 
-	/// Live transform edits (applied to the viewport without reloading the USD).
-	public var livePrimTransformPrimPath: String?
-	public var livePrimTransform: USDTransformData?
-	public var livePrimTransformRequestID: UUID?
-
 	public init(
 		id: UUID = UUID(),
 		fileURL: URL,
 		cameraTransform: [Float]? = nil,
 		cameraTransformRequestID: UUID? = nil,
 		frameRequestID: UUID? = nil,
-		reloadTrigger: UUID? = nil,
-		livePrimTransformPrimPath: String? = nil,
-		livePrimTransform: USDTransformData? = nil,
-		livePrimTransformRequestID: UUID? = nil
+		reloadTrigger: UUID? = nil
 	) {
 		self.id = id
 		let normalized = normalizedSceneURL(fileURL)
@@ -43,9 +35,6 @@ public struct SceneTab: Equatable, Identifiable {
 		self.cameraTransformRequestID = cameraTransformRequestID
 		self.frameRequestID = frameRequestID
 		self.reloadTrigger = reloadTrigger
-		self.livePrimTransformPrimPath = livePrimTransformPrimPath
-		self.livePrimTransform = livePrimTransform
-		self.livePrimTransformRequestID = livePrimTransformRequestID
 	}
 }
 
@@ -559,15 +548,16 @@ public struct DocumentEditorFeature {
 			case .inspector(let inspectorAction):
 				// Apply live transform edits to the viewport without reloading the USD asset.
 				if case .primTransformChanged(let transform) = inspectorAction,
-					case .scene(let tabID) = state.selectedTab,
-					var tab = state.openScenes[id: tabID],
+					case .scene = state.selectedTab,
 					case .prim(let path) = state.inspector.currentTarget
 				{
-					tab.livePrimTransformPrimPath = path
-					tab.livePrimTransform = transform
-					tab.livePrimTransformRequestID = uuid()
-					state.openScenes[id: tabID] = tab
-					return .none
+					// Route to viewport for instant visual feedback
+					return .send(.viewport(.applyLiveTransform(LiveTransformData(
+						primPath: path,
+						position: transform.position,
+						rotationDegrees: transform.rotationDegrees,
+						scale: transform.scale
+					))))
 				}
 
 				// Material bindings are authored to USD. Until we have a robust prim->entity material bridge,
