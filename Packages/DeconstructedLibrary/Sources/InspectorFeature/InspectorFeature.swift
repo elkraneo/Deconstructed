@@ -351,15 +351,23 @@ import USDInterfaces
 				      let primPath = state.selectedNodeID else {
 					return .none
 				}
+				let clock = self.clock
 				state.primTransform = transform
 				state.primErrorMessage = nil
 				return .run { send in
+					try await clock.sleep(for: .milliseconds(120))
 					do {
 						try DeconstructedUSDInterop.setPrimTransform(
 							url: url,
 							primPath: primPath,
 							transform: transform
 						)
+						if let refreshed = DeconstructedUSDInterop.getPrimTransform(
+							url: url,
+							primPath: primPath
+						) {
+							await send(.primTransformLoaded(refreshed))
+						}
 						await send(.primTransformSaveSucceeded)
 					} catch {
 						if let refreshed = DeconstructedUSDInterop.getPrimTransform(
@@ -371,6 +379,10 @@ import USDInterfaces
 						await send(.primTransformSaveFailed(error.localizedDescription))
 					}
 				}
+				.cancellable(
+					id: PrimTransformSaveCancellationID.save,
+					cancelInFlight: true
+				)
 
 			case .primTransformSaveSucceeded:
 				return .none
@@ -581,6 +593,10 @@ private func updateBoundMaterial(state: inout InspectorFeature.State) {
 
 private enum PrimAttributesLoadCancellationID {
 	case load
+}
+
+private enum PrimTransformSaveCancellationID {
+	case save
 }
 
 private enum PlaybackTimerID {
