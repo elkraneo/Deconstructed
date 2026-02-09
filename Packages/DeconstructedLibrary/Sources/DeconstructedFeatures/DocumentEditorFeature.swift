@@ -580,6 +580,15 @@ public struct DocumentEditorFeature {
 					return .send(.projectBrowser(.sceneModified(tab.fileURL)))
 				}
 
+				if case .primReferencesEditSucceeded = inspectorAction,
+					case .scene(let tabID) = state.selectedTab,
+					var tab = state.openScenes[id: tabID]
+				{
+					tab.reloadTrigger = uuid()
+					state.openScenes[id: tabID] = tab
+					return .send(.projectBrowser(.sceneModified(tab.fileURL)))
+				}
+
 				// Keep thumbnails/scene graph in sync after inspector-authored USD edits.
 				if case .primTransformSaveSucceeded = inspectorAction,
 					case .scene(let tabID) = state.selectedTab,

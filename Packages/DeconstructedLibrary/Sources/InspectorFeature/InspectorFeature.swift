@@ -105,6 +105,11 @@ import USDInterfaces
 			case primTransformSaveFailed(String)
 			case primReferencesLoaded([USDReference])
 			case primReferencesLoadFailed(String)
+			case addReferenceRequested(USDReference)
+			case removeReferenceRequested(USDReference)
+			case replaceReferenceRequested(old: USDReference, new: USDReference)
+			case primReferencesEditSucceeded
+			case primReferencesEditFailed(String)
 			case primMaterialBindingLoaded(String?, USDMaterialBindingStrength?)
 			case availableMaterialsLoaded([USDMaterialInfo])
 			case setMaterialBinding(String?)
@@ -293,6 +298,89 @@ import USDInterfaces
 				case let .primReferencesLoadFailed(message):
 					state.primReferences = []
 					state.primErrorMessage = message
+					return .none
+
+				case let .addReferenceRequested(reference):
+					guard let url = state.sceneURL, let primPath = state.selectedNodeID else {
+						return .none
+					}
+					return .run { send in
+						do {
+							try DeconstructedUSDInterop.addPrimReference(
+								url: url,
+								primPath: primPath,
+								reference: reference,
+								editTarget: .rootLayer
+							)
+							let updated = DeconstructedUSDInterop.getPrimReferences(
+								url: url,
+								primPath: primPath
+							)
+							await send(.primReferencesLoaded(updated))
+							await send(.primReferencesEditSucceeded)
+						} catch {
+							await send(.primReferencesEditFailed(error.localizedDescription))
+						}
+					}
+
+				case let .removeReferenceRequested(reference):
+					guard let url = state.sceneURL, let primPath = state.selectedNodeID else {
+						return .none
+					}
+					return .run { send in
+						do {
+							try DeconstructedUSDInterop.removePrimReference(
+								url: url,
+								primPath: primPath,
+								reference: reference,
+								editTarget: .rootLayer
+							)
+							let updated = DeconstructedUSDInterop.getPrimReferences(
+								url: url,
+								primPath: primPath
+							)
+							await send(.primReferencesLoaded(updated))
+							await send(.primReferencesEditSucceeded)
+						} catch {
+							await send(.primReferencesEditFailed(error.localizedDescription))
+						}
+					}
+
+				case let .replaceReferenceRequested(old, new):
+					guard let url = state.sceneURL, let primPath = state.selectedNodeID else {
+						return .none
+					}
+					return .run { send in
+						do {
+							try DeconstructedUSDInterop.removePrimReference(
+								url: url,
+								primPath: primPath,
+								reference: old,
+								editTarget: .rootLayer
+							)
+							try DeconstructedUSDInterop.addPrimReference(
+								url: url,
+								primPath: primPath,
+								reference: new,
+								editTarget: .rootLayer
+							)
+							let updated = DeconstructedUSDInterop.getPrimReferences(
+								url: url,
+								primPath: primPath
+							)
+							await send(.primReferencesLoaded(updated))
+							await send(.primReferencesEditSucceeded)
+						} catch {
+							await send(.primReferencesEditFailed(error.localizedDescription))
+						}
+					}
+
+				case .primReferencesEditSucceeded:
+					state.primErrorMessage = nil
+					return .none
+
+				case let .primReferencesEditFailed(message):
+					state.primErrorMessage = "Failed to edit references: \(message)"
 					return .none
 
 					case let .primMaterialBindingLoaded(binding, strength):

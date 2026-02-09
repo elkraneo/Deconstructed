@@ -5,6 +5,7 @@ import InspectorFeature
 import InspectorModels
 import SceneGraphModels
 import SwiftUI
+import UniformTypeIdentifiers
 import USDInterfaces
 
 public struct InspectorView: View {
@@ -95,9 +96,18 @@ public struct InspectorView: View {
 										onSetStrength: { store.send(.setMaterialBindingStrength($0)) }
 									)
 
-									if !store.primReferences.isEmpty {
-										PrimReferencesSection(references: store.primReferences)
-									}
+									PrimReferencesSection(
+										references: store.primReferences,
+										onAddReference: { reference in
+											store.send(.addReferenceRequested(reference))
+										},
+										onRemoveReference: { reference in
+											store.send(.removeReferenceRequested(reference))
+										},
+										onReplaceReference: { old, new in
+											store.send(.replaceReferenceRequested(old: old, new: new))
+										}
+									)
 
 									if store.primIsLoading {
 										ProgressView()
@@ -534,26 +544,111 @@ struct TransformSection: View {
 
 private struct PrimReferencesSection: View {
 	let references: [USDReference]
+	let onAddReference: (USDReference) -> Void
+	let onRemoveReference: (USDReference) -> Void
+	let onReplaceReference: (USDReference, USDReference) -> Void
 	@State private var isExpanded: Bool = true
+	@State private var selectedIndex: Int?
 
 	var body: some View {
 		InspectorGroupBox(title: "References", isExpanded: $isExpanded) {
-			VStack(alignment: .leading, spacing: 8) {
-				ForEach(Array(references.enumerated()), id: \.offset) { _, reference in
-					VStack(alignment: .leading, spacing: 2) {
-						Text(reference.assetPath)
-							.font(.system(size: 11))
-							.textSelection(.enabled)
-						if let primPath = reference.primPath, !primPath.isEmpty {
-							Text("Prim: \(primPath)")
-								.font(.system(size: 10))
-								.foregroundStyle(.secondary)
-								.textSelection(.enabled)
+			VStack(alignment: .leading, spacing: 10) {
+				if references.isEmpty {
+					Text("No references")
+						.font(.system(size: 11))
+						.foregroundStyle(.secondary)
+				} else {
+					VStack(alignment: .leading, spacing: 4) {
+						ForEach(Array(references.enumerated()), id: \.offset) { index, reference in
+							Button {
+								selectedIndex = index
+							} label: {
+								HStack(spacing: 8) {
+									Image(systemName: "shippingbox")
+										.font(.system(size: 11))
+										.foregroundStyle(.secondary)
+									VStack(alignment: .leading, spacing: 2) {
+										Text(reference.assetPath)
+											.font(.system(size: 11))
+											.lineLimit(1)
+											.truncationMode(.middle)
+										if let primPath = reference.primPath, !primPath.isEmpty {
+											Text("Prim: \(primPath)")
+												.font(.system(size: 10))
+												.foregroundStyle(.secondary)
+												.lineLimit(1)
+												.truncationMode(.middle)
+										}
+									}
+									Spacer()
+								}
+								.padding(.horizontal, 8)
+								.padding(.vertical, 6)
+								.background(
+									selectedIndex == index
+										? Color.accentColor.opacity(0.18)
+										: Color.clear
+								)
+								.clipShape(RoundedRectangle(cornerRadius: 8))
+							}
+							.buttonStyle(.plain)
 						}
 					}
 				}
+
+				Divider()
+
+				HStack(spacing: 10) {
+					Button {
+						guard let reference = chooseReference() else { return }
+						onAddReference(reference)
+					} label: {
+						Image(systemName: "plus")
+					}
+					.buttonStyle(.plain)
+
+					Button {
+						guard let index = selectedIndex, references.indices.contains(index) else { return }
+						onRemoveReference(references[index])
+						if references.count <= 1 {
+							selectedIndex = nil
+						} else {
+							selectedIndex = min(index, references.count - 2)
+						}
+					} label: {
+						Image(systemName: "minus")
+					}
+					.buttonStyle(.plain)
+					.disabled(selectedIndex == nil)
+
+					Button("Replace") {
+						guard let index = selectedIndex, references.indices.contains(index) else { return }
+						guard let newReference = chooseReference() else { return }
+						onReplaceReference(references[index], newReference)
+					}
+					.buttonStyle(.plain)
+					.disabled(selectedIndex == nil)
+				}
+				.font(.system(size: 13, weight: .semibold))
 			}
 		}
+	}
+
+	private func chooseReference() -> USDReference? {
+		let panel = NSOpenPanel()
+		panel.allowsMultipleSelection = false
+		panel.canChooseDirectories = false
+		panel.canChooseFiles = true
+		panel.allowedContentTypes = [
+			UTType(filenameExtension: "usd"),
+			UTType(filenameExtension: "usda"),
+			UTType(filenameExtension: "usdc"),
+			UTType(filenameExtension: "usdz")
+		].compactMap { $0 }
+		panel.prompt = "Select"
+
+		guard panel.runModal() == .OK, let url = panel.url else { return nil }
+		return USDReference(assetPath: url.path)
 	}
 }
 

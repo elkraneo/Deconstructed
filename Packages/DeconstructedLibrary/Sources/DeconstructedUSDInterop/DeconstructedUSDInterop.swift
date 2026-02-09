@@ -362,6 +362,42 @@ public enum DeconstructedUSDInterop {
 		advancedClient.primReferences(url: url, path: primPath)
 	}
 
+	public static func addPrimReference(
+		url: URL,
+		primPath: String,
+		reference: USDReference,
+		editTarget: USDLayerEditTarget = .rootLayer
+	) throws {
+		do {
+			try advancedClient.addReference(
+				url: url,
+				primPath: primPath,
+				reference: reference,
+				editTarget: editTarget
+			)
+		} catch {
+			throw mapAdvancedError(error, url: url, primPath: primPath, schema: nil)
+		}
+	}
+
+	public static func removePrimReference(
+		url: URL,
+		primPath: String,
+		reference: USDReference,
+		editTarget: USDLayerEditTarget = .rootLayer
+	) throws {
+		do {
+			try advancedClient.removeReference(
+				url: url,
+				primPath: primPath,
+				reference: reference,
+				editTarget: editTarget
+			)
+		} catch {
+			throw mapAdvancedError(error, url: url, primPath: primPath, schema: nil)
+		}
+	}
+
 	public static func setPrimTransform(
 		url: URL,
 		primPath: String,
