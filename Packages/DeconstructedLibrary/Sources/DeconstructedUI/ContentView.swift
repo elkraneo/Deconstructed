@@ -7,8 +7,9 @@ import InspectorUI
 import ProjectBrowserFeature
 import ProjectBrowserUI
 import RCPDocument
-import SceneGraphUI
+import RealityKitStageView
 import SceneGraphModels
+import SceneGraphUI
 import SwiftUI
 import ViewportModels
 import ViewportUI
@@ -104,98 +105,32 @@ public struct ContentView: View {
 
 							ZStack(alignment: .bottomLeading) {
 								let selectedPrimPath: String? = {
-									if case let .prim(path) = store.inspector.currentTarget { return path }
+									if case .prim(let path) = store.inspector.currentTarget {
+										return path
+									}
 									return nil
 								}()
-								ViewportView(
-									modelURL: sceneTab.fileURL,
-									configuration: ViewportConfiguration(
+								RealityKitStageView(
+									store: store.scope(state: \.viewport, action: \.viewport),
+									configuration: RealityKitConfiguration(
 										showGrid: store.viewportShowGrid,
 										showAxes: true,
-										metersPerUnit: store.inspector.layerData?.metersPerUnit ?? 1.0,
+										metersPerUnit: store.inspector.layerData?.metersPerUnit
+											?? 1.0,
 										isZUp: store.inspector.layerData?.upAxis == .z,
-										environment: EnvironmentConfiguration(
-											environmentPath: store.environmentPath,
-											showBackground: store.environmentShowBackground,
-											rotation: store.environmentRotation,
-											exposure: store.environmentExposure
-										)
-									),
-									onCameraStateChanged: { transform in
-										store.send(.sceneCameraChanged(sceneTab.fileURL, transform))
-									},
-									cameraTransform: sceneTab.cameraTransform,
-									cameraTransformRequestID: sceneTab.cameraTransformRequestID,
-									frameRequestID: sceneTab.frameRequestID,
-									modelReloadRequestID: sceneTab.reloadTrigger,
-									selectedPrimPath: selectedPrimPath,
-									livePrimTransform: sceneTab.livePrimTransform,
-									livePrimTransformRequestID: sceneTab.livePrimTransformRequestID
-								)
-
-							ViewportFloatingToolbar(
-								context: viewportMenuContext(store: store)
-							)
-							.padding(12)
-						}
-
-						Divider()
-
-						InspectorView(
-							store: store.scope(
-								state: \.inspector,
-								action: \.inspector
-							)
-						)
-						.frame(minWidth: 240, idealWidth: 280, maxWidth: 360)
-					}
-				} else if !store.openScenes.isEmpty {
-						// Show first scene if none selected but some are open
-						if let firstScene = store.openScenes.first {
-							HStack(spacing: 0) {
-								SceneNavigatorView(
-									store: store.scope(
-										state: \.sceneNavigator,
-										action: \.sceneNavigator
-									)
-								)
-								.frame(minWidth: 220, idealWidth: 260, maxWidth: 320)
-
-								Divider()
-
-								ZStack(alignment: .bottomLeading) {
-									let selectedPrimPath: String? = {
-										if case let .prim(path) = store.inspector.currentTarget { return path }
-										return nil
-									}()
-									ViewportView(
-										modelURL: firstScene.fileURL,
-										configuration: ViewportConfiguration(
-											showGrid: store.viewportShowGrid,
-											showAxes: true,
-											metersPerUnit: store.inspector.layerData?.metersPerUnit ?? 1.0,
-											isZUp: store.inspector.layerData?.upAxis == .z,
-											environment: EnvironmentConfiguration(
-												environmentPath: store.environmentPath,
-												showBackground: store.environmentShowBackground,
-												rotation: store.environmentRotation,
-												exposure: store.environmentExposure
-											)
-										),
-										onCameraStateChanged: { transform in
-											store.send(
-												.sceneCameraChanged(firstScene.fileURL, transform)
-											)
+										environmentMapURL: store.environmentPath.map {
+											URL(fileURLWithPath: $0)
 										},
-										cameraTransform: firstScene.cameraTransform,
-										cameraTransformRequestID: firstScene
-											.cameraTransformRequestID,
-										frameRequestID: firstScene.frameRequestID,
-										modelReloadRequestID: firstScene.reloadTrigger,
-										selectedPrimPath: selectedPrimPath,
-										livePrimTransform: firstScene.livePrimTransform,
-										livePrimTransformRequestID: firstScene.livePrimTransformRequestID
+										environmentExposure: store.environmentExposure,
+										environmentRotation: store.environmentRotation,
+										showEnvironmentBackground: store.environmentShowBackground,
+										outlineConfiguration: OutlineConfiguration(
+											color: .orange,
+											width: 0.15,
+											referenceDistance: 2.0
+										)
 									)
+								)
 
 								ViewportFloatingToolbar(
 									context: viewportMenuContext(store: store)
@@ -213,9 +148,69 @@ public struct ContentView: View {
 							)
 							.frame(minWidth: 240, idealWidth: 280, maxWidth: 360)
 						}
-					}
-				} else {
-					// No scene open - show placeholder
+					} else if !store.openScenes.isEmpty {
+						// Show first scene if none selected but some are open
+						if let firstScene = store.openScenes.first {
+							HStack(spacing: 0) {
+								SceneNavigatorView(
+									store: store.scope(
+										state: \.sceneNavigator,
+										action: \.sceneNavigator
+									)
+								)
+								.frame(minWidth: 220, idealWidth: 260, maxWidth: 320)
+
+								Divider()
+
+								ZStack(alignment: .bottomLeading) {
+									let selectedPrimPath: String? = {
+										if case .prim(let path) = store.inspector.currentTarget {
+											return path
+										}
+										return nil
+									}()
+									RealityKitStageView(
+										store: store.scope(state: \.viewport, action: \.viewport),
+										configuration: RealityKitConfiguration(
+											showGrid: store.viewportShowGrid,
+											showAxes: true,
+											metersPerUnit: store.inspector.layerData?.metersPerUnit
+												?? 1.0,
+											isZUp: store.inspector.layerData?.upAxis == .z,
+											environmentMapURL: store.environmentPath.map {
+												URL(fileURLWithPath: $0)
+											},
+											environmentExposure: store.environmentExposure,
+											environmentRotation: store.environmentRotation,
+											showEnvironmentBackground: store
+												.environmentShowBackground,
+											outlineConfiguration: OutlineConfiguration(
+												color: .cyan,
+												width: 0.10,
+												referenceDistance: 2.0
+											)
+										)
+									)
+
+									ViewportFloatingToolbar(
+										context: viewportMenuContext(store: store)
+									)
+									.padding(12)
+								}
+
+								Divider()
+
+								InspectorView(
+									store: store.scope(
+										state: \.inspector,
+										action: \.inspector
+									)
+								)
+								.frame(minWidth: 240, idealWidth: 280, maxWidth: 360)
+							}
+						}
+					} else {
+						// No scene open - show placeholder
 						ContentUnavailableView(
 							"No Scene Open",
 							systemImage: DeconstructedConstants.SFSymbol.cubeTransparent,
