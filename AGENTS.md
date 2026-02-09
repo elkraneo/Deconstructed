@@ -32,25 +32,45 @@ Reverse-engineer and clone Reality Composer Pro's functionality:
 3. Edit scenes and assets
 4. Save changes back to the package format
 
-## Private USDInteropAdvanced / Public Deconstructed
+## Dependency Resolution: Workspace vs Package.swift
 
-- The `USDInteropAdvanced` source repo is private.
-- This public repo depends on the binary wrapper package:
-  - `https://github.com/Reality2713/USDInteropAdvanced-binaries`
-  - Current version: `0.2.15`
+### The Problem
 
-### Local Development (Recommended: Xcode Workspace)
+This project has a split identity:
+- **Public open-source repo** (`Deconstructed`) — anyone should be able to clone and build
+- **Private dependencies** (`USDInteropAdvanced` source) — only available locally
 
-The `Deconstructed.xcworkspace` includes references to local checkouts of `USDInteropAdvanced` and `USDInterop`. **Xcode automatically prefers local packages over remote dependencies with the same name.**
+The root `Package.swift` and inner `Packages/DeconstructedLibrary/Package.swift` declare remote URLs for CI/public consumption. But locally, Xcode resolves dependencies at the **workspace level**, overriding what `Package.swift` says.
+
+### How It Actually Works
+
+**All dependency resolution happens through `Deconstructed.xcworkspace`.** The workspace includes local package references that Xcode prefers over remote URLs with the same identity.
 
 This means:
-- **No scripts needed** – just open the workspace and build
-- **Package.swift stays CI-safe** – it always points to the remote URL
-- **Edits in `/Volumes/Plutonian/_Developer/USDInteropAdvanced` are compiled immediately**
+- `Package.swift` remote URLs are **fallbacks for CI / clean clones only**
+- The inner `DeconstructedLibrary/Package.swift` may reference `branch: "main"` or pinned revisions — **it doesn't matter locally** because the workspace overrides them
+- Editing `/Volumes/Plutonian/_Developer/USDInteropAdvanced` compiles immediately
+- **You must open `Deconstructed.xcworkspace`**, not the `.xcodeproj`
 
-Requirements:
-- Local checkouts must exist at the paths specified in the workspace
-- Open `Deconstructed.xcworkspace` (not the `.xcodeproj`)
+### Do NOT Try to Build via `swift build` in Inner Package
+
+Running `swift build` inside `Packages/DeconstructedLibrary/` will fail because:
+1. SwiftPM resolves deps from `Package.swift` directly (no workspace override)
+2. The inner package may point to `branch: "main"` while root pins a revision — SwiftPM cannot reconcile two different revision-based requirements for the same package
+3. Local-only packages (like `SelectionOutline` as a sibling) resolve fine, but remote deps conflict
+
+**Always build through Xcode workspace or from the root `Package.swift`:**
+```bash
+# From repo root — uses root Package.swift which is kept CI-safe
+swift build --target ViewportUI
+```
+
+### For Agents / CI
+
+- The root `Package.swift` is the source of truth for public/CI builds
+- It pins stable versions of remote deps (revisions or semver)
+- Local packages (`SelectionOutline`, etc.) use relative paths that work from root
+- Never edit the inner `DeconstructedLibrary/Package.swift` dependency URLs to match root — they serve different purposes
 
 ## Reference Implementation
 
