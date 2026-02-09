@@ -15,6 +15,7 @@ import USDInterfaces
 			public var playbackData: ScenePlaybackData?
 			public var primAttributes: USDPrimAttributes?
 			public var primTransform: USDTransformData?
+			public var primVariantSets: [USDVariantSetDescriptor]
 			public var primReferences: [USDReference]
 			public var primMaterialBinding: String?
 			public var primMaterialBindingStrength: USDMaterialBindingStrength?
@@ -24,7 +25,8 @@ import USDInterfaces
 			public var isLoading: Bool
 			public var errorMessage: String?
 			public var primIsLoading: Bool
-		public var primErrorMessage: String?
+			public var primErrorMessage: String?
+			public var pendingPrimLoads: Set<PrimLoadSection>
 		public var playbackIsPlaying: Bool
 		public var playbackCurrentTime: Double
 		public var playbackSpeed: Double
@@ -37,6 +39,7 @@ import USDInterfaces
 				playbackData: ScenePlaybackData? = nil,
 				primAttributes: USDPrimAttributes? = nil,
 				primTransform: USDTransformData? = nil,
+				primVariantSets: [USDVariantSetDescriptor] = [],
 				primReferences: [USDReference] = [],
 				primMaterialBinding: String? = nil,
 				primMaterialBindingStrength: USDMaterialBindingStrength? = nil,
@@ -46,7 +49,8 @@ import USDInterfaces
 				isLoading: Bool = false,
 				errorMessage: String? = nil,
 				primIsLoading: Bool = false,
-			primErrorMessage: String? = nil,
+				primErrorMessage: String? = nil,
+				pendingPrimLoads: Set<PrimLoadSection> = [],
 			playbackIsPlaying: Bool = false,
 			playbackCurrentTime: Double = 0,
 			playbackSpeed: Double = 1.0,
@@ -58,6 +62,7 @@ import USDInterfaces
 				self.playbackData = playbackData
 				self.primAttributes = primAttributes
 				self.primTransform = primTransform
+				self.primVariantSets = primVariantSets
 				self.primReferences = primReferences
 				self.primMaterialBinding = primMaterialBinding
 				self.primMaterialBindingStrength = primMaterialBindingStrength
@@ -67,7 +72,8 @@ import USDInterfaces
 				self.isLoading = isLoading
 				self.errorMessage = errorMessage
 				self.primIsLoading = primIsLoading
-			self.primErrorMessage = primErrorMessage
+				self.primErrorMessage = primErrorMessage
+				self.pendingPrimLoads = pendingPrimLoads
 			self.playbackIsPlaying = playbackIsPlaying
 			self.playbackCurrentTime = playbackCurrentTime
 			self.playbackSpeed = playbackSpeed
@@ -103,6 +109,11 @@ import USDInterfaces
 			case primTransformChanged(USDTransformData)
 			case primTransformSaveSucceeded
 			case primTransformSaveFailed(String)
+			case primVariantSetsLoaded([USDVariantSetDescriptor])
+			case primVariantSetsLoadFailed(String)
+			case setVariantSelection(setName: String, selectionId: String?)
+			case setVariantSelectionSucceeded([USDVariantSetDescriptor])
+			case setVariantSelectionFailed(String)
 			case primReferencesLoaded([USDReference])
 			case primReferencesLoadFailed(String)
 			case addReferenceRequested(USDReference)
@@ -155,6 +166,7 @@ import USDInterfaces
 				state.playbackData = nil
 					state.primAttributes = nil
 					state.primTransform = nil
+					state.primVariantSets = []
 					state.primReferences = []
 					state.primMaterialBinding = nil
 					state.primMaterialBindingStrength = nil
@@ -162,6 +174,7 @@ import USDInterfaces
 					state.availableMaterials = []
 					state.primIsLoading = false
 					state.primErrorMessage = nil
+					state.pendingPrimLoads = []
 					state.sceneNodes = []
 				state.playbackIsPlaying = false
 				state.playbackCurrentTime = 0
@@ -175,24 +188,38 @@ import USDInterfaces
 					.run { send in
 						await loadLayerData(url: url, send: send)
 					},
-					.cancel(id: PlaybackTimerID.playback)
+					.cancel(id: PlaybackTimerID.playback),
+					.cancel(id: PrimVariantSelectionCancellationID.apply),
+					.cancel(id: PrimAttributesLoadCancellationID.load)
 				)
 
 				case let .selectionChanged(nodeID):
 					state.selectedNodeID = nodeID
 					state.primAttributes = nil
 					state.primTransform = nil
+					state.primVariantSets = []
 					state.primReferences = []
 					state.primMaterialBinding = nil
 					state.primMaterialBindingStrength = nil
 					state.boundMaterial = nil
 					state.primErrorMessage = nil
+					state.pendingPrimLoads = []
 					guard let nodeID, let url = state.sceneURL else {
 						state.primIsLoading = false
 						return .none
 					}
+					state.pendingPrimLoads = [
+						.attributes,
+						.transform,
+						.variants,
+						.references,
+						.materialBinding,
+						.materials
+					]
 					state.primIsLoading = true
-					return .run { send in
+					return .merge(
+						.cancel(id: PrimVariantSelectionCancellationID.apply),
+						.run { send in
 						let materials = DeconstructedUSDInterop.allMaterials(url: url)
 						await send(.availableMaterialsLoaded(materials))
 
@@ -214,6 +241,16 @@ import USDInterfaces
 							await send(.primTransformLoadFailed("No transform data available."))
 						}
 
+						do {
+							let variantSets = try DeconstructedUSDInterop.listPrimVariantSets(
+								url: url,
+								primPath: nodeID
+							)
+							await send(.primVariantSetsLoaded(variantSets))
+						} catch {
+							await send(.primVariantSetsLoadFailed(error.localizedDescription))
+						}
+
 						let references = DeconstructedUSDInterop.getPrimReferences(
 							url: url,
 							primPath: nodeID
@@ -224,9 +261,10 @@ import USDInterfaces
 						let strength = DeconstructedUSDInterop.materialBindingStrength(url: url, primPath: nodeID)
 						await send(.primMaterialBindingLoaded(binding, strength))
 					}
-				.cancellable(
-					id: PrimAttributesLoadCancellationID.load,
-					cancelInFlight: true
+					.cancellable(
+						id: PrimAttributesLoadCancellationID.load,
+						cancelInFlight: true
+					)
 				)
 
 			case let .sceneGraphUpdated(nodes):
@@ -269,35 +307,109 @@ import USDInterfaces
 
 			case let .primAttributesLoaded(attributes):
 				state.primAttributes = attributes
-				state.primIsLoading = false
 				state.primErrorMessage = nil
+				completePrimLoad(state: &state, section: .attributes)
 				return .none
 
 			case let .primAttributesLoadFailed(message):
 				state.primAttributes = nil
-				state.primIsLoading = false
 				state.primErrorMessage = message
+				completePrimLoad(state: &state, section: .attributes)
 				return .none
 
 			case let .primTransformLoaded(transform):
 				state.primTransform = transform
-				state.primIsLoading = false
 				state.primErrorMessage = nil
+				completePrimLoad(state: &state, section: .transform)
 				return .none
 
 				case let .primTransformLoadFailed(message):
 					state.primTransform = nil
-					state.primIsLoading = false
 					state.primErrorMessage = message
+					completePrimLoad(state: &state, section: .transform)
+					return .none
+
+				case let .primVariantSetsLoaded(sets):
+					state.primVariantSets = sets
+					completePrimLoad(state: &state, section: .variants)
+					return .none
+
+				case let .primVariantSetsLoadFailed(message):
+					state.primVariantSets = []
+					state.primErrorMessage = message
+					completePrimLoad(state: &state, section: .variants)
+					return .none
+
+				case let .setVariantSelection(setName, selectionId):
+					guard let url = state.sceneURL, let primPath = state.selectedNodeID else {
+						return .none
+					}
+					return .run { send in
+						do {
+							try DeconstructedUSDInterop.setPrimVariantSelection(
+								url: url,
+								primPath: primPath,
+								setName: setName,
+								selectionId: selectionId,
+								editTarget: .rootLayer,
+								persist: true
+							)
+							let refreshed = try DeconstructedUSDInterop.listPrimVariantSets(
+								url: url,
+								primPath: primPath
+							)
+							let normalizedSelection = selectionId?.isEmpty == true ? nil : selectionId
+							let appliedSelection = refreshed
+								.first(where: { $0.name == setName })?
+								.selectedOptionId
+							guard appliedSelection == normalizedSelection else {
+								let requested = normalizedSelection ?? "None"
+								let actual = appliedSelection ?? "None"
+								throw NSError(
+									domain: "InspectorFeature",
+									code: 1,
+									userInfo: [
+										NSLocalizedDescriptionKey:
+											"Variant selection did not apply for '\(setName)'. Requested \(requested), got \(actual)."
+									]
+								)
+							}
+							if let transform = DeconstructedUSDInterop.getPrimTransform(
+								url: url,
+								primPath: primPath
+							) {
+								await send(.primTransformLoaded(transform))
+							} else {
+								await send(.primTransformLoadFailed("No transform data available."))
+							}
+							await send(.setVariantSelectionSucceeded(refreshed))
+						} catch {
+							await send(.setVariantSelectionFailed(error.localizedDescription))
+						}
+					}
+					.cancellable(
+						id: PrimVariantSelectionCancellationID.apply,
+						cancelInFlight: true
+					)
+
+				case let .setVariantSelectionSucceeded(sets):
+					state.primVariantSets = sets
+					state.primErrorMessage = nil
+					return .none
+
+				case let .setVariantSelectionFailed(message):
+					state.primErrorMessage = "Failed to set variant: \(message)"
 					return .none
 
 				case let .primReferencesLoaded(references):
 					state.primReferences = references
+					completePrimLoad(state: &state, section: .references)
 					return .none
 
 				case let .primReferencesLoadFailed(message):
 					state.primReferences = []
 					state.primErrorMessage = message
+					completePrimLoad(state: &state, section: .references)
 					return .none
 
 				case let .addReferenceRequested(reference):
@@ -387,11 +499,13 @@ import USDInterfaces
 						state.primMaterialBinding = binding
 						state.primMaterialBindingStrength = strength
 						updateBoundMaterial(state: &state)
+						completePrimLoad(state: &state, section: .materialBinding)
 						return .none
 
 					case let .availableMaterialsLoaded(materials):
 						state.availableMaterials = materials
 						updateBoundMaterial(state: &state)
+						completePrimLoad(state: &state, section: .materials)
 						return .none
 
 				case let .setMaterialBinding(materialPath):
@@ -701,12 +815,33 @@ private func updateBoundMaterial(state: inout InspectorFeature.State) {
 	state.boundMaterial = state.availableMaterials.first { $0.path == binding }
 }
 
+private func completePrimLoad(
+	state: inout InspectorFeature.State,
+	section: PrimLoadSection
+) {
+	state.pendingPrimLoads.remove(section)
+	state.primIsLoading = !state.pendingPrimLoads.isEmpty
+}
+
 private enum PrimAttributesLoadCancellationID {
 	case load
 }
 
 private enum PrimTransformSaveCancellationID {
 	case save
+}
+
+private enum PrimVariantSelectionCancellationID {
+	case apply
+}
+
+public enum PrimLoadSection: Hashable {
+	case attributes
+	case transform
+	case variants
+	case references
+	case materialBinding
+	case materials
 }
 
 private enum PlaybackTimerID {
