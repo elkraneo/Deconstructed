@@ -24,27 +24,33 @@ A macOS document-based application that reverse-engineers and clones [Reality Co
 | Platform | macOS 26 (Tahoe) only |
 | UI Framework | SwiftUI |
 | Architecture | The Composable Architecture (TCA) 1.23.1 |
-| Document Model | Document-based app with `FileWrapper` |
+| Document Model | SwiftUI `DocumentGroup` + `FileDocument` (`FileWrapper`-backed `RCPPackage`) |
 | File Watching | FSEvents (macOS native API) |
-| 3D Rendering | ModelKit + USD (via C++ interop) |
+| 3D Viewport | `RealityKitStageView` (StageView) + USD (Swift/C++ interop) |
 | Swift Version | 6.2 with strict concurrency |
 
 ### External Dependencies
 
+- **[swift-composable-architecture](https://github.com/pointfreeco/swift-composable-architecture)** - App architecture and reducer composition
+- **[swift-sharing](https://github.com/pointfreeco/swift-sharing)** - Shared state helpers used by feature modules
 - **[USDInterop](https://github.com/Reality2713/USDInterop)** - Swift bindings for OpenUSD
-- **[USDInteropAdvanced](https://github.com/Reality2713/USDInteropAdvanced)** - Higher-level USD operations (metadata, scene graph, editing)
-- **[AppleUSDSchemas](https://github.com/Reality2713/AppleUSDSchemas)** - Apple's proprietary USD schema definitions
+- **[USDInteropAdvanced](https://github.com/Reality2713/USDInteropAdvanced)** / **[USDInteropAdvanced-binaries](https://github.com/Reality2713/USDInteropAdvanced-binaries)** - Higher-level USD operations
+- **[StageView](https://github.com/reality2713/StageView)** - RealityKit-backed viewport integration
 
 ## Local Development (CI-Safe)
 
-This repo keeps all SwiftPM dependencies in git as `.package(url: ...)` (CI-safe). For local development, use **SwiftPM mirrors** to route those same URLs to local checkouts without changing any committed manifests.
+This repository has a split dependency setup:
+
+- Root `Package.swift` is the source of truth for public/CI-safe builds.
+- Xcode resolves dependencies through `Deconstructed.xcworkspace`, which can override remotes with local package references.
+- The inner `Packages/DeconstructedLibrary/Package.swift` exists for package modularization but should not be used directly for local `swift build`.
 
 1. Open `/Volumes/Plutonian/_Developer/Deconstructed/source/Deconstructed/Deconstructed.xcworkspace` (not the `.xcodeproj`).
-2. Install mirrors (optional, but recommended if you have local clones):
+2. (Optional) Install SwiftPM mirrors if you want URL-based dependencies redirected to local checkouts:
 ```sh
 ./Scripts/spm-mirrors/install.sh
 ```
-3. If Xcode appears “stuck” on an old revision:
+3. If Xcode appears stuck on an old revision:
 - Xcode: `File > Packages > Reset Package Caches`, then `File > Packages > Resolve Package Versions`
 - Or delete DerivedData for this app
 4. To return to pure-remote resolution:
@@ -64,7 +70,7 @@ Deconstructed/
 │   └── DeconstructedLibrary/       # Swift Package with feature modules
 │       ├── Sources/
 │       │   ├── RCPDocument/        # FileDocument conformance
-│       │   ├── DeconstructedModels/# JSON schema models
+│       │   ├── DeconstructedModels/ # JSON schema models
 │       │   ├── ProjectBrowserFeature/  # File browser TCA feature
 │       │   ├── ProjectBrowserClients/  # File watching, asset discovery
 │       │   ├── ProjectBrowserUI/   # SwiftUI views
@@ -72,12 +78,13 @@ Deconstructed/
 │       │   ├── SceneGraphClients/  # USD scene loading
 │       │   ├── SceneGraphUI/       # Scene tree view
 │       │   ├── ViewportModels/     # Viewport state models
-│       │   ├── ViewportUI/         # 3D viewport (ModelKit-based)
+│       │   ├── ViewportUI/         # 3D viewport (RealityKitStageView-based)
 │       │   ├── InspectorFeature/   # Inspector TCA feature
 │       │   ├── InspectorModels/    # Inspector data models
 │       │   └── InspectorUI/        # Inspector panel views
 │       └── Tests/
-└── Deconstructed.xcodeproj/
+├── Deconstructed.xcodeproj/
+└── Deconstructed.xcworkspace/      # Primary local entry point
 ```
 
 ## Document Format
@@ -163,7 +170,7 @@ This project is documented in a series of articles exploring the reverse-enginee
    - Asset discovery and tree management
 
 4. **[Deconstructing Reality Composer Pro: Viewport](https://elkraneo.com/deconstructing-reality-composer-pro-viewport/)**
-   - Integrating ModelKit for 3D rendering
+   - Integrating StageView/RealityKit for 3D rendering
    - Viewport toolbar and camera controls
    - Environment configuration
 
@@ -204,11 +211,11 @@ This project is documented in a series of articles exploring the reverse-enginee
 ### Building
 
 ```bash
-# Build the Swift package
-swift build --package-path Packages/DeconstructedLibrary
+# Build from repo root (CI-safe root manifest)
+swift build --target ViewportUI
 
-# Build the full Xcode project
-xcodebuild -project Deconstructed.xcodeproj -scheme Deconstructed -destination 'platform=macOS' build
+# Build the app through the workspace
+xcodebuild -workspace Deconstructed.xcworkspace -scheme Deconstructed -destination 'platform=macOS' build
 ```
 
 ### Running
