@@ -10,7 +10,7 @@ A macOS document-based application that reverse-engineers and clones [Reality Co
 
 ## Purpose
 
-Reality Composer Pro (RCP) is Apple's professional tool for creating 3D content and spatial experiences for visionOS and iOS. While powerful, its file format and package structure aren't officially documented. **Deconstructed** aims to:
+[Reality Composer Pro](https://developer.apple.com/documentation/realitycomposerpro) (RCP) is Apple's professional tool for creating 3D content and spatial experiences for visionOS and iOS. While powerful, its file format and package structure aren't officially documented. **Deconstructed** aims to:
 
 1. **Open** `.realitycomposerpro` package files
 2. **Parse** and display the project structure
