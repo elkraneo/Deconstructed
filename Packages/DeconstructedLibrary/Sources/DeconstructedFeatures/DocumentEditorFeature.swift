@@ -568,7 +568,10 @@ public struct DocumentEditorFeature {
 				{
 					tab.reloadTrigger = uuid()
 					state.openScenes[id: tabID] = tab
-					return .send(.projectBrowser(.sceneModified(tab.fileURL)))
+					return .merge(
+						.send(.projectBrowser(.sceneModified(tab.fileURL))),
+						.send(.viewport(.loadRequested(tab.fileURL)))
+					)
 				}
 
 				if case .setMaterialBindingStrengthSucceeded = inspectorAction,
@@ -577,7 +580,10 @@ public struct DocumentEditorFeature {
 				{
 					tab.reloadTrigger = uuid()
 					state.openScenes[id: tabID] = tab
-					return .send(.projectBrowser(.sceneModified(tab.fileURL)))
+					return .merge(
+						.send(.projectBrowser(.sceneModified(tab.fileURL))),
+						.send(.viewport(.loadRequested(tab.fileURL)))
+					)
 				}
 
 				if case .primReferencesEditSucceeded = inspectorAction,
@@ -586,7 +592,22 @@ public struct DocumentEditorFeature {
 				{
 					tab.reloadTrigger = uuid()
 					state.openScenes[id: tabID] = tab
-					return .send(.projectBrowser(.sceneModified(tab.fileURL)))
+					return .merge(
+						.send(.projectBrowser(.sceneModified(tab.fileURL))),
+						.send(.viewport(.loadRequested(tab.fileURL)))
+					)
+				}
+
+				if case .setVariantSelectionSucceeded(_) = inspectorAction,
+					case .scene(let tabID) = state.selectedTab,
+					var tab = state.openScenes[id: tabID]
+				{
+					tab.reloadTrigger = uuid()
+					state.openScenes[id: tabID] = tab
+					return .merge(
+						.send(.projectBrowser(.sceneModified(tab.fileURL))),
+						.send(.viewport(.loadRequested(tab.fileURL)))
+					)
 				}
 
 				// Keep thumbnails/scene graph in sync after inspector-authored USD edits.

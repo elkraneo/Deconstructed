@@ -586,20 +586,8 @@ import USDInterfaces
 							primPath: primPath,
 							transform: transform
 						)
-						if let refreshed = DeconstructedUSDInterop.getPrimTransform(
-							url: url,
-							primPath: primPath
-						) {
-							await send(.primTransformLoaded(refreshed))
-						}
 						await send(.primTransformSaveSucceeded)
 					} catch {
-						if let refreshed = DeconstructedUSDInterop.getPrimTransform(
-							url: url,
-							primPath: primPath
-						) {
-							await send(.primTransformLoaded(refreshed))
-						}
 						await send(.primTransformSaveFailed(error.localizedDescription))
 					}
 				}

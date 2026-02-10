@@ -1,6 +1,12 @@
 # Deconstructed
-
+![Deconstructed app interface with multiple scene tabs open. A Bunsen burner model is selected in the scene hierarchy and displayed in the 3D viewport alongside a gray sphere with transform gizmos visible. The right inspector panel shows Transform properties (Position, Rotation, Scale), Material Bindings, Variants, and References sections. The bottom Project Browser displays asset thumbnails including the BunsenBurner.usdz file, scenes, and primitive shapes.](./assets/preview.png)
 A macOS document-based application that reverse-engineers and clones [Reality Composer Pro](https://developer.apple.com/augmented-reality/reality-composer/)'s functionality for editing `.realitycomposerpro` package files.
+
+> [!IMPORTANT]
+> **Open development status:** Deconstructed is developed in the open, and this repository contains the active source code.
+> We are still finishing fully reproducible fresh-clone builds while parts of the lower-level USD/C++ interop toolchain are being stabilized.
+> In the meantime, download the latest packaged macOS app from [Latest Release](https://github.com/elkraneo/Deconstructed/releases/latest).
+> For source builds, follow the setup notes in [Local Development (CI-Safe)](#local-development-ci-safe).
 
 ## Purpose
 
@@ -165,6 +171,11 @@ This project is documented in a series of articles exploring the reverse-enginee
    - Scene hierarchy visualization
    - USD prim navigation
    - Inserting primitives and structural elements
+
+6. **[Deconstructing Reality Composer Pro: Inspector Basics](https://elkraneo.com/deconstructing-reality-composer-pro-inspector-basics/)**
+   - Building the Inspector panel with TCA and scoped feature state
+   - Wiring USD stage metadata (default prim, scale, up axis) into the UI
+   - Establishing the selection-driven path toward prim-level inspection
 
 ## Current Status
 

@@ -96,6 +96,18 @@ public struct InspectorView: View {
 										onSetStrength: { store.send(.setMaterialBindingStrength($0)) }
 									)
 
+									PrimVariantsSection(
+										variantSets: store.primVariantSets,
+										onSelectionChanged: { setName, selectionId in
+											store.send(
+												.setVariantSelection(
+													setName: setName,
+													selectionId: selectionId
+												)
+											)
+										}
+									)
+
 									PrimReferencesSection(
 										references: store.primReferences,
 										onAddReference: { reference in
@@ -542,6 +554,45 @@ struct TransformSection: View {
 	}
 }
 
+private struct PrimVariantsSection: View {
+	let variantSets: [USDVariantSetDescriptor]
+	let onSelectionChanged: (String, String?) -> Void
+	@State private var isExpanded: Bool = true
+
+	var body: some View {
+		InspectorGroupBox(title: "Variants", isExpanded: $isExpanded) {
+			if variantSets.isEmpty {
+				Text("No variant sets")
+					.font(.system(size: 11))
+					.foregroundStyle(.secondary)
+			} else {
+				VStack(alignment: .leading, spacing: 10) {
+					ForEach(variantSets, id: \.key) { set in
+						InspectorRow(label: set.name) {
+							Picker(
+								"",
+								selection: Binding(
+									get: { set.selectedOptionId ?? "__none__" },
+									set: { newValue in
+										onSelectionChanged(set.name, newValue == "__none__" ? nil : newValue)
+									}
+								)
+							) {
+								Text("None").tag("__none__")
+								ForEach(set.options, id: \.id) { option in
+									Text(option.displayName).tag(option.id)
+								}
+							}
+							.pickerStyle(.menu)
+							.labelsHidden()
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
 private struct PrimReferencesSection: View {
 	let references: [USDReference]
 	let onAddReference: (USDReference) -> Void
@@ -838,13 +889,53 @@ private struct EditableAxisField: View {
 	}
 
 	private func commit() {
-		let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
-		guard let parsed = try? Self.numberFormat.parseStrategy.parse(normalized) else {
+		guard let parsed = parseFlexibleDouble(text) else {
 			text = value.formatted(Self.numberFormat)
 			return
 		}
 		onCommit(parsed)
 		text = parsed.formatted(Self.numberFormat)
+	}
+
+	private func parseFlexibleDouble(_ raw: String) -> Double? {
+		let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+		guard !trimmed.isEmpty else { return nil }
+
+		let decimalSeparators = CharacterSet(charactersIn: ".,\u{066B}\u{FF0E}\u{FF0C}\u{3002}")
+		let groupingSeparators = CharacterSet(charactersIn: "'\u{2019}\u{0060}\u{00A0}\u{202F}\u{066C}_ ")
+
+		var scalars = Array(trimmed.unicodeScalars)
+		let lastDecimalIndex = scalars.lastIndex { scalar in
+			decimalSeparators.contains(scalar)
+		}
+
+		var normalized = ""
+		for (index, scalar) in scalars.enumerated() {
+			if let digit = Character(scalar).wholeNumberValue {
+				normalized.append(String(digit))
+				continue
+			}
+			if (scalar == "+" || scalar == "-") && index == 0 {
+				normalized.append(Character(scalar))
+				continue
+			}
+			if groupingSeparators.contains(scalar) {
+				continue
+			}
+			if decimalSeparators.contains(scalar) {
+				if index == lastDecimalIndex {
+					normalized.append(".")
+				}
+				continue
+			}
+			return try? Self.numberFormat.parseStrategy.parse(trimmed)
+		}
+
+		if let parsed = Double(normalized) {
+			return parsed
+		}
+
+		return try? Self.numberFormat.parseStrategy.parse(trimmed)
 	}
 }
 

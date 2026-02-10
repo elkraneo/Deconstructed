@@ -362,6 +362,53 @@ public enum DeconstructedUSDInterop {
 		advancedClient.primReferences(url: url, path: primPath)
 	}
 
+	public static func listPrimVariantSets(
+		url: URL,
+		primPath: String
+	) throws -> [USDVariantSetDescriptor] {
+		do {
+			return try advancedClient.listVariantSets(
+				url: url,
+				scope: .prim(path: primPath)
+			)
+		} catch {
+			throw mapAdvancedError(error, url: url, primPath: primPath, schema: nil)
+		}
+	}
+
+	public static func setPrimVariantSelection(
+		url: URL,
+		primPath: String,
+		setName: String,
+		selectionId: String?,
+		editTarget: USDLayerEditTarget = .rootLayer,
+		persist: Bool = true
+	) throws {
+		let request = USDVariantSelectionRequest(
+			scope: .prim(path: primPath),
+			setName: setName,
+			selectionId: selectionId
+		)
+		let variantTarget: USDVariantEditTarget = switch editTarget {
+		case .sessionLayer:
+			.sessionLayer
+		case .rootLayer:
+			.rootLayer
+		@unknown default:
+			.rootLayer
+		}
+		do {
+			try advancedClient.applyVariantSelection(
+				url: url,
+				request: request,
+				editTarget: variantTarget,
+				persist: persist
+			)
+		} catch {
+			throw mapAdvancedError(error, url: url, primPath: primPath, schema: nil)
+		}
+	}
+
 	public static func addPrimReference(
 		url: URL,
 		primPath: String,

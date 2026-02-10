@@ -215,3 +215,18 @@ What we can say defensibly:
 - Expand inspector beyond Transform:
   - References, material bindings, primitive parameters.
   - This likely requires adding new typed DTOs to `USDInterfaces` and implementing typed endpoints in `USDInteropAdvanced` (schemas, authored attributes, relationships).
+
+## Numeric Input Localization Policy (Transform Fields)
+
+We adopted an explicit policy for transform numeric entry:
+
+- Open input, localized output.
+- Accept decimal separators from multiple locales at input time.
+- Normalize and parse to `Double`.
+- Display values using locale-native formatting.
+
+Rationale: this removes a major class of transform edit failures caused by strict locale-only parsing while preserving localized UI display.
+
+See:
+
+- `/Volumes/Plutonian/_Developer/Deconstructed/source/Deconstructed/Docs/Numeric-Input-Localization.md`
