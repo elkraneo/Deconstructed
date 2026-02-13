@@ -617,7 +617,7 @@ public struct DocumentEditorFeature {
 					state.openScenes[id: tabID] = tab
 					return .merge(
 						.send(.projectBrowser(.sceneModified(tab.fileURL))),
-						.send(.viewport(.loadRequested(tab.fileURL))),
+						.send(.viewport(.loadRequestedPreservingCamera(tab.fileURL))),
 						.send(.sceneNavigator(.refreshRequested))
 					)
 				}
