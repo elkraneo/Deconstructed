@@ -436,6 +436,7 @@ let package = Package(
 				"InspectorFeature",
 				"InspectorModels",
 				"SceneGraphModels",
+				.product(name: "Sharing", package: "swift-sharing"),
 				.product(name: "USDInteropAdvancedCore", package: "USDInteropAdvanced"),
 			],
 			swiftSettings: [

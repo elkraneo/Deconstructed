@@ -11,6 +11,7 @@ import USDInterfaces
 		public struct State: Equatable {
 			public var sceneURL: URL?
 			public var selectedNodeID: SceneNode.ID?
+			public var primVariantScopePath: String?
 			public var layerData: SceneLayerData?
 			public var playbackData: ScenePlaybackData?
 			public var primAttributes: USDPrimAttributes?
@@ -35,6 +36,7 @@ import USDInterfaces
 		public init(
 			sceneURL: URL? = nil,
 			selectedNodeID: SceneNode.ID? = nil,
+			primVariantScopePath: String? = nil,
 			layerData: SceneLayerData? = nil,
 				playbackData: ScenePlaybackData? = nil,
 				primAttributes: USDPrimAttributes? = nil,
@@ -58,6 +60,7 @@ import USDInterfaces
 		) {
 			self.sceneURL = sceneURL
 			self.selectedNodeID = selectedNodeID
+			self.primVariantScopePath = primVariantScopePath
 			self.layerData = layerData
 				self.playbackData = playbackData
 				self.primAttributes = primAttributes
@@ -161,6 +164,7 @@ import USDInterfaces
 				print("[InspectorFeature] sceneURLChanged: \(url?.lastPathComponent ?? "nil")")
 				state.sceneURL = url
 				state.selectedNodeID = nil
+				state.primVariantScopePath = nil
 				state.errorMessage = nil
 				state.layerData = nil
 				state.playbackData = nil
@@ -195,6 +199,7 @@ import USDInterfaces
 
 				case let .selectionChanged(nodeID):
 					state.selectedNodeID = nodeID
+					state.primVariantScopePath = nil
 					state.primAttributes = nil
 					state.primTransform = nil
 					state.primVariantSets = []
@@ -208,6 +213,15 @@ import USDInterfaces
 						state.primIsLoading = false
 						return .none
 					}
+					let materialBindingPrimPath = resolvedMaterialBindingPrimPath(
+						from: nodeID,
+						nodes: state.sceneNodes
+					)
+					let variantScopePath = resolvedVariantScopePrimPath(
+						from: nodeID,
+						url: url
+					)
+					state.primVariantScopePath = variantScopePath
 					state.pendingPrimLoads = [
 						.attributes,
 						.transform,
@@ -244,7 +258,7 @@ import USDInterfaces
 						do {
 							let variantSets = try DeconstructedUSDInterop.listPrimVariantSets(
 								url: url,
-								primPath: nodeID
+								primPath: variantScopePath
 							)
 							await send(.primVariantSetsLoaded(variantSets))
 						} catch {
@@ -257,8 +271,8 @@ import USDInterfaces
 						)
 						await send(.primReferencesLoaded(references))
 
-						let binding = DeconstructedUSDInterop.materialBinding(url: url, primPath: nodeID)
-						let strength = DeconstructedUSDInterop.materialBindingStrength(url: url, primPath: nodeID)
+						let binding = DeconstructedUSDInterop.materialBinding(url: url, primPath: materialBindingPrimPath)
+						let strength = DeconstructedUSDInterop.materialBindingStrength(url: url, primPath: materialBindingPrimPath)
 						await send(.primMaterialBindingLoaded(binding, strength))
 					}
 					.cancellable(
@@ -341,7 +355,11 @@ import USDInterfaces
 					return .none
 
 				case let .setVariantSelection(setName, selectionId):
-					guard let url = state.sceneURL, let primPath = state.selectedNodeID else {
+					guard let url = state.sceneURL else {
+						return .none
+					}
+					let primPath = state.primVariantScopePath ?? state.selectedNodeID
+					guard let primPath else {
 						return .none
 					}
 					return .run { send in
@@ -495,41 +513,48 @@ import USDInterfaces
 					state.primErrorMessage = "Failed to edit references: \(message)"
 					return .none
 
-					case let .primMaterialBindingLoaded(binding, strength):
-						state.primMaterialBinding = binding
-						state.primMaterialBindingStrength = strength
-						updateBoundMaterial(state: &state)
-						completePrimLoad(state: &state, section: .materialBinding)
-						return .none
+				case let .primMaterialBindingLoaded(binding, strength):
+					state.primMaterialBinding = normalizeMaterialPath(binding)
+					state.primMaterialBindingStrength = strength
+					updateBoundMaterial(state: &state)
+					completePrimLoad(state: &state, section: .materialBinding)
+					return .none
 
-					case let .availableMaterialsLoaded(materials):
-						state.availableMaterials = materials
-						updateBoundMaterial(state: &state)
-						completePrimLoad(state: &state, section: .materials)
-						return .none
+				case let .availableMaterialsLoaded(materials):
+					state.availableMaterials = materials
+					updateBoundMaterial(state: &state)
+					completePrimLoad(state: &state, section: .materials)
+					return .none
 
 				case let .setMaterialBinding(materialPath):
 					guard let url = state.sceneURL, let primPath = state.selectedNodeID else {
 						return .none
 					}
+					let bindingPrimPath = resolvedMaterialBindingPrimPath(
+						from: primPath,
+						nodes: state.sceneNodes
+					)
+					let normalizedMaterialPath = normalizeMaterialPath(materialPath)
 					return .run { send in
 						do {
-							if let materialPath {
+							if let normalizedMaterialPath {
+								print("[InspectorFeature] setMaterialBinding requested: selectedPrim=\(primPath), bindingPrim=\(bindingPrimPath), material=\(normalizedMaterialPath)")
 								try DeconstructedUSDInterop.setMaterialBinding(
 									url: url,
-									primPath: primPath,
-									materialPath: materialPath,
+									primPath: bindingPrimPath,
+									materialPath: normalizedMaterialPath,
 									editTarget: .rootLayer
 								)
 							} else {
 								try DeconstructedUSDInterop.clearMaterialBinding(
 									url: url,
-									primPath: primPath,
+									primPath: bindingPrimPath,
 									editTarget: .rootLayer
 								)
 							}
-							let refreshed = DeconstructedUSDInterop.materialBinding(url: url, primPath: primPath)
-							let refreshedStrength = DeconstructedUSDInterop.materialBindingStrength(url: url, primPath: primPath)
+							let refreshed = DeconstructedUSDInterop.materialBinding(url: url, primPath: bindingPrimPath)
+							let refreshedStrength = DeconstructedUSDInterop.materialBindingStrength(url: url, primPath: bindingPrimPath)
+							print("[InspectorFeature] Final material binding: \(normalizeMaterialPath(refreshed) ?? "nil"), strength=\(String(describing: refreshedStrength))")
 							await send(.primMaterialBindingLoaded(refreshed, refreshedStrength))
 							await send(.setMaterialBindingSucceeded)
 						} catch {
@@ -549,11 +574,15 @@ import USDInterfaces
 						return .none
 					}
 					state.primMaterialBindingStrength = strength
+					let bindingPrimPath = resolvedMaterialBindingPrimPath(
+						from: primPath,
+						nodes: state.sceneNodes
+					)
 					return .run { send in
 						do {
 							try DeconstructedUSDInterop.setMaterialBindingStrength(
 								url: url,
-								primPath: primPath,
+								primPath: bindingPrimPath,
 								strength: strength,
 								editTarget: .rootLayer
 							)
@@ -796,11 +825,92 @@ private func findNode(id: SceneNode.ID, in nodes: [SceneNode]) -> SceneNode? {
 }
 
 private func updateBoundMaterial(state: inout InspectorFeature.State) {
-	guard let binding = state.primMaterialBinding, !binding.isEmpty else {
+	guard let binding = normalizeMaterialPath(state.primMaterialBinding) else {
 		state.boundMaterial = nil
 		return
 	}
-	state.boundMaterial = state.availableMaterials.first { $0.path == binding }
+	state.boundMaterial = state.availableMaterials.first {
+		normalizeMaterialPath($0.path) == binding
+	}
+}
+
+private func normalizeMaterialPath(_ path: String?) -> String? {
+	guard var path, !path.isEmpty else { return nil }
+	path = path.trimmingCharacters(in: .whitespacesAndNewlines)
+	guard !path.isEmpty else { return nil }
+	// USD relationship targets are often serialized as </Prim/Material>.
+	if path.first == "<", path.last == ">", path.count >= 2 {
+		path.removeFirst()
+		path.removeLast()
+	}
+	return path.isEmpty ? nil : path
+}
+
+private func resolvedVariantScopePrimPath(from selectedPrimPath: String, url: URL) -> String {
+	var currentPath = selectedPrimPath
+	while true {
+		// If the currently selected prim has its own variant sets (e.g. realistic -> lods),
+		// keep it as the inspector scope and do not walk up to parent set owners.
+		if let currentSets = try? DeconstructedUSDInterop.listPrimVariantSets(
+			url: url,
+			primPath: currentPath
+		),
+		   !currentSets.isEmpty {
+			return currentPath
+		}
+
+		guard let parentPath = parentPrimPath(of: currentPath) else {
+			return currentPath
+		}
+		let childName = String(currentPath.split(separator: "/").last ?? "")
+		guard !childName.isEmpty else {
+			return currentPath
+		}
+		guard let parentSets = try? DeconstructedUSDInterop.listPrimVariantSets(
+			url: url,
+			primPath: parentPath
+		) else {
+			return currentPath
+		}
+		let isVariantOption = parentSets.contains { set in
+			set.options.contains {
+				$0.id == childName || $0.displayName == childName
+			}
+		}
+		guard isVariantOption else {
+			return currentPath
+		}
+		currentPath = parentPath
+	}
+}
+
+private func parentPrimPath(of path: String) -> String? {
+	let components = path.split(separator: "/")
+	guard components.count > 1 else { return nil }
+	return "/" + components.dropLast().joined(separator: "/")
+}
+
+private func resolvedMaterialBindingPrimPath(from selectedPrimPath: String, nodes: [SceneNode]) -> String {
+	guard let selectedNode = findNode(id: selectedPrimPath, in: nodes) else {
+		return selectedPrimPath
+	}
+	let selectedType = selectedNode.typeName?.lowercased() ?? ""
+	guard selectedType.contains("material") || selectedType.contains("shader") else {
+		return selectedPrimPath
+	}
+	var path = selectedPrimPath
+	while true {
+		let components = path.split(separator: "/")
+		guard components.count > 1 else { return selectedPrimPath }
+		path = "/" + components.dropLast().joined(separator: "/")
+		guard let ancestor = findNode(id: path, in: nodes) else {
+			continue
+		}
+		let type = ancestor.typeName?.lowercased() ?? ""
+		if !(type.contains("material") || type.contains("shader")) {
+			return ancestor.path
+		}
+	}
 }
 
 private func completePrimLoad(

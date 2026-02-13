@@ -5,6 +5,7 @@ import InspectorFeature
 import ProjectBrowserFeature
 import RealityKitStageView
 import SceneGraphFeature
+import SceneGraphModels
 import USDInterfaces
 import ViewportModels
 
@@ -526,8 +527,16 @@ public struct DocumentEditorFeature {
 
 				// Forward selection changes to inspector and viewport
 				if case .selectionChanged(let nodeID) = sceneAction {
-					effects.append(.send(.inspector(.selectionChanged(nodeID))))
-					effects.append(.send(.viewport(.selectionChanged(nodeID))))
+					let resolvedNodeID = resolvedInspectableSelectionPath(
+						nodeID,
+						nodes: state.sceneNavigator.nodes
+					)
+					if let nodeID, let resolvedNodeID, nodeID != resolvedNodeID {
+						print("[DocumentEditorFeature] Remapped scene selection \(nodeID) -> \(resolvedNodeID)")
+					}
+					state.sceneNavigator.selectedNodeID = resolvedNodeID
+					effects.append(.send(.inspector(.selectionChanged(resolvedNodeID))))
+					effects.append(.send(.viewport(.selectionChanged(resolvedNodeID))))
 				}
 
 				// Forward scene graph loaded to inspector for available prims
@@ -538,9 +547,16 @@ public struct DocumentEditorFeature {
 				return effects.isEmpty ? .none : .merge(effects)
 
 			case .viewport(.entityPicked(let path)):
+				let resolvedPath = resolvedInspectableSelectionPath(
+					path,
+					nodes: state.sceneNavigator.nodes
+				)
+				if path != resolvedPath {
+					print("[DocumentEditorFeature] Remapped viewport pick \(path) -> \(resolvedPath ?? "nil")")
+				}
 				return .merge(
-					.send(.sceneNavigator(.selectionChanged(path))),
-					.send(.inspector(.selectionChanged(path)))
+					.send(.sceneNavigator(.selectionChanged(resolvedPath))),
+					.send(.inspector(.selectionChanged(resolvedPath)))
 				)
 			case .viewport:
 				return .none
@@ -560,14 +576,11 @@ public struct DocumentEditorFeature {
 					))))
 				}
 
-				// Material bindings are authored to USD. Until we have a robust prim->entity material bridge,
-				// force a viewport reload so changes are visible immediately.
+				// Material binding edits should not force a full viewport reload; that resets camera/navigation.
 				if case .setMaterialBindingSucceeded = inspectorAction,
 					case .scene(let tabID) = state.selectedTab,
-					var tab = state.openScenes[id: tabID]
+					let tab = state.openScenes[id: tabID]
 				{
-					tab.reloadTrigger = uuid()
-					state.openScenes[id: tabID] = tab
 					return .merge(
 						.send(.projectBrowser(.sceneModified(tab.fileURL))),
 						.send(.viewport(.loadRequested(tab.fileURL)))
@@ -576,10 +589,8 @@ public struct DocumentEditorFeature {
 
 				if case .setMaterialBindingStrengthSucceeded = inspectorAction,
 					case .scene(let tabID) = state.selectedTab,
-					var tab = state.openScenes[id: tabID]
+					let tab = state.openScenes[id: tabID]
 				{
-					tab.reloadTrigger = uuid()
-					state.openScenes[id: tabID] = tab
 					return .merge(
 						.send(.projectBrowser(.sceneModified(tab.fileURL))),
 						.send(.viewport(.loadRequested(tab.fileURL)))
@@ -606,7 +617,8 @@ public struct DocumentEditorFeature {
 					state.openScenes[id: tabID] = tab
 					return .merge(
 						.send(.projectBrowser(.sceneModified(tab.fileURL))),
-						.send(.viewport(.loadRequested(tab.fileURL)))
+						.send(.viewport(.loadRequested(tab.fileURL))),
+						.send(.sceneNavigator(.refreshRequested))
 					)
 				}
 
@@ -649,6 +661,41 @@ public struct DocumentEditorFeature {
 
 private func normalizedSceneURL(_ url: URL) -> URL {
 	URL(fileURLWithPath: url.path).standardizedFileURL
+}
+
+private func resolvedInspectableSelectionPath(
+	_ path: String?,
+	nodes: [SceneNode]
+) -> String? {
+	guard let path else { return nil }
+	guard let node = findSceneNode(id: path, in: nodes) else { return path }
+	let type = node.typeName?.lowercased() ?? ""
+	guard type.contains("material") || type.contains("shader") else { return path }
+	var currentPath = path
+	while true {
+		let components = currentPath.split(separator: "/")
+		guard components.count > 1 else { return path }
+		currentPath = "/" + components.dropLast().joined(separator: "/")
+		guard let ancestor = findSceneNode(id: currentPath, in: nodes) else {
+			continue
+		}
+		let ancestorType = ancestor.typeName?.lowercased() ?? ""
+		if !(ancestorType.contains("material") || ancestorType.contains("shader")) {
+			return ancestor.path
+		}
+	}
+}
+
+private func findSceneNode(id: String, in nodes: [SceneNode]) -> SceneNode? {
+	for node in nodes {
+		if node.id == id {
+			return node
+		}
+		if let found = findSceneNode(id: id, in: node.children) {
+			return found
+		}
+	}
+	return nil
 }
 
 public struct WorkspaceRestore: Sendable, Equatable {

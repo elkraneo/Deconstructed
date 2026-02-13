@@ -4,6 +4,7 @@ import Foundation
 import InspectorFeature
 import InspectorModels
 import SceneGraphModels
+import Sharing
 import SwiftUI
 import UniformTypeIdentifiers
 import USDInterfaces
@@ -222,10 +223,10 @@ private struct InspectorGroupBox<Content: View>: View {
 
 struct PrimDataSection: View {
 	let node: SceneNode
-	@State private var isExpanded: Bool = true
+	@Shared(.inspectorDisclosureState) private var disclosureState
 
 	var body: some View {
-		InspectorGroupBox(title: "Prim", isExpanded: $isExpanded) {
+		InspectorGroupBox(title: "Prim", isExpanded: isExpanded) {
 			VStack(alignment: .leading, spacing: 12) {
 				InspectorRow(label: "Name") {
 					Text(node.name)
@@ -252,14 +253,23 @@ struct PrimDataSection: View {
 			}
 		}
 	}
+
+	private var isExpanded: Binding<Bool> {
+		Binding(
+			get: { disclosureState.primDataExpanded },
+			set: { newValue in
+				$disclosureState.withLock { $0.primDataExpanded = newValue }
+			}
+		)
+	}
 }
 
 struct PrimAttributesSection: View {
 	let attributes: USDPrimAttributes
-	@State private var isExpanded: Bool = true
+	@Shared(.inspectorDisclosureState) private var disclosureState
 
 	var body: some View {
-		InspectorGroupBox(title: "Properties", isExpanded: $isExpanded) {
+		InspectorGroupBox(title: "Properties", isExpanded: isExpanded) {
 			VStack(alignment: .leading, spacing: 12) {
 				InspectorRow(label: "USD Type") {
 					Text(attributes.typeName)
@@ -304,6 +314,15 @@ struct PrimAttributesSection: View {
 			}
 		}
 	}
+
+	private var isExpanded: Binding<Bool> {
+		Binding(
+			get: { disclosureState.primAttributesExpanded },
+			set: { newValue in
+				$disclosureState.withLock { $0.primAttributesExpanded = newValue }
+			}
+		)
+	}
 }
 
 struct MaterialBindingsSection: View {
@@ -313,16 +332,15 @@ struct MaterialBindingsSection: View {
 	let materials: [USDMaterialInfo]
 	let onSetBinding: (String?) -> Void
 	let onSetStrength: (USDMaterialBindingStrength) -> Void
-	@State private var isExpanded: Bool = true
-	@State private var selection: String = ""
+	@Shared(.inspectorDisclosureState) private var disclosureState
 	@State private var strengthSelection: USDMaterialBindingStrength = .fallbackStrength
 
 	var body: some View {
-		InspectorGroupBox(title: "Material Bindings", isExpanded: $isExpanded) {
+		InspectorGroupBox(title: "Material Bindings", isExpanded: isExpanded) {
 			VStack(alignment: .leading, spacing: 12) {
 				InspectorRow(label: "Binding") {
 					HStack(spacing: 8) {
-						Picker("", selection: $selection) {
+						Picker("", selection: bindingSelection) {
 							Text("None").tag("")
 							ForEach(materials, id: \.path) { material in
 								Text(material.name.isEmpty ? material.path : material.name)
@@ -331,11 +349,6 @@ struct MaterialBindingsSection: View {
 						}
 						.labelsHidden()
 						.pickerStyle(.menu)
-						.onChange(of: selection) { _, newValue in
-							// Avoid re-authoring when we're just syncing to the latest loaded binding.
-							if newValue == (currentBindingPath ?? "") { return }
-							onSetBinding(newValue.isEmpty ? nil : newValue)
-						}
 
 						Button {
 							onSetBinding(nil)
@@ -348,7 +361,7 @@ struct MaterialBindingsSection: View {
 					}
 				}
 
-				if let currentBindingPath, !currentBindingPath.isEmpty {
+				if let resolvedBindingPath = normalizeMaterialPath(currentBindingPath) {
 					InspectorRow(label: "Strength") {
 						Picker("", selection: $strengthSelection) {
 							ForEach(USDMaterialBindingStrength.allCases, id: \.self) { strength in
@@ -363,7 +376,7 @@ struct MaterialBindingsSection: View {
 						}
 					}
 
-					Text(currentBindingPath)
+					Text(resolvedBindingPath)
 						.font(.system(size: 11))
 						.foregroundStyle(.secondary)
 						.textSelection(.enabled)
@@ -391,7 +404,7 @@ struct MaterialBindingsSection: View {
 					}
 				} else {
 					// Keep the section informative even if material discovery is empty.
-					if let currentBindingPath, !currentBindingPath.isEmpty {
+					if normalizeMaterialPath(currentBindingPath) != nil {
 						Text("Material properties unavailable (material list did not include the bound path).")
 							.font(.system(size: 11))
 							.foregroundStyle(.secondary)
@@ -399,17 +412,45 @@ struct MaterialBindingsSection: View {
 				}
 			}
 			.onAppear {
-				selection = currentBindingPath ?? ""
 				strengthSelection = currentStrength ?? .fallbackStrength
-			}
-			.onChange(of: currentBindingPath) { _, newValue in
-				selection = newValue ?? ""
 			}
 			.onChange(of: currentStrength) { _, newValue in
 				strengthSelection = newValue ?? .fallbackStrength
 			}
 		}
 	}
+
+	private var bindingSelection: Binding<String> {
+		Binding(
+			get: { normalizeMaterialPath(currentBindingPath) ?? "" },
+			set: { newValue in
+				let normalizedCurrent = normalizeMaterialPath(currentBindingPath) ?? ""
+				let normalizedNew = normalizeMaterialPath(newValue) ?? ""
+				if normalizedNew == normalizedCurrent { return }
+				onSetBinding(normalizedNew.isEmpty ? nil : normalizedNew)
+			}
+		)
+	}
+
+	private var isExpanded: Binding<Bool> {
+		Binding(
+			get: { disclosureState.materialBindingsExpanded },
+			set: { newValue in
+				$disclosureState.withLock { $0.materialBindingsExpanded = newValue }
+			}
+		)
+	}
+}
+
+private func normalizeMaterialPath(_ path: String?) -> String? {
+	guard var path, !path.isEmpty else { return nil }
+	path = path.trimmingCharacters(in: .whitespacesAndNewlines)
+	guard !path.isEmpty else { return nil }
+	if path.first == "<", path.last == ">", path.count >= 2 {
+		path.removeFirst()
+		path.removeLast()
+	}
+	return path.isEmpty ? nil : path
 }
 
 private struct MaterialPropertyRow: View {
@@ -491,7 +532,7 @@ struct TransformSection: View {
 	let transform: USDTransformData
 	let metersPerUnit: Double?
 	let onTransformChanged: (USDTransformData) -> Void
-	@State private var isExpanded: Bool = true
+	@Shared(.inspectorDisclosureState) private var disclosureState
 	@State private var isUniformScale: Bool
 
 	private var lengthUnitLabel: String {
@@ -516,7 +557,7 @@ struct TransformSection: View {
 	}
 
 	var body: some View {
-		InspectorGroupBox(title: "Transform", isExpanded: $isExpanded) {
+		InspectorGroupBox(title: "Transform", isExpanded: isExpanded) {
 			VStack(alignment: .leading, spacing: 10) {
 				TransformEditableRow(
 					label: "Position",
@@ -552,15 +593,24 @@ struct TransformSection: View {
 			}
 		}
 	}
+
+	private var isExpanded: Binding<Bool> {
+		Binding(
+			get: { disclosureState.transformExpanded },
+			set: { newValue in
+				$disclosureState.withLock { $0.transformExpanded = newValue }
+			}
+		)
+	}
 }
 
 private struct PrimVariantsSection: View {
 	let variantSets: [USDVariantSetDescriptor]
 	let onSelectionChanged: (String, String?) -> Void
-	@State private var isExpanded: Bool = true
+	@Shared(.inspectorDisclosureState) private var disclosureState
 
 	var body: some View {
-		InspectorGroupBox(title: "Variants", isExpanded: $isExpanded) {
+		InspectorGroupBox(title: "Variants", isExpanded: isExpanded) {
 			if variantSets.isEmpty {
 				Text("No variant sets")
 					.font(.system(size: 11))
@@ -591,6 +641,15 @@ private struct PrimVariantsSection: View {
 			}
 		}
 	}
+
+	private var isExpanded: Binding<Bool> {
+		Binding(
+			get: { disclosureState.variantsExpanded },
+			set: { newValue in
+				$disclosureState.withLock { $0.variantsExpanded = newValue }
+			}
+		)
+	}
 }
 
 private struct PrimReferencesSection: View {
@@ -598,11 +657,11 @@ private struct PrimReferencesSection: View {
 	let onAddReference: (USDReference) -> Void
 	let onRemoveReference: (USDReference) -> Void
 	let onReplaceReference: (USDReference, USDReference) -> Void
-	@State private var isExpanded: Bool = true
+	@Shared(.inspectorDisclosureState) private var disclosureState
 	@State private var selectedIndex: Int?
 
 	var body: some View {
-		InspectorGroupBox(title: "References", isExpanded: $isExpanded) {
+		InspectorGroupBox(title: "References", isExpanded: isExpanded) {
 			VStack(alignment: .leading, spacing: 10) {
 				if references.isEmpty {
 					Text("No references")
@@ -683,6 +742,15 @@ private struct PrimReferencesSection: View {
 				.font(.system(size: 13, weight: .semibold))
 			}
 		}
+	}
+
+	private var isExpanded: Binding<Bool> {
+		Binding(
+			get: { disclosureState.referencesExpanded },
+			set: { newValue in
+				$disclosureState.withLock { $0.referencesExpanded = newValue }
+			}
+		)
 	}
 
 	private func chooseReference() -> USDReference? {
@@ -947,7 +1015,7 @@ struct ScenePlaybackSection: View {
 	let onPlayPause: () -> Void
 	let onStop: () -> Void
 	let onScrub: (Double, Bool) -> Void
-	@State private var isExpanded: Bool = true
+	@Shared(.inspectorDisclosureState) private var disclosureState
 
 	private var isEnabled: Bool {
 		playbackData?.hasTimeline ?? false
@@ -968,7 +1036,7 @@ struct ScenePlaybackSection: View {
 	}
 
 	var body: some View {
-		InspectorGroupBox(title: "Scene Playback", isExpanded: $isExpanded) {
+		InspectorGroupBox(title: "Scene Playback", isExpanded: isExpanded) {
 			VStack(alignment: .leading, spacing: 10) {
 				HStack(spacing: 10) {
 					Button(action: onPlayPause) {
@@ -1022,6 +1090,15 @@ struct ScenePlaybackSection: View {
 		let frame = time * fps
 		return String(format: "%.0f", frame)
 	}
+
+	private var isExpanded: Binding<Bool> {
+		Binding(
+			get: { disclosureState.scenePlaybackExpanded },
+			set: { newValue in
+				$disclosureState.withLock { $0.scenePlaybackExpanded = newValue }
+			}
+		)
+	}
 }
 
 struct LayerDataSection: View {
@@ -1030,10 +1107,10 @@ struct LayerDataSection: View {
 	let onMetersPerUnitChanged: (Double) -> Void
 	let onUpAxisChanged: (UpAxis) -> Void
 	let onConvertVariantsTapped: () -> Void
-	@State private var isExpanded: Bool = true
+	@Shared(.inspectorDisclosureState) private var disclosureState
 
 	var body: some View {
-		InspectorGroupBox(title: "Layer Data", isExpanded: $isExpanded) {
+		InspectorGroupBox(title: "Layer Data", isExpanded: isExpanded) {
 			VStack(alignment: .leading, spacing: 12) {
 				InspectorRow(label: "Default Prim") {
 					Picker(
@@ -1095,6 +1172,15 @@ struct LayerDataSection: View {
 				.help("Deferred: will use USDInteropAdvanced combineVariants in a later pass.")
 			}
 		}
+	}
+
+	private var isExpanded: Binding<Bool> {
+		Binding(
+			get: { disclosureState.layerDataExpanded },
+			set: { newValue in
+				$disclosureState.withLock { $0.layerDataExpanded = newValue }
+			}
+		)
 	}
 }
 
