@@ -138,7 +138,7 @@ Events are debounced (300ms) to prevent excessive UI reloads during batch operat
 The Inspector panel uses a **context-sensitive** approach:
 
 - **Scene Layer Mode**: Shows USD stage metadata (default prim, meters per unit, up axis) when no prim is selected
-- **Prim Mode**: Will show prim-specific properties when a node is selected in the Scene Navigator
+- **Prim Mode**: Shows transform editing, material bindings, variant sets, and references when a node is selected in the Scene Navigator
 
 State is synchronized via TCA's scoped reducers - DocumentEditorFeature wires the inspector to scene URL changes and selection updates from the Scene Navigator.
 
@@ -201,11 +201,10 @@ This project is documented in a series of articles exploring the reverse-enginee
 - ✅ **Project Browser**: File tree with folder creation, file operations, and live watching
 - ✅ **Scene Navigator**: Hierarchy view with prim selection and insertion
 - ✅ **Viewport**: 3D preview with grid, axes, and environment controls
-- ✅ **Inspector**: Layer Data panel (default prim, meters per unit, up axis)
+- ✅ **Inspector**: Layer Data, scene playback, transform editing, material bindings, references, and variants
 
 ### In Progress
 
-- 🚧 **Inspector**: Prim-specific property editing
 - 🚧 **Component Management**: ECS component visualization and editing
 - 🚧 **Material Editor**: Shader graph integration
 
