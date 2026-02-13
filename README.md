@@ -184,6 +184,15 @@ This project is documented in a series of articles exploring the reverse-enginee
    - Wiring USD stage metadata (default prim, scale, up axis) into the UI
    - Establishing the selection-driven path toward prim-level inspection
 
+7. **[Deconstructing Reality Composer Pro: Inspector Bindings, References, Variants](https://elkraneo.com/deconstructing-reality-composer-pro-inspector-bindings-references-variants/)**
+   - Extending prim inspection with material bindings and relationship references
+   - Implementing variant set discovery and selection workflows
+   - Bridging inspector edits to live viewport and scene graph updates
+
+## Notes
+
+- `/Volumes/Plutonian/_Developer/Deconstructed/source/Deconstructed/Docs/MaterialX-Interchange.md` (MaterialX vs UsdPreviewSurface portability through RealityKit/RCP)
+
 ## Current Status
 
 ### Implemented Features

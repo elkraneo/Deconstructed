@@ -41,6 +41,12 @@ This is intentionally **not** a shader editor yet. It is an inspection surface w
 
 Those are later steps, but the current structure keeps the architecture clean and allows us to add typed endpoints in `USDInteropAdvanced` as we need more operations.
 
+## Interchange Note
+
+Material interchange into RealityKit/RCP is often limited by supported shader features rather than conversion mechanics. See:
+
+- `/Volumes/Plutonian/_Developer/Deconstructed/source/Deconstructed/Docs/MaterialX-Interchange.md`
+
 ## Why This Matches RCP’s Model
 
 RCP’s “Material Bindings” panel maps cleanly to:
@@ -55,4 +61,3 @@ The UI can remain responsive by editing only the relationship (fast), while deep
 - `/Volumes/Plutonian/_Developer/Deconstructed/source/Deconstructed/Packages/DeconstructedLibrary/Sources/InspectorFeature/InspectorFeature.swift`
 - `/Volumes/Plutonian/_Developer/Deconstructed/source/Deconstructed/Packages/DeconstructedLibrary/Sources/InspectorUI/InspectorView.swift`
 - `/Volumes/Plutonian/_Developer/Deconstructed/source/Deconstructed/Packages/DeconstructedLibrary/Sources/DeconstructedUSDInterop/DeconstructedUSDInterop.swift`
-
