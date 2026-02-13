@@ -583,7 +583,7 @@ public struct DocumentEditorFeature {
 				{
 					return .merge(
 						.send(.projectBrowser(.sceneModified(tab.fileURL))),
-						.send(.viewport(.loadRequested(tab.fileURL)))
+						.send(.viewport(.loadRequestedPreservingCamera(tab.fileURL)))
 					)
 				}
 
@@ -593,7 +593,7 @@ public struct DocumentEditorFeature {
 				{
 					return .merge(
 						.send(.projectBrowser(.sceneModified(tab.fileURL))),
-						.send(.viewport(.loadRequested(tab.fileURL)))
+						.send(.viewport(.loadRequestedPreservingCamera(tab.fileURL)))
 					)
 				}
 
