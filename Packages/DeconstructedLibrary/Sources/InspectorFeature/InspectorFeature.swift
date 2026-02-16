@@ -1373,6 +1373,30 @@ private func componentParameterAuthoringSpec(
 			attributeName: "type",
 			valueLiteral: quoteUSDString(value)
 		)
+	case ("RealityKit.PointLight", "color", .string(let value)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "color3f",
+			attributeName: "color",
+			valueLiteral: formatUSDColor3(value)
+		)
+	case ("RealityKit.PointLight", "intensity", .double(let value)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "float",
+			attributeName: "intensity",
+			valueLiteral: formatUSDFloat(value)
+		)
+	case ("RealityKit.PointLight", "attenuationRadius", .double(let value)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "float",
+			attributeName: "attenuationRadius",
+			valueLiteral: formatUSDFloat(value)
+		)
+	case ("RealityKit.PointLight", "attenuationFalloff", .double(let value)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "float",
+			attributeName: "attenuationFalloff",
+			valueLiteral: formatUSDFloat(value)
+		)
 	default:
 		return nil
 	}
@@ -1393,6 +1417,20 @@ private func formatUSDFloat(_ value: Double) -> String {
 private func formatUSDUInt(_ value: Double) -> String {
 	let rounded = max(0, value.rounded())
 	return String(UInt64(rounded))
+}
+
+private func formatUSDColor3(_ raw: String) -> String {
+	let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+	if trimmed.hasPrefix("("), trimmed.hasSuffix(")") {
+		return trimmed
+	}
+	let parts = trimmed
+		.split(separator: ",")
+		.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+	if parts.count == 3 {
+		return "(\(parts[0]), \(parts[1]), \(parts[2]))"
+	}
+	return "(1, 1, 1)"
 }
 
 private func mapReverbPresetToToken(_ displayName: String) -> String {

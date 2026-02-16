@@ -193,6 +193,29 @@ public struct InspectorComponentDefinition: Equatable, Sendable, Identifiable, H
 					kind: .text(defaultValue: "Default", placeholder: "Collision type token")
 				)
 			]
+		case "RealityKit.PointLight":
+			return [
+				InspectorComponentParameter(
+					key: "color",
+					label: "Color",
+					kind: .text(defaultValue: "(1, 1, 1)", placeholder: "(r, g, b)")
+				),
+				InspectorComponentParameter(
+					key: "intensity",
+					label: "Intensity",
+					kind: .scalar(defaultValue: 26963.76, unit: nil)
+				),
+				InspectorComponentParameter(
+					key: "attenuationRadius",
+					label: "Attenuation Radius",
+					kind: .scalar(defaultValue: 10, unit: nil)
+				),
+				InspectorComponentParameter(
+					key: "attenuationFalloff",
+					label: "Attenuation Falloff",
+					kind: .scalar(defaultValue: 2, unit: nil)
+				)
+			]
 		default:
 			return []
 		}
