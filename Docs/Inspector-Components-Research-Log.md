@@ -271,7 +271,10 @@ Current slice:
 1. Accessibility: Add yes, Typed UI yes, Persist yes, Fallback Raw yes
 2. Billboard: Add yes, Typed UI yes, Persist yes, Fallback Raw yes
 3. Reverb: Add yes, Typed UI yes, Persist yes, Fallback Raw yes
-4. All other catalog components: Add yes, Typed UI no, Persist via typed mapping no, Fallback Raw yes (top-level authored attributes only)
+4. Image Based Light: Add yes, Typed UI yes, Persist yes, Fallback Raw yes
+5. Virtual Environment Probe (top-level blend mode): Add yes, Typed UI yes, Persist yes, Fallback Raw yes
+6. Collision (top-level group/mask/type): Add yes, Typed UI yes, Persist yes, Fallback Raw yes
+7. Remaining catalog components: Add yes, Typed UI no, Persist via typed mapping no, Fallback Raw yes (top-level authored attributes only)
 
 Remaining work for full parity:
 

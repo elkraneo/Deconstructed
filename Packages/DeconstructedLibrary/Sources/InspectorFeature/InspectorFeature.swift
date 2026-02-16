@@ -1245,6 +1245,36 @@ private func componentParameterAuthoringSpec(
 			attributeName: "reverbPreset",
 			valueLiteral: quoteUSDString(token)
 		)
+	case ("RealityKit.ImageBasedLight", "isGlobalIBL", .bool(let boolValue)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "bool",
+			attributeName: "isGlobalIBL",
+			valueLiteral: boolValue ? "true" : "false"
+		)
+	case ("RealityKit.VirtualEnvironmentProbe", "blendMode", .string(let value)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "token",
+			attributeName: "blendMode",
+			valueLiteral: quoteUSDString(value)
+		)
+	case ("RealityKit.Collider", "group", .double(let numberValue)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "uint",
+			attributeName: "group",
+			valueLiteral: formatUSDUInt(numberValue)
+		)
+	case ("RealityKit.Collider", "mask", .double(let numberValue)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "uint",
+			attributeName: "mask",
+			valueLiteral: formatUSDUInt(numberValue)
+		)
+	case ("RealityKit.Collider", "type", .string(let value)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "token",
+			attributeName: "type",
+			valueLiteral: quoteUSDString(value)
+		)
 	default:
 		return nil
 	}
@@ -1260,6 +1290,11 @@ private func quoteUSDString(_ text: String) -> String {
 private func formatUSDFloat(_ value: Double) -> String {
 	let formatted = String(format: "%.6f", value)
 	return formatted.replacingOccurrences(of: #"(\.\d*?[1-9])0+$|\.0+$"#, with: "$1", options: .regularExpression)
+}
+
+private func formatUSDUInt(_ value: Double) -> String {
+	let rounded = max(0, value.rounded())
+	return String(UInt64(rounded))
 }
 
 private func mapReverbPresetToToken(_ displayName: String) -> String {

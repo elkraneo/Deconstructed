@@ -1365,6 +1365,10 @@ private struct ComponentParametersSection: View {
 			return true
 		case "false":
 			return false
+		case "1":
+			return true
+		case "0":
+			return false
 		default:
 			return nil
 		}

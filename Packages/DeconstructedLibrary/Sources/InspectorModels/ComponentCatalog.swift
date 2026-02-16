@@ -156,6 +156,43 @@ public struct InspectorComponentDefinition: Equatable, Sendable, Identifiable, H
 					)
 				)
 			]
+		case "RealityKit.ImageBasedLight":
+			return [
+				InspectorComponentParameter(
+					key: "isGlobalIBL",
+					label: "Is Global IBL",
+					kind: .toggle(defaultValue: false)
+				)
+			]
+		case "RealityKit.VirtualEnvironmentProbe":
+			return [
+				InspectorComponentParameter(
+					key: "blendMode",
+					label: "Blend Mode",
+					kind: .choice(
+						defaultValue: "single",
+						options: ["single", "additive", "multiply"]
+					)
+				)
+			]
+		case "RealityKit.Collider":
+			return [
+				InspectorComponentParameter(
+					key: "group",
+					label: "Group",
+					kind: .scalar(defaultValue: 1, unit: nil)
+				),
+				InspectorComponentParameter(
+					key: "mask",
+					label: "Mask",
+					kind: .scalar(defaultValue: 4294967295, unit: nil)
+				),
+				InspectorComponentParameter(
+					key: "type",
+					label: "Type",
+					kind: .text(defaultValue: "Default", placeholder: "Collision type token")
+				)
+			]
 		default:
 			return []
 		}
