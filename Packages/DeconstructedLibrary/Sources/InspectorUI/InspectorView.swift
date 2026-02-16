@@ -91,6 +91,7 @@ public struct InspectorView: View {
 								)
 								let componentPaths = Set(graphComponentNodesByPath.keys)
 									.union(store.componentActiveByPath.keys)
+									.union(store.componentAuthoredAttributesByPath.keys)
 									.sorted()
 								VStack(alignment: .leading) {
 									if let transform = store.primTransform {
@@ -142,18 +143,31 @@ public struct InspectorView: View {
 											?? componentPath.split(separator: "/").last.map(String.init)
 											?? componentPath
 										let isActive = store.componentActiveByPath[componentPath] ?? true
+										let authoredAttributes =
+											store.componentAuthoredAttributesByPath[componentPath] ?? []
 										ComponentParametersSection(
 											componentPath: componentPath,
 											componentName: componentName,
 											definition: InspectorComponentCatalog.definition(
 												forAuthoredPrimName: componentName
 											),
+											authoredAttributes: authoredAttributes,
 											isActive: isActive,
 											onToggleActive: { newValue in
 												store.send(
 													.setComponentActiveRequested(
 														componentPath: componentPath,
 														isActive: newValue
+													)
+												)
+											},
+											onParameterChanged: { identifier, parameterKey, value in
+												store.send(
+													.setComponentParameterRequested(
+														componentPath: componentPath,
+														componentIdentifier: identifier,
+														parameterKey: parameterKey,
+														value: value
 													)
 												)
 											},
@@ -856,34 +870,35 @@ private struct ComponentParametersSection: View {
 	let componentPath: String
 	let componentName: String
 	let definition: InspectorComponentDefinition?
+	let authoredAttributes: [USDPrimAttributes.AuthoredAttribute]
 	let isActive: Bool
 	let onToggleActive: (Bool) -> Void
+	let onParameterChanged: (String, String, InspectorComponentParameterValue) -> Void
 	let onDelete: () -> Void
-	@State private var values: [String: ComponentParameterValue]
+	@State private var values: [String: InspectorComponentParameterValue]
 	@State private var isExpanded: Bool
 
 	init(
 		componentPath: String,
 		componentName: String,
 		definition: InspectorComponentDefinition?,
+		authoredAttributes: [USDPrimAttributes.AuthoredAttribute],
 		isActive: Bool,
 		onToggleActive: @escaping (Bool) -> Void,
+		onParameterChanged: @escaping (String, String, InspectorComponentParameterValue) -> Void,
 		onDelete: @escaping () -> Void
 	) {
 		self.componentPath = componentPath
 		self.componentName = componentName
 		self.definition = definition
+		self.authoredAttributes = authoredAttributes
 		self.isActive = isActive
 		self.onToggleActive = onToggleActive
+		self.onParameterChanged = onParameterChanged
 		self.onDelete = onDelete
 		let layout = definition?.parameterLayout ?? []
-		self._values = State(
-			initialValue: Dictionary(
-				uniqueKeysWithValues: layout.map { parameter in
-					(parameter.key, ComponentParameterValue.defaultValue(for: parameter.kind))
-				}
-			)
-		)
+		let authoredMap = Self.authoredMap(from: authoredAttributes)
+		self._values = State(initialValue: Self.initialValues(layout: layout, authoredAttributes: authoredMap, identifier: definition?.identifier))
 		self._isExpanded = State(initialValue: true)
 	}
 
@@ -944,9 +959,23 @@ private struct ComponentParametersSection: View {
 			Group {
 				let parameters = definition?.parameterLayout ?? []
 				if parameters.isEmpty {
-					Text("No editable parameters mapped yet.")
-						.font(.system(size: 11))
-						.foregroundStyle(.secondary)
+					let visibleAttributes = authoredAttributes.filter { $0.name != "info:id" }
+					if visibleAttributes.isEmpty {
+						Text("No editable parameters mapped yet.")
+							.font(.system(size: 11))
+							.foregroundStyle(.secondary)
+					} else {
+						VStack(alignment: .leading, spacing: 8) {
+							ForEach(visibleAttributes, id: \.name) { attribute in
+								InspectorRow(label: attribute.name) {
+									Text(attribute.value)
+										.font(.system(size: 11))
+										.textSelection(.enabled)
+										.frame(maxWidth: .infinity, alignment: .leading)
+								}
+							}
+						}
+					}
 				} else {
 					VStack(alignment: .leading, spacing: 10) {
 						ForEach(parameters, id: \.key) { parameter in
@@ -1013,6 +1042,15 @@ private struct ComponentParametersSection: View {
 		}
 		.opacity(isActive ? 1 : 0.55)
 		.animation(.default, value: isActive)
+		.onChange(of: authoredAttributesSignature) { _, _ in
+			let layout = definition?.parameterLayout ?? []
+			guard !layout.isEmpty else { return }
+			values = Self.initialValues(
+				layout: layout,
+				authoredAttributes: Self.authoredMap(from: authoredAttributes),
+				identifier: componentIdentifier
+			)
+		}
 	}
 
 	private func boolBinding(for key: String, fallback: Bool) -> Binding<Bool> {
@@ -1021,7 +1059,10 @@ private struct ComponentParametersSection: View {
 				if case let .bool(value)? = values[key] { return value }
 				return fallback
 			},
-			set: { values[key] = .bool($0) }
+			set: {
+				values[key] = .bool($0)
+				notifyParameterChange(key: key, value: .bool($0))
+			}
 		)
 	}
 
@@ -1031,7 +1072,10 @@ private struct ComponentParametersSection: View {
 				if case let .string(value)? = values[key] { return value }
 				return fallback
 			},
-			set: { values[key] = .string($0) }
+			set: {
+				values[key] = .string($0)
+				notifyParameterChange(key: key, value: .string($0))
+			}
 		)
 	}
 
@@ -1041,8 +1085,16 @@ private struct ComponentParametersSection: View {
 				if case let .double(value)? = values[key] { return value }
 				return fallback
 			},
-			set: { values[key] = .double($0) }
+			set: {
+				values[key] = .double($0)
+				notifyParameterChange(key: key, value: .double($0))
+			}
 		)
+	}
+
+	private func notifyParameterChange(key: String, value: InspectorComponentParameterValue) {
+		guard let componentIdentifier else { return }
+		onParameterChanged(componentIdentifier, key, value)
 	}
 
 	private func copyComponentName() {
@@ -1066,24 +1118,121 @@ private struct ComponentParametersSection: View {
 		pasteboard.clearContents()
 		pasteboard.setString(payload, forType: .string)
 	}
-}
 
-private enum ComponentParameterValue: Equatable {
-	case bool(Bool)
-	case string(String)
-	case double(Double)
+	private var componentIdentifier: String? {
+		definition?.identifier
+		?? authoredAttributes.first(where: { $0.name == "info:id" })?.value
+			.trimmingCharacters(in: CharacterSet(charactersIn: "\""))
+	}
 
-	static func defaultValue(for kind: InspectorComponentParameter.Kind) -> Self {
-		switch kind {
-		case let .toggle(defaultValue):
-			.bool(defaultValue)
-		case let .text(defaultValue, _):
-			.string(defaultValue)
-		case let .scalar(defaultValue, _):
-			.double(defaultValue)
-		case let .choice(defaultValue, _):
-			.string(defaultValue)
+	private var authoredAttributesSignature: String {
+		authoredAttributes
+			.map { "\($0.name)=\($0.value)" }
+			.sorted()
+			.joined(separator: "|")
+	}
+
+	private static func authoredMap(from attributes: [USDPrimAttributes.AuthoredAttribute]) -> [String: String] {
+		var map: [String: String] = [:]
+		for attribute in attributes {
+			map[attribute.name] = attribute.value
 		}
+		return map
+	}
+
+	private static func initialValues(
+		layout: [InspectorComponentParameter],
+		authoredAttributes: [String: String],
+		identifier: String?
+	) -> [String: InspectorComponentParameterValue] {
+		Dictionary(
+			uniqueKeysWithValues: layout.map { parameter in
+				(
+					parameter.key,
+					initialValue(
+						for: parameter,
+						authoredAttributes: authoredAttributes,
+						identifier: identifier
+					)
+				)
+			}
+		)
+	}
+
+	private static func initialValue(
+		for parameter: InspectorComponentParameter,
+		authoredAttributes: [String: String],
+		identifier: String?
+	) -> InspectorComponentParameterValue {
+		let authoredName = authoredNameForParameter(
+			key: parameter.key,
+			componentIdentifier: identifier
+		)
+		let authoredRaw = authoredAttributes[authoredName]
+		switch parameter.kind {
+		case let .toggle(defaultValue):
+			guard let authoredRaw else {
+				return .bool(defaultValue)
+			}
+			return .bool(parseUSDBool(authoredRaw) ?? defaultValue)
+		case let .text(defaultValue, _):
+			guard let authoredRaw else {
+				return .string(defaultValue)
+			}
+			return .string(parseUSDString(authoredRaw))
+		case let .scalar(defaultValue, _):
+			guard let authoredRaw else {
+				return .double(defaultValue)
+			}
+			return .double(parseUSDDouble(authoredRaw) ?? defaultValue)
+		case let .choice(defaultValue, options):
+			guard let authoredRaw else {
+				return .string(defaultValue)
+			}
+			let parsed = parseUSDString(authoredRaw)
+			let resolved = options.contains(parsed) ? parsed : defaultValue
+			return .string(resolved)
+		}
+	}
+
+	private static func authoredNameForParameter(
+		key: String,
+		componentIdentifier: String?
+	) -> String {
+		switch (componentIdentifier, key) {
+		case ("RealityKit.Reverb", "preset"):
+			return "reverbPreset"
+		default:
+			return key
+		}
+	}
+
+	private static func parseUSDBool(_ raw: String) -> Bool? {
+		switch raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+		case "true":
+			return true
+		case "false":
+			return false
+		default:
+			return nil
+		}
+	}
+
+	private static func parseUSDDouble(_ raw: String) -> Double? {
+		Double(raw.trimmingCharacters(in: .whitespacesAndNewlines))
+	}
+
+	private static func parseUSDString(_ raw: String) -> String {
+		let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+		guard trimmed.count >= 2, trimmed.first == "\"", trimmed.last == "\"" else {
+			return trimmed
+		}
+		let start = trimmed.index(after: trimmed.startIndex)
+		let end = trimmed.index(before: trimmed.endIndex)
+		let inner = String(trimmed[start..<end])
+		return inner
+			.replacingOccurrences(of: "\\\"", with: "\"")
+			.replacingOccurrences(of: "\\\\", with: "\\")
 	}
 }
 

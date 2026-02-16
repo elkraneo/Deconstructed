@@ -632,7 +632,8 @@ public struct DocumentEditorFeature {
 						.send(.projectBrowser(.sceneModified(tab.fileURL))),
 						.send(.viewport(.loadRequestedPreservingCamera(tab.fileURL))),
 						.send(.sceneNavigator(.refreshRequested)),
-						.send(.inspector(.selectionChanged(state.inspector.selectedNodeID)))
+						.send(.inspector(.selectionChanged(state.inspector.selectedNodeID))),
+						.send(.viewport(.selectionChanged(state.inspector.selectedNodeID)))
 					)
 				}
 
@@ -645,7 +646,8 @@ public struct DocumentEditorFeature {
 					return .merge(
 						.send(.viewport(.loadRequestedPreservingCamera(tab.fileURL))),
 						.send(.sceneNavigator(.refreshRequested)),
-						.send(.inspector(.selectionChanged(state.inspector.selectedNodeID)))
+						.send(.inspector(.selectionChanged(state.inspector.selectedNodeID))),
+						.send(.viewport(.selectionChanged(state.inspector.selectedNodeID)))
 					)
 				}
 
@@ -658,7 +660,8 @@ public struct DocumentEditorFeature {
 					return .merge(
 						.send(.viewport(.loadRequestedPreservingCamera(tab.fileURL))),
 						.send(.sceneNavigator(.refreshRequested)),
-						.send(.inspector(.selectionChanged(state.inspector.selectedNodeID)))
+						.send(.inspector(.selectionChanged(state.inspector.selectedNodeID))),
+						.send(.viewport(.selectionChanged(state.inspector.selectedNodeID)))
 					)
 				}
 

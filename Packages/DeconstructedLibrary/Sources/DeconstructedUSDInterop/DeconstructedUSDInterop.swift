@@ -554,6 +554,43 @@ public enum DeconstructedUSDInterop {
 		try deletePrim(url: url, primPath: componentPrimPath)
 	}
 
+	public static func setRealityKitComponentParameter(
+		url: URL,
+		componentPrimPath: String,
+		attributeType: String,
+		attributeName: String,
+		valueLiteral: String
+	) throws {
+		guard url.pathExtension.lowercased() == "usda" else {
+			throw DeconstructedUSDInteropError.componentAuthoringFailed(
+				reason: "Only .usda scenes are supported for initial component parameter editing."
+			)
+		}
+		let source: String
+		do {
+			source = try String(contentsOf: url, encoding: .utf8)
+		} catch {
+			throw DeconstructedUSDInteropError.componentAuthoringFailed(
+				reason: "Unable to read USDA scene."
+			)
+		}
+
+		let updated = try updateRealityKitComponentParameterInUSDA(
+			source,
+			componentPrimPath: componentPrimPath,
+			attributeType: attributeType,
+			attributeName: attributeName,
+			valueLiteral: valueLiteral
+		)
+		do {
+			try updated.write(to: url, atomically: true, encoding: .utf8)
+		} catch {
+			throw DeconstructedUSDInteropError.componentAuthoringFailed(
+				reason: "Unable to write USDA scene."
+			)
+		}
+	}
+
 	public static func listRealityKitComponentPrims(
 		url: URL,
 		parentPrimPath: String
@@ -1015,4 +1052,96 @@ private func parseActiveFlag(from text: String?) -> Bool? {
 		return true
 	}
 	return nil
+}
+
+private func updateRealityKitComponentParameterInUSDA(
+	_ source: String,
+	componentPrimPath: String,
+	attributeType: String,
+	attributeName: String,
+	valueLiteral: String
+) throws -> String {
+	let lines = source.split(whereSeparator: \.isNewline).map(String.init)
+	let indentUnit = source.contains("\t") ? "\t" : "    "
+	let attrRegex = try NSRegularExpression(
+		pattern: #"^\s*(?:uniform\s+)?[A-Za-z0-9_:\[\]]+\s+([A-Za-z_][A-Za-z0-9_:]*)\s*="#
+	)
+
+	var stack: [USDAPrimContext] = []
+	var pending: USDAPrimContext?
+	var componentIndent: String?
+	var inTarget = false
+	var insertIndex: Int?
+	var replaceIndex: Int?
+
+	for (index, line) in lines.enumerated() {
+		if let declaration = parsePrimDeclarationLine(line) {
+			let path = if let parent = stack.last?.path {
+				"\(parent)/\(declaration.primName)"
+			} else {
+				"/\(declaration.primName)"
+			}
+			let context = USDAPrimContext(path: path, indent: declaration.indent)
+			if line.contains("{") {
+				stack.append(context)
+				inTarget = context.path == componentPrimPath
+				if inTarget { componentIndent = context.indent }
+			} else {
+				pending = context
+			}
+		}
+
+		if line.contains("{"), let pendingContext = pending {
+			stack.append(pendingContext)
+			inTarget = pendingContext.path == componentPrimPath
+			if inTarget { componentIndent = pendingContext.indent }
+			pending = nil
+		}
+
+		if inTarget {
+			let nsLine = line as NSString
+			let range = NSRange(location: 0, length: nsLine.length)
+			if let match = attrRegex.firstMatch(in: line, options: [], range: range),
+			   match.numberOfRanges > 1
+			{
+				let nameRange = match.range(at: 1)
+				if nameRange.location != NSNotFound {
+					let name = nsLine.substring(with: nameRange)
+					if name == attributeName {
+						replaceIndex = index
+					}
+				}
+			}
+		}
+
+		let closingCount = line.filter { $0 == "}" }.count
+		if closingCount > 0 {
+			for _ in 0..<closingCount {
+				guard let current = stack.last else { break }
+				if current.path == componentPrimPath && insertIndex == nil {
+					insertIndex = index
+				}
+				_ = stack.popLast()
+				inTarget = stack.last?.path == componentPrimPath
+			}
+		}
+	}
+
+	guard let componentIndent, let insertIndex else {
+		throw DeconstructedUSDInteropError.componentAuthoringFailed(
+			reason: "Component prim not found: \(componentPrimPath)"
+		)
+	}
+
+	let fieldIndent = componentIndent + indentUnit
+	let authoredLine = "\(fieldIndent)\(attributeType) \(attributeName) = \(valueLiteral)"
+	var updatedLines = lines
+	if let replaceIndex {
+		updatedLines[replaceIndex] = authoredLine
+	} else {
+		updatedLines.insert(authoredLine, at: insertIndex)
+	}
+
+	let updated = updatedLines.joined(separator: "\n")
+	return source.hasSuffix("\n") ? updated + "\n" : updated
 }

@@ -21,6 +21,12 @@ public struct InspectorComponentParameter: Equatable, Sendable, Hashable, Identi
 	public var id: String { key }
 }
 
+public enum InspectorComponentParameterValue: Equatable, Sendable, Hashable {
+	case bool(Bool)
+	case string(String)
+	case double(Double)
+}
+
 public struct InspectorComponentDefinition: Equatable, Sendable, Identifiable, Hashable {
 	public enum Placement: Sendable, Hashable {
 		case selectedPrim

@@ -22,6 +22,7 @@ import USDInteropAdvancedCore
 			public var primMaterialBinding: String?
 			public var primMaterialBindingStrength: USDMaterialBindingStrength?
 			public var componentActiveByPath: [String: Bool]
+			public var componentAuthoredAttributesByPath: [String: [USDPrimAttributes.AuthoredAttribute]]
 			public var boundMaterial: USDMaterialInfo?
 			public var availableMaterials: [USDMaterialInfo]
 			public var sceneNodes: [SceneNode]
@@ -48,6 +49,7 @@ import USDInteropAdvancedCore
 				primMaterialBinding: String? = nil,
 				primMaterialBindingStrength: USDMaterialBindingStrength? = nil,
 				componentActiveByPath: [String: Bool] = [:],
+				componentAuthoredAttributesByPath: [String: [USDPrimAttributes.AuthoredAttribute]] = [:],
 				boundMaterial: USDMaterialInfo? = nil,
 				availableMaterials: [USDMaterialInfo] = [],
 				sceneNodes: [SceneNode] = [],
@@ -73,6 +75,7 @@ import USDInteropAdvancedCore
 				self.primMaterialBinding = primMaterialBinding
 				self.primMaterialBindingStrength = primMaterialBindingStrength
 				self.componentActiveByPath = componentActiveByPath
+				self.componentAuthoredAttributesByPath = componentAuthoredAttributesByPath
 				self.boundMaterial = boundMaterial
 				self.availableMaterials = availableMaterials
 				self.sceneNodes = sceneNodes
@@ -137,12 +140,21 @@ import USDInteropAdvancedCore
 			case setMaterialBindingStrengthSucceeded
 			case setMaterialBindingStrengthFailed(String)
 			case componentActivationLoaded([String: Bool])
+			case componentAuthoredAttributesLoaded([String: [USDPrimAttributes.AuthoredAttribute]])
 			case addComponentRequested(InspectorComponentDefinition)
 			case addComponentSucceeded(String)
 			case addComponentFailed(String)
 			case setComponentActiveRequested(componentPath: String, isActive: Bool)
 			case setComponentActiveSucceeded(componentPath: String, isActive: Bool)
 			case setComponentActiveFailed(String)
+			case setComponentParameterRequested(
+				componentPath: String,
+				componentIdentifier: String,
+				parameterKey: String,
+				value: InspectorComponentParameterValue
+			)
+			case setComponentParameterSucceeded(componentPath: String, attributeName: String)
+			case setComponentParameterFailed(String)
 			case deleteComponentRequested(componentPath: String)
 			case deleteComponentSucceeded(componentPath: String)
 			case deleteComponentFailed(String)
@@ -189,6 +201,7 @@ import USDInteropAdvancedCore
 					state.primMaterialBinding = nil
 					state.primMaterialBindingStrength = nil
 					state.componentActiveByPath = [:]
+					state.componentAuthoredAttributesByPath = [:]
 					state.boundMaterial = nil
 					state.availableMaterials = []
 					state.primIsLoading = false
@@ -222,6 +235,7 @@ import USDInteropAdvancedCore
 					state.primMaterialBinding = nil
 					state.primMaterialBindingStrength = nil
 					state.componentActiveByPath = [:]
+					state.componentAuthoredAttributesByPath = [:]
 					state.boundMaterial = nil
 					state.primErrorMessage = nil
 					state.pendingPrimLoads = []
@@ -298,6 +312,16 @@ import USDInteropAdvancedCore
 							url: url
 						)
 						await send(.componentActivationLoaded(componentStates))
+						var componentAttributes: [String: [USDPrimAttributes.AuthoredAttribute]] = [:]
+						for componentPath in componentStates.keys {
+							if let attrs = DeconstructedUSDInterop.getPrimAttributes(
+								url: url,
+								primPath: componentPath
+							)?.authoredAttributes {
+								componentAttributes[componentPath] = attrs
+							}
+						}
+						await send(.componentAuthoredAttributesLoaded(componentAttributes))
 					}
 					.cancellable(
 						id: PrimAttributesLoadCancellationID.load,
@@ -554,6 +578,12 @@ import USDInteropAdvancedCore
 					state.componentActiveByPath = states
 					return .none
 
+				case let .componentAuthoredAttributesLoaded(attributesByPath):
+					for (path, attributes) in attributesByPath {
+						state.componentAuthoredAttributesByPath[path] = attributes
+					}
+					return .none
+
 				case let .setMaterialBinding(materialPath):
 					guard let url = state.sceneURL, let primPath = state.selectedNodeID else {
 						return .none
@@ -701,6 +731,49 @@ import USDInteropAdvancedCore
 					state.primErrorMessage = "Failed to update component state: \(message)"
 					return .none
 
+				case let .setComponentParameterRequested(componentPath, componentIdentifier, parameterKey, value):
+					guard let url = state.sceneURL else {
+						return .none
+					}
+					guard let spec = componentParameterAuthoringSpec(
+						componentIdentifier: componentIdentifier,
+						parameterKey: parameterKey,
+						value: value
+					) else {
+						state.primErrorMessage = "Unsupported parameter mapping for \(componentIdentifier).\(parameterKey)"
+						return .none
+					}
+					return .run { send in
+						do {
+							try DeconstructedUSDInterop.setRealityKitComponentParameter(
+								url: url,
+								componentPrimPath: componentPath,
+								attributeType: spec.attributeType,
+								attributeName: spec.attributeName,
+								valueLiteral: spec.valueLiteral
+							)
+							let refreshed = DeconstructedUSDInterop.getPrimAttributes(
+								url: url,
+								primPath: componentPath
+							)?.authoredAttributes ?? []
+							await send(.componentAuthoredAttributesLoaded([componentPath: refreshed]))
+							await send(.setComponentParameterSucceeded(
+								componentPath: componentPath,
+								attributeName: spec.attributeName
+							))
+						} catch {
+							await send(.setComponentParameterFailed(error.localizedDescription))
+						}
+					}
+
+				case .setComponentParameterSucceeded:
+					state.primErrorMessage = nil
+					return .none
+
+				case let .setComponentParameterFailed(message):
+					state.primErrorMessage = "Failed to set component parameter: \(message)"
+					return .none
+
 				case let .deleteComponentRequested(componentPath):
 					guard let url = state.sceneURL else {
 						return .none
@@ -719,6 +792,7 @@ import USDInteropAdvancedCore
 
 				case let .deleteComponentSucceeded(componentPath):
 					state.componentActiveByPath.removeValue(forKey: componentPath)
+					state.componentAuthoredAttributesByPath.removeValue(forKey: componentPath)
 					state.primErrorMessage = nil
 					return .none
 
@@ -1083,6 +1157,76 @@ private func completePrimLoad(
 ) {
 	state.pendingPrimLoads.remove(section)
 	state.primIsLoading = !state.pendingPrimLoads.isEmpty
+}
+
+private struct ComponentParameterAuthoringSpec {
+	let attributeType: String
+	let attributeName: String
+	let valueLiteral: String
+}
+
+private func componentParameterAuthoringSpec(
+	componentIdentifier: String,
+	parameterKey: String,
+	value: InspectorComponentParameterValue
+) -> ComponentParameterAuthoringSpec? {
+	switch (componentIdentifier, parameterKey, value) {
+	case ("RealityKit.Accessibility", "isAccessibilityElement", .bool(let boolValue)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "bool",
+			attributeName: "isAccessibilityElement",
+			valueLiteral: boolValue ? "true" : "false"
+		)
+	case ("RealityKit.Accessibility", "label", .string(let stringValue)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "string",
+			attributeName: "label",
+			valueLiteral: quoteUSDString(stringValue)
+		)
+	case ("RealityKit.Accessibility", "value", .string(let stringValue)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "string",
+			attributeName: "value",
+			valueLiteral: quoteUSDString(stringValue)
+		)
+	case ("RealityKit.Billboard", "blendFactor", .double(let numberValue)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "float",
+			attributeName: "blendFactor",
+			valueLiteral: formatUSDFloat(numberValue)
+		)
+	case ("RealityKit.Reverb", "preset", .string(let displayPreset)):
+		let token = mapReverbPresetToToken(displayPreset)
+		return ComponentParameterAuthoringSpec(
+			attributeType: "token",
+			attributeName: "reverbPreset",
+			valueLiteral: quoteUSDString(token)
+		)
+	default:
+		return nil
+	}
+}
+
+private func quoteUSDString(_ text: String) -> String {
+	let escaped = text
+		.replacingOccurrences(of: "\\", with: "\\\\")
+		.replacingOccurrences(of: "\"", with: "\\\"")
+	return "\"\(escaped)\""
+}
+
+private func formatUSDFloat(_ value: Double) -> String {
+	let formatted = String(format: "%.6f", value)
+	return formatted.replacingOccurrences(of: #"(\.\d*?[1-9])0+$|\.0+$"#, with: "$1", options: .regularExpression)
+}
+
+private func mapReverbPresetToToken(_ displayName: String) -> String {
+	switch displayName {
+	case "Small Room": return "SmallRoom"
+	case "Large Room": return "LargeRoom"
+	case "Cathedral": return "Cathedral"
+	case "Plate": return "Plate"
+	default: return "MediumRoomTreated"
+	}
 }
 
 private enum PrimAttributesLoadCancellationID {
