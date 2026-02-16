@@ -216,6 +216,64 @@ public struct InspectorComponentDefinition: Equatable, Sendable, Identifiable, H
 					kind: .scalar(defaultValue: 2, unit: nil)
 				)
 			]
+		case "RealityKit.SpotLight":
+			return [
+				InspectorComponentParameter(
+					key: "color",
+					label: "Color",
+					kind: .text(defaultValue: "(1, 1, 1)", placeholder: "(r, g, b)")
+				),
+				InspectorComponentParameter(
+					key: "intensity",
+					label: "Intensity",
+					kind: .scalar(defaultValue: 26963.76, unit: nil)
+				),
+				InspectorComponentParameter(
+					key: "innerAngle",
+					label: "Inner Angle",
+					kind: .scalar(defaultValue: 45, unit: nil)
+				),
+				InspectorComponentParameter(
+					key: "outerAngle",
+					label: "Outer Angle",
+					kind: .scalar(defaultValue: 45, unit: nil)
+				),
+				InspectorComponentParameter(
+					key: "attenuationRadius",
+					label: "Attenuation Radius",
+					kind: .scalar(defaultValue: 10, unit: nil)
+				),
+				InspectorComponentParameter(
+					key: "attenuationFalloff",
+					label: "Attenuation Falloff",
+					kind: .scalar(defaultValue: 2, unit: nil)
+				),
+				InspectorComponentParameter(
+					key: "shadowEnabled",
+					label: "Shadow Enabled",
+					kind: .toggle(defaultValue: false)
+				),
+				InspectorComponentParameter(
+					key: "shadowBias",
+					label: "Shadow Bias",
+					kind: .scalar(defaultValue: 0, unit: nil)
+				),
+				InspectorComponentParameter(
+					key: "shadowCullMode",
+					label: "Shadow Cull Mode",
+					kind: .choice(defaultValue: "Default", options: ["Default", "Back", "Front", "None"])
+				),
+				InspectorComponentParameter(
+					key: "shadowNear",
+					label: "Shadow Near",
+					kind: .choice(defaultValue: "Automatic", options: ["Automatic", "Fixed"])
+				),
+				InspectorComponentParameter(
+					key: "shadowFar",
+					label: "Shadow Far",
+					kind: .choice(defaultValue: "Automatic", options: ["Automatic", "Fixed"])
+				)
+			]
 		default:
 			return []
 		}

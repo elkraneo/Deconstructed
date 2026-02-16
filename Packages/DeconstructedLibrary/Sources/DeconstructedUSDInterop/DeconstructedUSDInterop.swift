@@ -591,6 +591,39 @@ public enum DeconstructedUSDInterop {
 		}
 	}
 
+	public static func deleteRealityKitComponentParameter(
+		url: URL,
+		componentPrimPath: String,
+		attributeName: String
+	) throws {
+		guard url.pathExtension.lowercased() == "usda" else {
+			throw DeconstructedUSDInteropError.componentAuthoringFailed(
+				reason: "Only .usda scenes are supported for initial component parameter editing."
+			)
+		}
+		let source: String
+		do {
+			source = try String(contentsOf: url, encoding: .utf8)
+		} catch {
+			throw DeconstructedUSDInteropError.componentAuthoringFailed(
+				reason: "Unable to read USDA scene."
+			)
+		}
+
+		let updated = try removeRealityKitComponentParameterInUSDA(
+			source,
+			componentPrimPath: componentPrimPath,
+			attributeName: attributeName
+		)
+		do {
+			try updated.write(to: url, atomically: true, encoding: .utf8)
+		} catch {
+			throw DeconstructedUSDInteropError.componentAuthoringFailed(
+				reason: "Unable to write USDA scene."
+			)
+		}
+	}
+
 	public static func listRealityKitComponentPrims(
 		url: URL,
 		parentPrimPath: String
@@ -1142,6 +1175,78 @@ private func updateRealityKitComponentParameterInUSDA(
 		updatedLines.insert(authoredLine, at: insertIndex)
 	}
 
+	let updated = updatedLines.joined(separator: "\n")
+	return source.hasSuffix("\n") ? updated + "\n" : updated
+}
+
+private func removeRealityKitComponentParameterInUSDA(
+	_ source: String,
+	componentPrimPath: String,
+	attributeName: String
+) throws -> String {
+	let lines = source.split(whereSeparator: \.isNewline).map(String.init)
+	let attrRegex = try NSRegularExpression(
+		pattern: #"^\s*(?:uniform\s+)?[A-Za-z0-9_:\[\]]+\s+([A-Za-z_][A-Za-z0-9_:]*)\s*="#
+	)
+
+	var stack: [USDAPrimContext] = []
+	var pending: USDAPrimContext?
+	var inTarget = false
+	var removeIndex: Int?
+
+	for (index, line) in lines.enumerated() {
+		if let declaration = parsePrimDeclarationLine(line) {
+			let path = if let parent = stack.last?.path {
+				"\(parent)/\(declaration.primName)"
+			} else {
+				"/\(declaration.primName)"
+			}
+			let context = USDAPrimContext(path: path, indent: declaration.indent)
+			if line.contains("{") {
+				stack.append(context)
+				inTarget = context.path == componentPrimPath
+			} else {
+				pending = context
+			}
+		}
+
+		if line.contains("{"), let pendingContext = pending {
+			stack.append(pendingContext)
+			inTarget = pendingContext.path == componentPrimPath
+			pending = nil
+		}
+
+		if inTarget {
+			let nsLine = line as NSString
+			let range = NSRange(location: 0, length: nsLine.length)
+			if let match = attrRegex.firstMatch(in: line, options: [], range: range),
+			   match.numberOfRanges > 1
+			{
+				let nameRange = match.range(at: 1)
+				if nameRange.location != NSNotFound {
+					let name = nsLine.substring(with: nameRange)
+					if name == attributeName {
+						removeIndex = index
+						break
+					}
+				}
+			}
+		}
+
+		let closingCount = line.filter { $0 == "}" }.count
+		if closingCount > 0 {
+			for _ in 0..<closingCount {
+				_ = stack.popLast()
+				inTarget = stack.last?.path == componentPrimPath
+			}
+		}
+	}
+
+	guard let removeIndex else {
+		return source
+	}
+	var updatedLines = lines
+	updatedLines.remove(at: removeIndex)
 	let updated = updatedLines.joined(separator: "\n")
 	return source.hasSuffix("\n") ? updated + "\n" : updated
 }

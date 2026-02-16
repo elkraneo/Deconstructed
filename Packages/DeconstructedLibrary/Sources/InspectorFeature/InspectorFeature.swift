@@ -776,13 +776,27 @@ import USDInteropAdvancedCore
 					}
 					return .run { send in
 						do {
-							try DeconstructedUSDInterop.setRealityKitComponentParameter(
-								url: url,
-								componentPrimPath: componentPath,
-								attributeType: spec.attributeType,
-								attributeName: spec.attributeName,
-								valueLiteral: spec.valueLiteral
-							)
+							let targetPrimPath = if let suffix = spec.primPathSuffix {
+								"\(componentPath)/\(suffix)"
+							} else {
+								componentPath
+							}
+							switch spec.operation {
+							case let .set(valueLiteral):
+								try DeconstructedUSDInterop.setRealityKitComponentParameter(
+									url: url,
+									componentPrimPath: targetPrimPath,
+									attributeType: spec.attributeType,
+									attributeName: spec.attributeName,
+									valueLiteral: valueLiteral
+								)
+							case .clear:
+								try DeconstructedUSDInterop.deleteRealityKitComponentParameter(
+									url: url,
+									componentPrimPath: targetPrimPath,
+									attributeName: spec.attributeName
+								)
+							}
 							let refreshed = DeconstructedUSDInterop.getPrimAttributes(
 								url: url,
 								primPath: componentPath
@@ -1301,9 +1315,15 @@ private func completePrimLoad(
 }
 
 private struct ComponentParameterAuthoringSpec {
+	enum Operation {
+		case set(valueLiteral: String)
+		case clear
+	}
+
 	let attributeType: String
 	let attributeName: String
-	let valueLiteral: String
+	let operation: Operation
+	let primPathSuffix: String?
 }
 
 private func componentParameterAuthoringSpec(
@@ -1316,86 +1336,201 @@ private func componentParameterAuthoringSpec(
 		return ComponentParameterAuthoringSpec(
 			attributeType: "bool",
 			attributeName: "isAccessibilityElement",
-			valueLiteral: boolValue ? "true" : "false"
+			operation: .set(valueLiteral: boolValue ? "true" : "false"),
+			primPathSuffix: nil
 		)
 	case ("RealityKit.Accessibility", "label", .string(let stringValue)):
 		return ComponentParameterAuthoringSpec(
 			attributeType: "string",
 			attributeName: "label",
-			valueLiteral: quoteUSDString(stringValue)
+			operation: .set(valueLiteral: quoteUSDString(stringValue)),
+			primPathSuffix: nil
 		)
 	case ("RealityKit.Accessibility", "value", .string(let stringValue)):
 		return ComponentParameterAuthoringSpec(
 			attributeType: "string",
 			attributeName: "value",
-			valueLiteral: quoteUSDString(stringValue)
+			operation: .set(valueLiteral: quoteUSDString(stringValue)),
+			primPathSuffix: nil
 		)
 	case ("RealityKit.Billboard", "blendFactor", .double(let numberValue)):
 		return ComponentParameterAuthoringSpec(
 			attributeType: "float",
 			attributeName: "blendFactor",
-			valueLiteral: formatUSDFloat(numberValue)
+			operation: .set(valueLiteral: formatUSDFloat(numberValue)),
+			primPathSuffix: nil
 		)
 	case ("RealityKit.Reverb", "preset", .string(let displayPreset)):
 		let token = mapReverbPresetToToken(displayPreset)
 		return ComponentParameterAuthoringSpec(
 			attributeType: "token",
 			attributeName: "reverbPreset",
-			valueLiteral: quoteUSDString(token)
+			operation: .set(valueLiteral: quoteUSDString(token)),
+			primPathSuffix: nil
 		)
 	case ("RealityKit.ImageBasedLight", "isGlobalIBL", .bool(let boolValue)):
 		return ComponentParameterAuthoringSpec(
 			attributeType: "bool",
 			attributeName: "isGlobalIBL",
-			valueLiteral: boolValue ? "true" : "false"
+			operation: .set(valueLiteral: boolValue ? "true" : "false"),
+			primPathSuffix: nil
 		)
 	case ("RealityKit.VirtualEnvironmentProbe", "blendMode", .string(let value)):
 		return ComponentParameterAuthoringSpec(
 			attributeType: "token",
 			attributeName: "blendMode",
-			valueLiteral: quoteUSDString(value)
+			operation: .set(valueLiteral: quoteUSDString(value)),
+			primPathSuffix: nil
 		)
 	case ("RealityKit.Collider", "group", .double(let numberValue)):
 		return ComponentParameterAuthoringSpec(
 			attributeType: "uint",
 			attributeName: "group",
-			valueLiteral: formatUSDUInt(numberValue)
+			operation: .set(valueLiteral: formatUSDUInt(numberValue)),
+			primPathSuffix: nil
 		)
 	case ("RealityKit.Collider", "mask", .double(let numberValue)):
 		return ComponentParameterAuthoringSpec(
 			attributeType: "uint",
 			attributeName: "mask",
-			valueLiteral: formatUSDUInt(numberValue)
+			operation: .set(valueLiteral: formatUSDUInt(numberValue)),
+			primPathSuffix: nil
 		)
 	case ("RealityKit.Collider", "type", .string(let value)):
 		return ComponentParameterAuthoringSpec(
 			attributeType: "token",
 			attributeName: "type",
-			valueLiteral: quoteUSDString(value)
+			operation: .set(valueLiteral: quoteUSDString(value)),
+			primPathSuffix: nil
 		)
 	case ("RealityKit.PointLight", "color", .string(let value)):
 		return ComponentParameterAuthoringSpec(
 			attributeType: "float3",
 			attributeName: "color",
-			valueLiteral: formatUSDColor3(value)
+			operation: .set(valueLiteral: formatUSDColor3(value)),
+			primPathSuffix: nil
 		)
 	case ("RealityKit.PointLight", "intensity", .double(let value)):
 		return ComponentParameterAuthoringSpec(
 			attributeType: "float",
 			attributeName: "intensity",
-			valueLiteral: formatUSDFloat(value)
+			operation: .set(valueLiteral: formatUSDFloat(value)),
+			primPathSuffix: nil
 		)
 	case ("RealityKit.PointLight", "attenuationRadius", .double(let value)):
 		return ComponentParameterAuthoringSpec(
 			attributeType: "float",
 			attributeName: "attenuationRadius",
-			valueLiteral: formatUSDFloat(value)
+			operation: .set(valueLiteral: formatUSDFloat(value)),
+			primPathSuffix: nil
 		)
 	case ("RealityKit.PointLight", "attenuationFalloff", .double(let value)):
 		return ComponentParameterAuthoringSpec(
 			attributeType: "float",
 			attributeName: "attenuationFalloffExponent",
-			valueLiteral: formatUSDFloat(value)
+			operation: .set(valueLiteral: formatUSDFloat(value)),
+			primPathSuffix: nil
+		)
+	case ("RealityKit.SpotLight", "color", .string(let value)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "float3",
+			attributeName: "color",
+			operation: .set(valueLiteral: formatUSDColor3(value)),
+			primPathSuffix: nil
+		)
+	case ("RealityKit.SpotLight", "intensity", .double(let value)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "float",
+			attributeName: "intensity",
+			operation: .set(valueLiteral: formatUSDFloat(value)),
+			primPathSuffix: nil
+		)
+	case ("RealityKit.SpotLight", "innerAngle", .double(let value)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "float",
+			attributeName: "innerAngle",
+			operation: .set(valueLiteral: formatUSDFloat(value)),
+			primPathSuffix: nil
+		)
+	case ("RealityKit.SpotLight", "outerAngle", .double(let value)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "float",
+			attributeName: "outerAngle",
+			operation: .set(valueLiteral: formatUSDFloat(value)),
+			primPathSuffix: nil
+		)
+	case ("RealityKit.SpotLight", "attenuationRadius", .double(let value)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "float",
+			attributeName: "attenuationRadius",
+			operation: .set(valueLiteral: formatUSDFloat(value)),
+			primPathSuffix: nil
+		)
+	case ("RealityKit.SpotLight", "attenuationFalloff", .double(let value)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "float",
+			attributeName: "attenuationFalloffExponent",
+			operation: .set(valueLiteral: formatUSDFloat(value)),
+			primPathSuffix: nil
+		)
+	case ("RealityKit.SpotLight", "shadowEnabled", .bool(let value)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "bool",
+			attributeName: "isEnabled",
+			operation: .set(valueLiteral: value ? "1" : "0"),
+			primPathSuffix: "Shadow"
+		)
+	case ("RealityKit.SpotLight", "shadowBias", .double(let value)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "float",
+			attributeName: "depthBias",
+			operation: .set(valueLiteral: formatUSDFloat(value)),
+			primPathSuffix: "Shadow"
+		)
+	case ("RealityKit.SpotLight", "shadowCullMode", .string(let value)):
+		if value == "Default" || value == "None" {
+			return ComponentParameterAuthoringSpec(
+				attributeType: "token",
+				attributeName: "cullMode",
+				operation: .clear,
+				primPathSuffix: "Shadow"
+			)
+		}
+		return ComponentParameterAuthoringSpec(
+			attributeType: "token",
+			attributeName: "cullMode",
+			operation: .set(valueLiteral: quoteUSDString(value)),
+			primPathSuffix: "Shadow"
+		)
+	case ("RealityKit.SpotLight", "shadowNear", .string(let value)):
+		if value == "Automatic" {
+			return ComponentParameterAuthoringSpec(
+				attributeType: "token",
+				attributeName: "zNear",
+				operation: .clear,
+				primPathSuffix: "Shadow"
+			)
+		}
+		return ComponentParameterAuthoringSpec(
+			attributeType: "token",
+			attributeName: "zNear",
+			operation: .set(valueLiteral: quoteUSDString(value)),
+			primPathSuffix: "Shadow"
+		)
+	case ("RealityKit.SpotLight", "shadowFar", .string(let value)):
+		if value == "Automatic" {
+			return ComponentParameterAuthoringSpec(
+				attributeType: "token",
+				attributeName: "zFar",
+				operation: .clear,
+				primPathSuffix: "Shadow"
+			)
+		}
+		return ComponentParameterAuthoringSpec(
+			attributeType: "token",
+			attributeName: "zFar",
+			operation: .set(valueLiteral: quoteUSDString(value)),
+			primPathSuffix: "Shadow"
 		)
 	default:
 		return nil

@@ -934,7 +934,8 @@ private struct ComponentParametersSection: View {
 		self.onPasteComponent = onPasteComponent
 		self.onDelete = onDelete
 		let layout = definition?.parameterLayout ?? []
-		let authoredMap = Self.authoredMap(from: authoredAttributes)
+		let allAuthoredAttributes = authoredAttributes + descendantAttributes.flatMap(\.authoredAttributes)
+		let authoredMap = Self.authoredMap(from: allAuthoredAttributes)
 		self._values = State(initialValue: Self.initialValues(layout: layout, authoredAttributes: authoredMap, identifier: definition?.identifier))
 		self._rawValues = State(
 			initialValue: Dictionary(
@@ -942,10 +943,8 @@ private struct ComponentParametersSection: View {
 			)
 		)
 		self._rawAttributeTypes = State(
-			initialValue: Dictionary(
-				uniqueKeysWithValues: authoredAttributes.map { attribute in
-					(attribute.name, inferAttributeType(name: attribute.name, literal: attribute.value))
-				}
+			initialValue: inferredTypeMap(
+				for: authoredAttributes + descendantAttributes.flatMap(\.authoredAttributes)
 			)
 		)
 		self._isExpanded = State(initialValue: true)
@@ -1155,15 +1154,14 @@ private struct ComponentParametersSection: View {
 			rawValues = Dictionary(
 				uniqueKeysWithValues: authoredAttributes.map { ($0.name, $0.value) }
 			)
-			rawAttributeTypes = Dictionary(
-				uniqueKeysWithValues: authoredAttributes.map { attribute in
-					(attribute.name, inferAttributeType(name: attribute.name, literal: attribute.value))
-				}
+			rawAttributeTypes = inferredTypeMap(
+				for: authoredAttributes + descendantAttributes.flatMap(\.authoredAttributes)
 			)
 			guard !layout.isEmpty else { return }
+			let allAuthoredAttributes = authoredAttributes + descendantAttributes.flatMap(\.authoredAttributes)
 			values = Self.initialValues(
 				layout: layout,
-				authoredAttributes: Self.authoredMap(from: authoredAttributes),
+				authoredAttributes: Self.authoredMap(from: allAuthoredAttributes),
 				identifier: componentIdentifier
 			)
 		}
@@ -1270,6 +1268,16 @@ private struct ComponentParametersSection: View {
 		return "token"
 	}
 
+	private func inferredTypeMap(
+		for attributes: [USDPrimAttributes.AuthoredAttribute]
+	) -> [String: String] {
+		var result: [String: String] = [:]
+		for attribute in attributes {
+			result[attribute.name] = inferAttributeType(name: attribute.name, literal: attribute.value)
+		}
+		return result
+	}
+
 	private func normalizeLiteral(_ input: String, attributeType: String) -> String {
 		let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
 		switch attributeType {
@@ -1329,7 +1337,7 @@ private struct ComponentParametersSection: View {
 	}
 
 	private var authoredAttributesSignature: String {
-		authoredAttributes
+		(authoredAttributes + descendantAttributes.flatMap(\.authoredAttributes))
 			.map { "\($0.name)=\($0.value)" }
 			.sorted()
 			.joined(separator: "|")
@@ -1407,6 +1415,18 @@ private struct ComponentParametersSection: View {
 			return "reverbPreset"
 		case ("RealityKit.PointLight", "attenuationFalloff"):
 			return "attenuationFalloffExponent"
+		case ("RealityKit.SpotLight", "attenuationFalloff"):
+			return "attenuationFalloffExponent"
+		case ("RealityKit.SpotLight", "shadowEnabled"):
+			return "isEnabled"
+		case ("RealityKit.SpotLight", "shadowBias"):
+			return "depthBias"
+		case ("RealityKit.SpotLight", "shadowCullMode"):
+			return "cullMode"
+		case ("RealityKit.SpotLight", "shadowNear"):
+			return "zNear"
+		case ("RealityKit.SpotLight", "shadowFar"):
+			return "zFar"
 		default:
 			return key
 		}
