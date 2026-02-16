@@ -797,6 +797,34 @@ import USDInteropAdvancedCore
 									attributeName: spec.attributeName
 								)
 							}
+							let supplemental = supplementalComponentAuthoringSpecs(
+								componentIdentifier: componentIdentifier,
+								parameterKey: parameterKey,
+								value: value
+							)
+							for extraSpec in supplemental {
+								let extraTargetPrimPath = if let suffix = extraSpec.primPathSuffix {
+									"\(componentPath)/\(suffix)"
+								} else {
+									componentPath
+								}
+								switch extraSpec.operation {
+								case let .set(valueLiteral):
+									try DeconstructedUSDInterop.setRealityKitComponentParameter(
+										url: url,
+										componentPrimPath: extraTargetPrimPath,
+										attributeType: extraSpec.attributeType,
+										attributeName: extraSpec.attributeName,
+										valueLiteral: valueLiteral
+									)
+								case .clear:
+									try DeconstructedUSDInterop.deleteRealityKitComponentParameter(
+										url: url,
+										componentPrimPath: extraTargetPrimPath,
+										attributeName: extraSpec.attributeName
+									)
+								}
+							}
 							let refreshed = DeconstructedUSDInterop.getPrimAttributes(
 								url: url,
 								primPath: componentPath
@@ -1532,8 +1560,127 @@ private func componentParameterAuthoringSpec(
 			operation: .set(valueLiteral: quoteUSDString(value)),
 			primPathSuffix: "Shadow"
 		)
+	case ("RealityKit.DirectionalLight", "color", .string(let value)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "float3",
+			attributeName: "color",
+			operation: .set(valueLiteral: formatUSDColor3(value)),
+			primPathSuffix: nil
+		)
+	case ("RealityKit.DirectionalLight", "intensity", .double(let value)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "float",
+			attributeName: "intensity",
+			operation: .set(valueLiteral: formatUSDFloat(value)),
+			primPathSuffix: nil
+		)
+	case ("RealityKit.DirectionalLight", "shadowEnabled", .bool(let value)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "bool",
+			attributeName: "isEnabled",
+			operation: .set(valueLiteral: value ? "1" : "0"),
+			primPathSuffix: "Shadow"
+		)
+	case ("RealityKit.DirectionalLight", "shadowBias", .double(let value)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "float",
+			attributeName: "depthBias",
+			operation: .set(valueLiteral: formatUSDFloat(value)),
+			primPathSuffix: "Shadow"
+		)
+	case ("RealityKit.DirectionalLight", "shadowCullMode", .string(let value)):
+		if value == "Default" {
+			return ComponentParameterAuthoringSpec(
+				attributeType: "token",
+				attributeName: "cullMode",
+				operation: .clear,
+				primPathSuffix: "Shadow"
+			)
+		}
+		return ComponentParameterAuthoringSpec(
+			attributeType: "token",
+			attributeName: "cullMode",
+			operation: .set(valueLiteral: quoteUSDString(value)),
+			primPathSuffix: "Shadow"
+		)
+	case ("RealityKit.DirectionalLight", "shadowProjectionType", .string(let value)):
+		if value == "Automatic" {
+			return ComponentParameterAuthoringSpec(
+				attributeType: "token",
+				attributeName: "projectionType",
+				operation: .clear,
+				primPathSuffix: "Shadow"
+			)
+		}
+		return ComponentParameterAuthoringSpec(
+			attributeType: "token",
+			attributeName: "projectionType",
+			operation: .set(valueLiteral: quoteUSDString(value)),
+			primPathSuffix: "Shadow"
+		)
+	case ("RealityKit.DirectionalLight", "shadowOrthographicScale", .double(let value)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "float",
+			attributeName: "orthographicScale",
+			operation: .set(valueLiteral: formatUSDFloat(value)),
+			primPathSuffix: "Shadow"
+		)
+	case ("RealityKit.DirectionalLight", "shadowZBounds", .string(let value)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "float2",
+			attributeName: "zBounds",
+			operation: .set(valueLiteral: formatUSDFloat2(value)),
+			primPathSuffix: "Shadow"
+		)
 	default:
 		return nil
+	}
+}
+
+private func supplementalComponentAuthoringSpecs(
+	componentIdentifier: String,
+	parameterKey: String,
+	value: InspectorComponentParameterValue
+) -> [ComponentParameterAuthoringSpec] {
+	switch (componentIdentifier, parameterKey, value) {
+	case ("RealityKit.DirectionalLight", "shadowProjectionType", .string(let value)):
+		if value == "Automatic" {
+			return [
+				ComponentParameterAuthoringSpec(
+					attributeType: "float",
+					attributeName: "orthographicScale",
+					operation: .clear,
+					primPathSuffix: "Shadow"
+				),
+				ComponentParameterAuthoringSpec(
+					attributeType: "float2",
+					attributeName: "zBounds",
+					operation: .clear,
+					primPathSuffix: "Shadow"
+				)
+			]
+		}
+		return []
+	case ("RealityKit.DirectionalLight", "shadowOrthographicScale", .double):
+		return [
+			ComponentParameterAuthoringSpec(
+				attributeType: "token",
+				attributeName: "projectionType",
+				operation: .set(valueLiteral: quoteUSDString("Fixed")),
+				primPathSuffix: "Shadow"
+			)
+		]
+	case ("RealityKit.DirectionalLight", "shadowZBounds", .string):
+		return [
+			ComponentParameterAuthoringSpec(
+				attributeType: "token",
+				attributeName: "projectionType",
+				operation: .set(valueLiteral: quoteUSDString("Fixed")),
+				primPathSuffix: "Shadow"
+			)
+		]
+	default:
+		return []
 	}
 }
 
@@ -1566,6 +1713,20 @@ private func formatUSDColor3(_ raw: String) -> String {
 		return "(\(parts[0]), \(parts[1]), \(parts[2]))"
 	}
 	return "(1, 1, 1)"
+}
+
+private func formatUSDFloat2(_ raw: String) -> String {
+	let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+	if trimmed.hasPrefix("("), trimmed.hasSuffix(")") {
+		return trimmed
+	}
+	let parts = trimmed
+		.split(separator: ",")
+		.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+	if parts.count == 2 {
+		return "(\(parts[0]), \(parts[1]))"
+	}
+	return "(0.02, 20)"
 }
 
 private func mapReverbPresetToToken(_ displayName: String) -> String {

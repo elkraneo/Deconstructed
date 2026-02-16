@@ -20,6 +20,7 @@ Only these component IDs currently have authored parameter lines in the fixture 
 6. `RealityKit.VirtualEnvironmentProbe`
 7. `RealityKit.SpotLight` (from `ComponentFieldExploration` diffs)
 8. `RealityKit.PointLight` (from `ComponentFieldExploration` diffs)
+9. `RealityKit.DirectionalLight` (from `ComponentFieldExploration` diffs)
 
 All other components in the fixture set are present as component prims but currently only author `info:id` (no parameter lines yet).
 
@@ -84,6 +85,19 @@ All other components in the fixture set are present as component prims but curre
    - `token cullMode = "Back"|"Front"` (not authored for `Default`/`None` in current fixtures)
    - `token zNear = "Fixed"` (absent for `Automatic`)
    - `token zFar = "Fixed"` (absent for `Automatic`)
+
+### RealityKit.DirectionalLight
+
+1. Top-level fields:
+   - `float3 color = (...)`
+   - `float intensity = ...`
+2. Descendant `Shadow` struct fields:
+   - `bool isEnabled = 1`
+   - `float depthBias = ...`
+   - `token cullMode = "Back"|"Front"|"None"` (not authored for `Default` in current fixtures)
+   - `token projectionType = "Fixed"` (not authored in base/default)
+   - `float orthographicScale = ...` (authored together with `projectionType = "Fixed"` in current fixtures)
+   - `float2 zBounds = (...)` (authored together with `projectionType = "Fixed"` in current fixtures)
 
 ## What This Means For Implementation
 

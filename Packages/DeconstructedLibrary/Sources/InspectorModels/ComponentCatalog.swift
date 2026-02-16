@@ -274,6 +274,49 @@ public struct InspectorComponentDefinition: Equatable, Sendable, Identifiable, H
 					kind: .choice(defaultValue: "Automatic", options: ["Automatic", "Fixed"])
 				)
 			]
+		case "RealityKit.DirectionalLight":
+			return [
+				InspectorComponentParameter(
+					key: "color",
+					label: "Color",
+					kind: .text(defaultValue: "(1, 1, 1)", placeholder: "(r, g, b)")
+				),
+				InspectorComponentParameter(
+					key: "intensity",
+					label: "Intensity",
+					kind: .scalar(defaultValue: 26963.76, unit: nil)
+				),
+				InspectorComponentParameter(
+					key: "shadowEnabled",
+					label: "Shadow Enabled",
+					kind: .toggle(defaultValue: false)
+				),
+				InspectorComponentParameter(
+					key: "shadowBias",
+					label: "Shadow Bias",
+					kind: .scalar(defaultValue: 0, unit: nil)
+				),
+				InspectorComponentParameter(
+					key: "shadowCullMode",
+					label: "Shadow Cull Mode",
+					kind: .choice(defaultValue: "Default", options: ["Default", "Back", "Front", "None"])
+				),
+				InspectorComponentParameter(
+					key: "shadowProjectionType",
+					label: "Shadow Projection",
+					kind: .choice(defaultValue: "Automatic", options: ["Automatic", "Fixed"])
+				),
+				InspectorComponentParameter(
+					key: "shadowOrthographicScale",
+					label: "Orthographic Scale",
+					kind: .scalar(defaultValue: 1, unit: nil)
+				),
+				InspectorComponentParameter(
+					key: "shadowZBounds",
+					label: "Z Bounds",
+					kind: .text(defaultValue: "(0.02, 20)", placeholder: "(near, far)")
+				)
+			]
 		default:
 			return []
 		}

@@ -1427,6 +1427,18 @@ private struct ComponentParametersSection: View {
 			return "zNear"
 		case ("RealityKit.SpotLight", "shadowFar"):
 			return "zFar"
+		case ("RealityKit.DirectionalLight", "shadowEnabled"):
+			return "isEnabled"
+		case ("RealityKit.DirectionalLight", "shadowBias"):
+			return "depthBias"
+		case ("RealityKit.DirectionalLight", "shadowCullMode"):
+			return "cullMode"
+		case ("RealityKit.DirectionalLight", "shadowProjectionType"):
+			return "projectionType"
+		case ("RealityKit.DirectionalLight", "shadowOrthographicScale"):
+			return "orthographicScale"
+		case ("RealityKit.DirectionalLight", "shadowZBounds"):
+			return "zBounds"
 		default:
 			return key
 		}
