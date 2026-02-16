@@ -23,6 +23,7 @@ import USDInteropAdvancedCore
 			public var primMaterialBindingStrength: USDMaterialBindingStrength?
 			public var componentActiveByPath: [String: Bool]
 			public var componentAuthoredAttributesByPath: [String: [USDPrimAttributes.AuthoredAttribute]]
+			public var componentDescendantAttributesByPath: [String: [ComponentDescendantAttributes]]
 			public var boundMaterial: USDMaterialInfo?
 			public var availableMaterials: [USDMaterialInfo]
 			public var sceneNodes: [SceneNode]
@@ -50,6 +51,7 @@ import USDInteropAdvancedCore
 				primMaterialBindingStrength: USDMaterialBindingStrength? = nil,
 				componentActiveByPath: [String: Bool] = [:],
 				componentAuthoredAttributesByPath: [String: [USDPrimAttributes.AuthoredAttribute]] = [:],
+				componentDescendantAttributesByPath: [String: [ComponentDescendantAttributes]] = [:],
 				boundMaterial: USDMaterialInfo? = nil,
 				availableMaterials: [USDMaterialInfo] = [],
 				sceneNodes: [SceneNode] = [],
@@ -76,6 +78,7 @@ import USDInteropAdvancedCore
 				self.primMaterialBindingStrength = primMaterialBindingStrength
 				self.componentActiveByPath = componentActiveByPath
 				self.componentAuthoredAttributesByPath = componentAuthoredAttributesByPath
+				self.componentDescendantAttributesByPath = componentDescendantAttributesByPath
 				self.boundMaterial = boundMaterial
 				self.availableMaterials = availableMaterials
 				self.sceneNodes = sceneNodes
@@ -141,6 +144,7 @@ import USDInteropAdvancedCore
 			case setMaterialBindingStrengthFailed(String)
 			case componentActivationLoaded([String: Bool])
 			case componentAuthoredAttributesLoaded([String: [USDPrimAttributes.AuthoredAttribute]])
+			case componentDescendantAttributesLoaded([String: [ComponentDescendantAttributes]])
 			case addComponentRequested(InspectorComponentDefinition)
 			case addComponentSucceeded(String)
 			case addComponentFailed(String)
@@ -210,6 +214,7 @@ import USDInteropAdvancedCore
 					state.primMaterialBindingStrength = nil
 					state.componentActiveByPath = [:]
 					state.componentAuthoredAttributesByPath = [:]
+					state.componentDescendantAttributesByPath = [:]
 					state.boundMaterial = nil
 					state.availableMaterials = []
 					state.primIsLoading = false
@@ -244,6 +249,7 @@ import USDInteropAdvancedCore
 					state.primMaterialBindingStrength = nil
 					state.componentActiveByPath = [:]
 					state.componentAuthoredAttributesByPath = [:]
+					state.componentDescendantAttributesByPath = [:]
 					state.boundMaterial = nil
 					state.primErrorMessage = nil
 					state.pendingPrimLoads = []
@@ -321,6 +327,7 @@ import USDInteropAdvancedCore
 						)
 						await send(.componentActivationLoaded(componentStates))
 						var componentAttributes: [String: [USDPrimAttributes.AuthoredAttribute]] = [:]
+						var componentDescendants: [String: [ComponentDescendantAttributes]] = [:]
 						for componentPath in componentStates.keys {
 							if let attrs = DeconstructedUSDInterop.getPrimAttributes(
 								url: url,
@@ -328,8 +335,17 @@ import USDInteropAdvancedCore
 							)?.authoredAttributes {
 								componentAttributes[componentPath] = attrs
 							}
+							let descendants = loadComponentDescendantAttributes(
+								componentPath: componentPath,
+								sceneNodes: sceneNodesSnapshot,
+								url: url
+							)
+							if !descendants.isEmpty {
+								componentDescendants[componentPath] = descendants
+							}
 						}
 						await send(.componentAuthoredAttributesLoaded(componentAttributes))
+						await send(.componentDescendantAttributesLoaded(componentDescendants))
 					}
 					.cancellable(
 						id: PrimAttributesLoadCancellationID.load,
@@ -592,6 +608,12 @@ import USDInteropAdvancedCore
 					}
 					return .none
 
+				case let .componentDescendantAttributesLoaded(attributesByPath):
+					for (path, attributes) in attributesByPath {
+						state.componentDescendantAttributesByPath[path] = attributes
+					}
+					return .none
+
 				case let .setMaterialBinding(materialPath):
 					guard let url = state.sceneURL, let primPath = state.selectedNodeID else {
 						return .none
@@ -743,6 +765,7 @@ import USDInteropAdvancedCore
 					guard let url = state.sceneURL else {
 						return .none
 					}
+					let sceneNodesSnapshot = state.sceneNodes
 					guard let spec = componentParameterAuthoringSpec(
 						componentIdentifier: componentIdentifier,
 						parameterKey: parameterKey,
@@ -765,6 +788,15 @@ import USDInteropAdvancedCore
 								primPath: componentPath
 							)?.authoredAttributes ?? []
 							await send(.componentAuthoredAttributesLoaded([componentPath: refreshed]))
+							await send(
+								.componentDescendantAttributesLoaded([
+									componentPath: loadComponentDescendantAttributes(
+										componentPath: componentPath,
+										sceneNodes: sceneNodesSnapshot,
+										url: url
+									)
+								])
+							)
 							await send(.setComponentParameterSucceeded(
 								componentPath: componentPath,
 								attributeName: spec.attributeName
@@ -786,6 +818,7 @@ import USDInteropAdvancedCore
 					guard let url = state.sceneURL else {
 						return .none
 					}
+					let sceneNodesSnapshot = state.sceneNodes
 					return .run { send in
 						do {
 							try DeconstructedUSDInterop.setRealityKitComponentParameter(
@@ -800,6 +833,15 @@ import USDInteropAdvancedCore
 								primPath: componentPath
 							)?.authoredAttributes ?? []
 							await send(.componentAuthoredAttributesLoaded([componentPath: refreshed]))
+							await send(
+								.componentDescendantAttributesLoaded([
+									componentPath: loadComponentDescendantAttributes(
+										componentPath: componentPath,
+										sceneNodes: sceneNodesSnapshot,
+										url: url
+									)
+								])
+							)
 							await send(.setRawComponentAttributeSucceeded(
 								componentPath: componentPath,
 								attributeName: attributeName
@@ -836,6 +878,7 @@ import USDInteropAdvancedCore
 				case let .deleteComponentSucceeded(componentPath):
 					state.componentActiveByPath.removeValue(forKey: componentPath)
 					state.componentAuthoredAttributesByPath.removeValue(forKey: componentPath)
+					state.componentDescendantAttributesByPath.removeValue(forKey: componentPath)
 					state.primErrorMessage = nil
 					return .none
 
@@ -1163,6 +1206,61 @@ private func loadComponentActivationState(
 		states[component.path] = isActive
 	}
 	return states
+}
+
+public struct ComponentDescendantAttributes: Equatable, Sendable {
+	public let primPath: String
+	public let displayName: String
+	public let authoredAttributes: [USDPrimAttributes.AuthoredAttribute]
+
+	public init(
+		primPath: String,
+		displayName: String,
+		authoredAttributes: [USDPrimAttributes.AuthoredAttribute]
+	) {
+		self.primPath = primPath
+		self.displayName = displayName
+		self.authoredAttributes = authoredAttributes
+	}
+}
+
+private func loadComponentDescendantAttributes(
+	componentPath: String,
+	sceneNodes: [SceneNode],
+	url: URL
+) -> [ComponentDescendantAttributes] {
+	guard let componentNode = findNode(id: componentPath, in: sceneNodes) else {
+		return []
+	}
+	let descendants = flattenedDescendants(of: componentNode)
+	guard !descendants.isEmpty else {
+		return []
+	}
+	var collected: [ComponentDescendantAttributes] = []
+	for descendant in descendants {
+		let attrs = DeconstructedUSDInterop.getPrimAttributes(
+			url: url,
+			primPath: descendant.path
+		)?.authoredAttributes ?? []
+		guard !attrs.isEmpty else { continue }
+		collected.append(
+			ComponentDescendantAttributes(
+				primPath: descendant.path,
+				displayName: descendant.name,
+				authoredAttributes: attrs
+			)
+		)
+	}
+	return collected
+}
+
+private func flattenedDescendants(of node: SceneNode) -> [SceneNode] {
+	var result: [SceneNode] = []
+	for child in node.children {
+		result.append(child)
+		result.append(contentsOf: flattenedDescendants(of: child))
+	}
+	return result
 }
 
 private func parentPrimPath(of path: String) -> String? {

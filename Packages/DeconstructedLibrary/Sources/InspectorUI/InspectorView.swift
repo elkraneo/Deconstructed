@@ -145,6 +145,8 @@ public struct InspectorView: View {
 										let isActive = store.componentActiveByPath[componentPath] ?? true
 										let authoredAttributes =
 											store.componentAuthoredAttributesByPath[componentPath] ?? []
+										let descendantAttributes =
+											store.componentDescendantAttributesByPath[componentPath] ?? []
 										ComponentParametersSection(
 											componentPath: componentPath,
 											componentName: componentName,
@@ -152,6 +154,7 @@ public struct InspectorView: View {
 												forAuthoredPrimName: componentName
 											),
 											authoredAttributes: authoredAttributes,
+											descendantAttributes: descendantAttributes,
 											isActive: isActive,
 											onToggleActive: { newValue in
 												store.send(
@@ -171,10 +174,10 @@ public struct InspectorView: View {
 													)
 												)
 											},
-											onRawAttributeChanged: { attributeType, attributeName, valueLiteral in
+											onRawAttributeChanged: { targetPrimPath, attributeType, attributeName, valueLiteral in
 												store.send(
 													.setRawComponentAttributeRequested(
-														componentPath: componentPath,
+														componentPath: targetPrimPath,
 														attributeType: attributeType,
 														attributeName: attributeName,
 														valueLiteral: valueLiteral
@@ -894,10 +897,11 @@ private struct ComponentParametersSection: View {
 	let componentName: String
 	let definition: InspectorComponentDefinition?
 	let authoredAttributes: [USDPrimAttributes.AuthoredAttribute]
+	let descendantAttributes: [ComponentDescendantAttributes]
 	let isActive: Bool
 	let onToggleActive: (Bool) -> Void
 	let onParameterChanged: (String, String, InspectorComponentParameterValue) -> Void
-	let onRawAttributeChanged: (String, String, String) -> Void
+	let onRawAttributeChanged: (String, String, String, String) -> Void
 	let onPasteComponent: (String) -> Void
 	let onDelete: () -> Void
 	@State private var values: [String: InspectorComponentParameterValue]
@@ -910,10 +914,11 @@ private struct ComponentParametersSection: View {
 		componentName: String,
 		definition: InspectorComponentDefinition?,
 		authoredAttributes: [USDPrimAttributes.AuthoredAttribute],
+		descendantAttributes: [ComponentDescendantAttributes],
 		isActive: Bool,
 		onToggleActive: @escaping (Bool) -> Void,
 		onParameterChanged: @escaping (String, String, InspectorComponentParameterValue) -> Void,
-		onRawAttributeChanged: @escaping (String, String, String) -> Void,
+		onRawAttributeChanged: @escaping (String, String, String, String) -> Void,
 		onPasteComponent: @escaping (String) -> Void,
 		onDelete: @escaping () -> Void
 	) {
@@ -921,6 +926,7 @@ private struct ComponentParametersSection: View {
 		self.componentName = componentName
 		self.definition = definition
 		self.authoredAttributes = authoredAttributes
+		self.descendantAttributes = descendantAttributes
 		self.isActive = isActive
 		self.onToggleActive = onToggleActive
 		self.onParameterChanged = onParameterChanged
@@ -1026,12 +1032,55 @@ private struct ComponentParametersSection: View {
 										rawValues[attribute.name] = value
 										rawAttributeTypes[attribute.name] = type
 										onRawAttributeChanged(
+											componentPath,
 											type,
 											attribute.name,
 											value
 										)
 									}
 								)
+							}
+						}
+					}
+					if !descendantAttributes.isEmpty {
+						Divider()
+							.padding(.vertical, 4)
+						VStack(alignment: .leading, spacing: 8) {
+							ForEach(descendantAttributes, id: \.primPath) { descendant in
+								let visibleDescendantAttrs = descendant.authoredAttributes.filter { $0.name != "info:id" }
+								if !visibleDescendantAttrs.isEmpty {
+									Text(descendant.displayName)
+										.font(.system(size: 11, weight: .semibold))
+										.foregroundStyle(.secondary)
+									ForEach(visibleDescendantAttrs, id: \.name) { attribute in
+										GenericComponentAttributeRow(
+											name: "\(descendant.displayName).\(attribute.name)",
+											attributeType: rawAttributeTypes["\(descendant.primPath)#\(attribute.name)"]
+												?? inferAttributeType(name: attribute.name, literal: attribute.value),
+											value: rawBinding(
+												for: "\(descendant.primPath)#\(attribute.name)",
+												fallback: attribute.value
+											),
+											onCommit: { newValue in
+												let storageKey = "\(descendant.primPath)#\(attribute.name)"
+												let type = rawAttributeTypes[storageKey]
+													?? inferAttributeType(name: attribute.name, literal: attribute.value)
+												let value = normalizeLiteral(
+													newValue,
+													attributeType: type
+												)
+												rawValues[storageKey] = value
+												rawAttributeTypes[storageKey] = type
+												onRawAttributeChanged(
+													descendant.primPath,
+													type,
+													attribute.name,
+													value
+												)
+											}
+										)
+									}
+								}
 							}
 						}
 					}
