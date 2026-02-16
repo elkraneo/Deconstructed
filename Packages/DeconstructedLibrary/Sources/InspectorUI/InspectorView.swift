@@ -1013,6 +1013,8 @@ private struct ComponentParametersSection: View {
 							ForEach(visibleAttributes, id: \.name) { attribute in
 								GenericComponentAttributeRow(
 									name: attribute.name,
+									attributeType: rawAttributeTypes[attribute.name]
+										?? inferAttributeType(name: attribute.name, literal: attribute.value),
 									value: rawBinding(for: attribute.name, fallback: attribute.value),
 									onCommit: { newValue in
 										let type = rawAttributeTypes[attribute.name]
@@ -1394,6 +1396,7 @@ private struct ComponentParametersSection: View {
 
 private struct GenericComponentAttributeRow: View {
 	let name: String
+	let attributeType: String
 	@Binding var value: String
 	let onCommit: (String) -> Void
 
@@ -1402,10 +1405,29 @@ private struct GenericComponentAttributeRow: View {
 			Text(name)
 				.font(.system(size: 11))
 				.foregroundStyle(.secondary)
-			TextField("", text: $value)
-				.textFieldStyle(.roundedBorder)
-				.font(.system(size: 11))
-				.onSubmit { onCommit(value) }
+			switch attributeType {
+			case "bool":
+				Toggle(
+					"",
+					isOn: Binding(
+						get: {
+							let lower = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+							return lower == "true" || lower == "1"
+						},
+						set: { isOn in
+							value = isOn ? "true" : "false"
+							onCommit(value)
+						}
+					)
+				)
+				.labelsHidden()
+				.toggleStyle(.checkbox)
+			default:
+				TextField("", text: $value)
+					.textFieldStyle(.roundedBorder)
+					.font(.system(size: 11))
+					.onSubmit { onCommit(value) }
+			}
 		}
 	}
 }
