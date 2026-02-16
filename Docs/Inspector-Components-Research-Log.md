@@ -257,6 +257,30 @@ Implemented component-specific template authoring for:
 2. Physics: Collision, Physics Body
 3. General: Anchoring, Character Controller, Docking Region, Particle Emitter
 
+## Implementation Matrix (Current)
+
+Legend:
+
+1. `Add`: can be added from Add Component menu.
+2. `Typed UI`: has dedicated parameter controls.
+3. `Persist`: parameter edits persist via typed mapping.
+4. `Fallback Raw`: raw authored attrs render/edit in generic fallback UI.
+
+Current slice:
+
+1. Accessibility: Add yes, Typed UI yes, Persist yes, Fallback Raw yes
+2. Billboard: Add yes, Typed UI yes, Persist yes, Fallback Raw yes
+3. Reverb: Add yes, Typed UI yes, Persist yes, Fallback Raw yes
+4. All other catalog components: Add yes, Typed UI no, Persist via typed mapping no, Fallback Raw yes (top-level authored attributes only)
+
+Remaining work for full parity:
+
+1. Add typed UI + explicit mapping for remaining built-in component parameters.
+2. Add editors for nested `RealityKitStruct` fields (collision shapes, rigid body nested data, light shadow blocks, etc.).
+3. Implement `Remove Overrides` behavior compatible with composed USD layers.
+4. Expand copy/paste semantics beyond add-by-identifier to include parameter payload transfer.
+5. Complete custom component field-type matrix (Swift type <-> USD authored form <-> inspector widget).
+
 ## Authoring Strategy Decision
 
 Decision:

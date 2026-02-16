@@ -902,6 +902,7 @@ private struct ComponentParametersSection: View {
 	let onDelete: () -> Void
 	@State private var values: [String: InspectorComponentParameterValue]
 	@State private var rawValues: [String: String]
+	@State private var rawAttributeTypes: [String: String]
 	@State private var isExpanded: Bool
 
 	init(
@@ -932,6 +933,13 @@ private struct ComponentParametersSection: View {
 		self._rawValues = State(
 			initialValue: Dictionary(
 				uniqueKeysWithValues: authoredAttributes.map { ($0.name, $0.value) }
+			)
+		)
+		self._rawAttributeTypes = State(
+			initialValue: Dictionary(
+				uniqueKeysWithValues: authoredAttributes.map { attribute in
+					(attribute.name, inferAttributeType(name: attribute.name, literal: attribute.value))
+				}
 			)
 		)
 		self._isExpanded = State(initialValue: true)
@@ -1007,9 +1015,16 @@ private struct ComponentParametersSection: View {
 									name: attribute.name,
 									value: rawBinding(for: attribute.name, fallback: attribute.value),
 									onCommit: { newValue in
-										let value = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+										let type = rawAttributeTypes[attribute.name]
+											?? inferAttributeType(name: attribute.name, literal: attribute.value)
+										let value = normalizeLiteral(
+											newValue,
+											attributeType: type
+										)
+										rawValues[attribute.name] = value
+										rawAttributeTypes[attribute.name] = type
 										onRawAttributeChanged(
-											inferAttributeType(name: attribute.name, literal: value),
+											type,
 											attribute.name,
 											value
 										)
@@ -1088,6 +1103,11 @@ private struct ComponentParametersSection: View {
 			let layout = definition?.parameterLayout ?? []
 			rawValues = Dictionary(
 				uniqueKeysWithValues: authoredAttributes.map { ($0.name, $0.value) }
+			)
+			rawAttributeTypes = Dictionary(
+				uniqueKeysWithValues: authoredAttributes.map { attribute in
+					(attribute.name, inferAttributeType(name: attribute.name, literal: attribute.value))
+				}
 			)
 			guard !layout.isEmpty else { return }
 			values = Self.initialValues(
@@ -1169,8 +1189,26 @@ private struct ComponentParametersSection: View {
 		if lower == "true" || lower == "false" {
 			return "bool"
 		}
+		if lower == "0" || lower == "1" {
+			if lowerName.hasPrefix("is")
+				|| lowerName.hasPrefix("has")
+				|| lowerName.hasPrefix("enable")
+				|| lowerName.hasPrefix("use")
+			{
+				return "bool"
+			}
+		}
 		if trimmed.first == "\"", trimmed.last == "\"" {
-			return "string"
+			if lowerName == "label"
+				|| lowerName == "value"
+				|| lowerName == "name"
+				|| lowerName == "title"
+				|| lowerName.hasSuffix("text")
+				|| lowerName.contains("description")
+			{
+				return "string"
+			}
+			return "token"
 		}
 		if Int(trimmed) != nil {
 			return "int"
@@ -1179,6 +1217,27 @@ private struct ComponentParametersSection: View {
 			return "float"
 		}
 		return "token"
+	}
+
+	private func normalizeLiteral(_ input: String, attributeType: String) -> String {
+		let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
+		switch attributeType {
+		case "string", "token":
+			if trimmed.first == "\"", trimmed.last == "\"" {
+				return trimmed
+			}
+			let escaped = trimmed
+				.replacingOccurrences(of: "\\", with: "\\\\")
+				.replacingOccurrences(of: "\"", with: "\\\"")
+			return "\"\(escaped)\""
+		case "bool":
+			let lower = trimmed.lowercased()
+			if lower == "1" || lower == "true" { return "true" }
+			if lower == "0" || lower == "false" { return "false" }
+			return "false"
+		default:
+			return trimmed
+		}
 	}
 
 	private func copiedComponentIdentifierFromPasteboard() -> String? {
