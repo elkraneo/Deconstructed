@@ -8,6 +8,7 @@ import Sharing
 import SwiftUI
 import UniformTypeIdentifiers
 import USDInterfaces
+import USDInteropAdvancedCore
 
 public struct InspectorView: View {
 	@Bindable public var store: StoreOf<InspectorFeature>
@@ -79,6 +80,18 @@ public struct InspectorView: View {
 							}
 						case .prim:
 							if let selectedNode = store.selectedNode {
+								let graphComponentNodesByPath = Dictionary(
+									uniqueKeysWithValues: selectedNode.children
+										.filter {
+											$0.typeName == "RealityKitComponent"
+											|| $0.typeName == "RealityKitCustomComponent"
+											|| InspectorComponentCatalog.definition(forAuthoredPrimName: $0.name) != nil
+										}
+										.map { ($0.path, $0) }
+								)
+								let componentPaths = Set(graphComponentNodesByPath.keys)
+									.union(store.componentActiveByPath.keys)
+									.sorted()
 								VStack(alignment: .leading) {
 									if let transform = store.primTransform {
 										TransformSection(
@@ -122,6 +135,38 @@ public struct InspectorView: View {
 										}
 									)
 
+									ForEach(componentPaths, id: \.self) { componentPath in
+										let componentNode = graphComponentNodesByPath[componentPath]
+										let componentName =
+											componentNode?.name
+											?? componentPath.split(separator: "/").last.map(String.init)
+											?? componentPath
+										let isActive = store.componentActiveByPath[componentPath] ?? true
+										ComponentParametersSection(
+											componentPath: componentPath,
+											componentName: componentName,
+											definition: InspectorComponentCatalog.definition(
+												forAuthoredPrimName: componentName
+											),
+											isActive: isActive,
+											onToggleActive: { newValue in
+												store.send(
+													.setComponentActiveRequested(
+														componentPath: componentPath,
+														isActive: newValue
+													)
+												)
+											},
+											onDelete: {
+												store.send(
+													.deleteComponentRequested(
+														componentPath: componentPath
+													)
+												)
+											}
+										)
+									}
+
 									if store.primIsLoading {
 										ProgressView()
 											.frame(maxWidth: .infinity, alignment: .center)
@@ -149,6 +194,13 @@ public struct InspectorView: View {
 					}
 				}
 				.padding()
+			}
+
+			if case .prim = store.currentTarget, store.selectedNode != nil {
+				Divider()
+				InspectorAddComponentFooter { component in
+					store.send(.addComponentRequested(component))
+				}
 			}
 		}
 		.background(.background)
@@ -768,6 +820,270 @@ private struct PrimReferencesSection: View {
 
 		guard panel.runModal() == .OK, let url = panel.url else { return nil }
 		return USDReference(assetPath: url.path)
+	}
+}
+
+private struct InspectorAddComponentFooter: View {
+	let onAddComponent: (InspectorComponentDefinition) -> Void
+
+	var body: some View {
+		HStack {
+			Menu {
+				ForEach(InspectorComponentCatalog.grouped, id: \.0) { category, components in
+					Section(category.displayName) {
+						ForEach(components, id: \.id) { component in
+							Button(component.name) {
+								onAddComponent(component)
+							}
+							.disabled(!component.isEnabledForAuthoring)
+							.help(component.summary)
+						}
+					}
+				}
+			} label: {
+				Text("Add Component")
+					.font(.system(size: 12, weight: .semibold))
+					.frame(maxWidth: .infinity)
+			}
+			.menuStyle(.borderlessButton)
+		}
+		.padding(12)
+		.background(.thinMaterial)
+	}
+}
+
+private struct ComponentParametersSection: View {
+	let componentPath: String
+	let componentName: String
+	let definition: InspectorComponentDefinition?
+	let isActive: Bool
+	let onToggleActive: (Bool) -> Void
+	let onDelete: () -> Void
+	@State private var values: [String: ComponentParameterValue]
+	@State private var isExpanded: Bool
+
+	init(
+		componentPath: String,
+		componentName: String,
+		definition: InspectorComponentDefinition?,
+		isActive: Bool,
+		onToggleActive: @escaping (Bool) -> Void,
+		onDelete: @escaping () -> Void
+	) {
+		self.componentPath = componentPath
+		self.componentName = componentName
+		self.definition = definition
+		self.isActive = isActive
+		self.onToggleActive = onToggleActive
+		self.onDelete = onDelete
+		let layout = definition?.parameterLayout ?? []
+		self._values = State(
+			initialValue: Dictionary(
+				uniqueKeysWithValues: layout.map { parameter in
+					(parameter.key, ComponentParameterValue.defaultValue(for: parameter.kind))
+				}
+			)
+		)
+		self._isExpanded = State(initialValue: true)
+	}
+
+	var body: some View {
+		InspectorGroupBox(
+			title: definition?.name ?? componentName,
+			isExpanded: $isExpanded
+		) {
+			HStack(spacing: 8) {
+				Spacer()
+				Menu {
+					Button("Copy Component") {
+						copyComponentPayload()
+					}
+					Button("Copy Component Name") {
+						copyComponentName()
+					}
+					Button("Paste Component") {
+						// TODO: implement component paste from clipboard payload.
+					}
+					.disabled(true)
+
+					Divider()
+
+					Button(isActive ? "Deactivate" : "Activate") {
+						onToggleActive(!isActive)
+					}
+
+					Divider()
+
+					Button("Remove Overrides") {
+						// TODO: implement component override clearing semantics.
+					}
+					.disabled(true)
+
+					Divider()
+					Button("Delete", role: .destructive) {
+						onDelete()
+					}
+				} label: {
+					Image(systemName: "ellipsis")
+						.font(.system(size: 12, weight: .semibold))
+						.foregroundStyle(.secondary)
+						.frame(width: 20, height: 20)
+				}
+				.menuStyle(.borderlessButton)
+				Button {
+					onToggleActive(!isActive)
+				} label: {
+					Image(systemName: isActive ? "checkmark.circle" : "circle")
+						.font(.system(size: 16, weight: .semibold))
+						.foregroundStyle(isActive ? .orange : .secondary)
+				}
+				.buttonStyle(.plain)
+				.help(isActive ? "Deactivate component" : "Activate component")
+			}
+
+			Group {
+				let parameters = definition?.parameterLayout ?? []
+				if parameters.isEmpty {
+					Text("No editable parameters mapped yet.")
+						.font(.system(size: 11))
+						.foregroundStyle(.secondary)
+				} else {
+					VStack(alignment: .leading, spacing: 10) {
+						ForEach(parameters, id: \.key) { parameter in
+							switch parameter.kind {
+							case let .toggle(defaultValue):
+								Toggle(
+									parameter.label,
+									isOn: boolBinding(for: parameter.key, fallback: defaultValue)
+								)
+								.font(.system(size: 11))
+								.toggleStyle(.checkbox)
+
+							case let .text(defaultValue, placeholder):
+								VStack(alignment: .leading, spacing: 4) {
+									Text(parameter.label)
+										.font(.system(size: 11))
+										.foregroundStyle(.secondary)
+									TextField(
+										placeholder,
+										text: stringBinding(for: parameter.key, fallback: defaultValue)
+									)
+									.textFieldStyle(.roundedBorder)
+									.font(.system(size: 11))
+								}
+
+							case let .scalar(defaultValue, unit):
+								InspectorRow(label: parameter.label) {
+									HStack(spacing: 8) {
+										TextField(
+											"",
+											value: doubleBinding(for: parameter.key, fallback: defaultValue),
+											format: .number.precision(.fractionLength(0...3))
+										)
+										.textFieldStyle(.roundedBorder)
+										.frame(width: 90)
+										.font(.system(size: 11))
+										if let unit {
+											Text(unit)
+												.font(.system(size: 10))
+												.foregroundStyle(.secondary)
+										}
+									}
+								}
+
+							case let .choice(defaultValue, options):
+								InspectorRow(label: parameter.label) {
+									Picker(
+										"",
+										selection: stringBinding(for: parameter.key, fallback: defaultValue)
+									) {
+										ForEach(options, id: \.self) { option in
+											Text(option).tag(option)
+										}
+									}
+									.labelsHidden()
+									.pickerStyle(.menu)
+								}
+							}
+						}
+					}
+				}
+			}
+			.disabled(!isActive)
+		}
+		.opacity(isActive ? 1 : 0.55)
+		.animation(.default, value: isActive)
+	}
+
+	private func boolBinding(for key: String, fallback: Bool) -> Binding<Bool> {
+		Binding(
+			get: {
+				if case let .bool(value)? = values[key] { return value }
+				return fallback
+			},
+			set: { values[key] = .bool($0) }
+		)
+	}
+
+	private func stringBinding(for key: String, fallback: String) -> Binding<String> {
+		Binding(
+			get: {
+				if case let .string(value)? = values[key] { return value }
+				return fallback
+			},
+			set: { values[key] = .string($0) }
+		)
+	}
+
+	private func doubleBinding(for key: String, fallback: Double) -> Binding<Double> {
+		Binding(
+			get: {
+				if case let .double(value)? = values[key] { return value }
+				return fallback
+			},
+			set: { values[key] = .double($0) }
+		)
+	}
+
+	private func copyComponentName() {
+		let pasteboard = NSPasteboard.general
+		pasteboard.clearContents()
+		pasteboard.setString(definition?.name ?? componentName, forType: .string)
+	}
+
+	private func copyComponentPayload() {
+		let payloadName = definition?.name ?? componentName
+		let payloadIdentifier = definition?.identifier ?? "unknown"
+		let payload = """
+		{
+		  "name": "\(payloadName)",
+		  "authoredPrimName": "\(componentName)",
+		  "path": "\(componentPath)",
+		  "identifier": "\(payloadIdentifier)"
+		}
+		"""
+		let pasteboard = NSPasteboard.general
+		pasteboard.clearContents()
+		pasteboard.setString(payload, forType: .string)
+	}
+}
+
+private enum ComponentParameterValue: Equatable {
+	case bool(Bool)
+	case string(String)
+	case double(Double)
+
+	static func defaultValue(for kind: InspectorComponentParameter.Kind) -> Self {
+		switch kind {
+		case let .toggle(defaultValue):
+			.bool(defaultValue)
+		case let .text(defaultValue, _):
+			.string(defaultValue)
+		case let .scalar(defaultValue, _):
+			.double(defaultValue)
+		case let .choice(defaultValue, _):
+			.string(defaultValue)
+		}
 	}
 }
 

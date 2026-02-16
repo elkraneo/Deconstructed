@@ -4,6 +4,7 @@ import Foundation
 import InspectorModels
 import SceneGraphModels
 import USDInterfaces
+import USDInteropAdvancedCore
 
 @Reducer
 	public struct InspectorFeature {
@@ -20,6 +21,7 @@ import USDInterfaces
 			public var primReferences: [USDReference]
 			public var primMaterialBinding: String?
 			public var primMaterialBindingStrength: USDMaterialBindingStrength?
+			public var componentActiveByPath: [String: Bool]
 			public var boundMaterial: USDMaterialInfo?
 			public var availableMaterials: [USDMaterialInfo]
 			public var sceneNodes: [SceneNode]
@@ -45,6 +47,7 @@ import USDInterfaces
 				primReferences: [USDReference] = [],
 				primMaterialBinding: String? = nil,
 				primMaterialBindingStrength: USDMaterialBindingStrength? = nil,
+				componentActiveByPath: [String: Bool] = [:],
 				boundMaterial: USDMaterialInfo? = nil,
 				availableMaterials: [USDMaterialInfo] = [],
 				sceneNodes: [SceneNode] = [],
@@ -69,6 +72,7 @@ import USDInterfaces
 				self.primReferences = primReferences
 				self.primMaterialBinding = primMaterialBinding
 				self.primMaterialBindingStrength = primMaterialBindingStrength
+				self.componentActiveByPath = componentActiveByPath
 				self.boundMaterial = boundMaterial
 				self.availableMaterials = availableMaterials
 				self.sceneNodes = sceneNodes
@@ -132,6 +136,16 @@ import USDInterfaces
 			case setMaterialBindingStrength(USDMaterialBindingStrength)
 			case setMaterialBindingStrengthSucceeded
 			case setMaterialBindingStrengthFailed(String)
+			case componentActivationLoaded([String: Bool])
+			case addComponentRequested(InspectorComponentDefinition)
+			case addComponentSucceeded(String)
+			case addComponentFailed(String)
+			case setComponentActiveRequested(componentPath: String, isActive: Bool)
+			case setComponentActiveSucceeded(componentPath: String, isActive: Bool)
+			case setComponentActiveFailed(String)
+			case deleteComponentRequested(componentPath: String)
+			case deleteComponentSucceeded(componentPath: String)
+			case deleteComponentFailed(String)
 			case refreshLayerData
 
 		case defaultPrimChanged(String)
@@ -174,6 +188,7 @@ import USDInterfaces
 					state.primReferences = []
 					state.primMaterialBinding = nil
 					state.primMaterialBindingStrength = nil
+					state.componentActiveByPath = [:]
 					state.boundMaterial = nil
 					state.availableMaterials = []
 					state.primIsLoading = false
@@ -206,6 +221,7 @@ import USDInterfaces
 					state.primReferences = []
 					state.primMaterialBinding = nil
 					state.primMaterialBindingStrength = nil
+					state.componentActiveByPath = [:]
 					state.boundMaterial = nil
 					state.primErrorMessage = nil
 					state.pendingPrimLoads = []
@@ -221,6 +237,7 @@ import USDInterfaces
 						from: nodeID,
 						url: url
 					)
+					let sceneNodesSnapshot = state.sceneNodes
 					state.primVariantScopePath = variantScopePath
 					state.pendingPrimLoads = [
 						.attributes,
@@ -274,6 +291,13 @@ import USDInterfaces
 						let binding = DeconstructedUSDInterop.materialBinding(url: url, primPath: materialBindingPrimPath)
 						let strength = DeconstructedUSDInterop.materialBindingStrength(url: url, primPath: materialBindingPrimPath)
 						await send(.primMaterialBindingLoaded(binding, strength))
+
+						let componentStates = loadComponentActivationState(
+							selectedPrimPath: nodeID,
+							sceneNodes: sceneNodesSnapshot,
+							url: url
+						)
+						await send(.componentActivationLoaded(componentStates))
 					}
 					.cancellable(
 						id: PrimAttributesLoadCancellationID.load,
@@ -526,6 +550,10 @@ import USDInterfaces
 					completePrimLoad(state: &state, section: .materials)
 					return .none
 
+				case let .componentActivationLoaded(states):
+					state.componentActiveByPath = states
+					return .none
+
 				case let .setMaterialBinding(materialPath):
 					guard let url = state.sceneURL, let primPath = state.selectedNodeID else {
 						return .none
@@ -597,6 +625,105 @@ import USDInterfaces
 
 				case let .setMaterialBindingStrengthFailed(message):
 					state.primErrorMessage = message
+					return .none
+
+				case let .addComponentRequested(component):
+					guard let url = state.sceneURL, let selectedPrimPath = state.selectedNodeID else {
+						return .none
+					}
+					guard component.isEnabledForAuthoring else {
+						state.primErrorMessage = "'\(component.name)' is listed but not implemented yet."
+						return .none
+					}
+					let targetPrimPath: String = switch component.placement {
+					case .selectedPrim:
+						selectedPrimPath
+					case .rootPrim:
+						state.sceneNodes.first?.path ?? "/Root"
+					}
+					guard findNode(id: targetPrimPath, in: state.sceneNodes) != nil else {
+						state.primErrorMessage = "Target prim not found: \(targetPrimPath)"
+						return .none
+					}
+					let existingComponents = DeconstructedUSDInterop.listRealityKitComponentPrims(
+						url: url,
+						parentPrimPath: targetPrimPath
+					)
+					if existingComponents.contains(where: { $0.primName == component.authoredPrimName }) {
+						state.primErrorMessage = "Component '\(component.name)' already exists on this prim."
+						return .none
+					}
+					return .run { send in
+						do {
+							let componentPath = try DeconstructedUSDInterop.addRealityKitComponent(
+								url: url,
+								primPath: targetPrimPath,
+								componentName: component.authoredPrimName,
+								componentIdentifier: component.identifier
+							)
+							await send(.addComponentSucceeded(componentPath))
+						} catch {
+							await send(.addComponentFailed(error.localizedDescription))
+						}
+					}
+
+				case .addComponentSucceeded:
+					state.primErrorMessage = nil
+					return .none
+
+				case let .addComponentFailed(message):
+					state.primErrorMessage = "Failed to add component: \(message)"
+					return .none
+
+				case let .setComponentActiveRequested(componentPath, isActive):
+					guard let url = state.sceneURL else {
+						return .none
+					}
+					return .run { send in
+						do {
+							try DeconstructedUSDInterop.setRealityKitComponentActive(
+								url: url,
+								componentPrimPath: componentPath,
+								isActive: isActive
+							)
+							await send(.setComponentActiveSucceeded(componentPath: componentPath, isActive: isActive))
+						} catch {
+							await send(.setComponentActiveFailed(error.localizedDescription))
+						}
+					}
+
+				case let .setComponentActiveSucceeded(componentPath, isActive):
+					state.componentActiveByPath[componentPath] = isActive
+					state.primErrorMessage = nil
+					return .none
+
+				case let .setComponentActiveFailed(message):
+					state.primErrorMessage = "Failed to update component state: \(message)"
+					return .none
+
+				case let .deleteComponentRequested(componentPath):
+					guard let url = state.sceneURL else {
+						return .none
+					}
+					return .run { send in
+						do {
+							try DeconstructedUSDInterop.deleteRealityKitComponent(
+								url: url,
+								componentPrimPath: componentPath
+							)
+							await send(.deleteComponentSucceeded(componentPath: componentPath))
+						} catch {
+							await send(.deleteComponentFailed(error.localizedDescription))
+						}
+					}
+
+				case let .deleteComponentSucceeded(componentPath):
+					state.componentActiveByPath.removeValue(forKey: componentPath)
+					state.primErrorMessage = nil
+					return .none
+
+				case let .deleteComponentFailed(message):
+					state.primErrorMessage = "Failed to delete component: \(message)"
 					return .none
 
 				case let .primTransformChanged(transform):
@@ -882,6 +1009,43 @@ private func resolvedVariantScopePrimPath(from selectedPrimPath: String, url: UR
 		}
 		currentPath = parentPath
 	}
+}
+
+private func loadComponentActivationState(
+	selectedPrimPath: String,
+	sceneNodes: [SceneNode],
+	url: URL
+) -> [String: Bool] {
+	let parsedComponents = DeconstructedUSDInterop.listRealityKitComponentPrims(
+		url: url,
+		parentPrimPath: selectedPrimPath
+	)
+	if !parsedComponents.isEmpty {
+		return Dictionary(
+			uniqueKeysWithValues: parsedComponents.map { ($0.path, $0.isActive) }
+		)
+	}
+
+	guard let selectedNode = findNode(id: selectedPrimPath, in: sceneNodes) else {
+		return [:]
+	}
+	let componentNodes = selectedNode.children.filter {
+		$0.typeName == "RealityKitComponent"
+		|| $0.typeName == "RealityKitCustomComponent"
+		|| InspectorComponentCatalog.definition(forAuthoredPrimName: $0.name) != nil
+	}
+	guard !componentNodes.isEmpty else {
+		return [:]
+	}
+	var states: [String: Bool] = [:]
+	for component in componentNodes {
+		let isActive = DeconstructedUSDInterop.getPrimAttributes(
+			url: url,
+			primPath: component.path
+		)?.isActive ?? true
+		states[component.path] = isActive
+	}
+	return states
 }
 
 private func parentPrimPath(of path: String) -> String? {

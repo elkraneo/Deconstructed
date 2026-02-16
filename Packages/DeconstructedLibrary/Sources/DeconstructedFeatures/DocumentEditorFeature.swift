@@ -622,6 +622,46 @@ public struct DocumentEditorFeature {
 					)
 				}
 
+				if case .addComponentSucceeded(_) = inspectorAction,
+					case .scene(let tabID) = state.selectedTab,
+					var tab = state.openScenes[id: tabID]
+				{
+					tab.reloadTrigger = uuid()
+					state.openScenes[id: tabID] = tab
+					return .merge(
+						.send(.projectBrowser(.sceneModified(tab.fileURL))),
+						.send(.viewport(.loadRequestedPreservingCamera(tab.fileURL))),
+						.send(.sceneNavigator(.refreshRequested)),
+						.send(.inspector(.selectionChanged(state.inspector.selectedNodeID)))
+					)
+				}
+
+				if case .setComponentActiveSucceeded(componentPath: _, isActive: _) = inspectorAction,
+				   case .scene(let tabID) = state.selectedTab,
+				   var tab = state.openScenes[id: tabID]
+				{
+					tab.reloadTrigger = uuid()
+					state.openScenes[id: tabID] = tab
+					return .merge(
+						.send(.viewport(.loadRequestedPreservingCamera(tab.fileURL))),
+						.send(.sceneNavigator(.refreshRequested)),
+						.send(.inspector(.selectionChanged(state.inspector.selectedNodeID)))
+					)
+				}
+
+				if case .deleteComponentSucceeded(componentPath: _) = inspectorAction,
+				   case .scene(let tabID) = state.selectedTab,
+				   var tab = state.openScenes[id: tabID]
+				{
+					tab.reloadTrigger = uuid()
+					state.openScenes[id: tabID] = tab
+					return .merge(
+						.send(.viewport(.loadRequestedPreservingCamera(tab.fileURL))),
+						.send(.sceneNavigator(.refreshRequested)),
+						.send(.inspector(.selectionChanged(state.inspector.selectedNodeID)))
+					)
+				}
+
 				// Keep thumbnails/scene graph in sync after inspector-authored USD edits.
 				if case .primTransformSaveSucceeded = inspectorAction,
 					case .scene(let tabID) = state.selectedTab,
