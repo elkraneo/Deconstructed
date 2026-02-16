@@ -1375,7 +1375,7 @@ private func componentParameterAuthoringSpec(
 		)
 	case ("RealityKit.PointLight", "color", .string(let value)):
 		return ComponentParameterAuthoringSpec(
-			attributeType: "color3f",
+			attributeType: "float3",
 			attributeName: "color",
 			valueLiteral: formatUSDColor3(value)
 		)
@@ -1394,7 +1394,7 @@ private func componentParameterAuthoringSpec(
 	case ("RealityKit.PointLight", "attenuationFalloff", .double(let value)):
 		return ComponentParameterAuthoringSpec(
 			attributeType: "float",
-			attributeName: "attenuationFalloff",
+			attributeName: "attenuationFalloffExponent",
 			valueLiteral: formatUSDFloat(value)
 		)
 	default:

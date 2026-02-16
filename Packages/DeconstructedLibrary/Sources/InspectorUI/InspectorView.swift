@@ -1405,6 +1405,8 @@ private struct ComponentParametersSection: View {
 		switch (componentIdentifier, key) {
 		case ("RealityKit.Reverb", "preset"):
 			return "reverbPreset"
+		case ("RealityKit.PointLight", "attenuationFalloff"):
+			return "attenuationFalloffExponent"
 		default:
 			return key
 		}
