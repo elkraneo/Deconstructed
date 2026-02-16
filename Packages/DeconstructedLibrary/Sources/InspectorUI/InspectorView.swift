@@ -171,6 +171,29 @@ public struct InspectorView: View {
 													)
 												)
 											},
+											onRawAttributeChanged: { attributeType, attributeName, valueLiteral in
+												store.send(
+													.setRawComponentAttributeRequested(
+														componentPath: componentPath,
+														attributeType: attributeType,
+														attributeName: attributeName,
+														valueLiteral: valueLiteral
+													)
+												)
+											},
+											onPasteComponent: { copiedIdentifier in
+												if let copiedDefinition = InspectorComponentCatalog.all.first(
+													where: { $0.identifier == copiedIdentifier }
+												) {
+													store.send(.addComponentRequested(copiedDefinition))
+												} else {
+													store.send(
+														.addComponentFailed(
+															"Copied component '\(copiedIdentifier)' is not available in the catalog."
+														)
+													)
+												}
+											},
 											onDelete: {
 												store.send(
 													.deleteComponentRequested(
@@ -874,8 +897,11 @@ private struct ComponentParametersSection: View {
 	let isActive: Bool
 	let onToggleActive: (Bool) -> Void
 	let onParameterChanged: (String, String, InspectorComponentParameterValue) -> Void
+	let onRawAttributeChanged: (String, String, String) -> Void
+	let onPasteComponent: (String) -> Void
 	let onDelete: () -> Void
 	@State private var values: [String: InspectorComponentParameterValue]
+	@State private var rawValues: [String: String]
 	@State private var isExpanded: Bool
 
 	init(
@@ -886,6 +912,8 @@ private struct ComponentParametersSection: View {
 		isActive: Bool,
 		onToggleActive: @escaping (Bool) -> Void,
 		onParameterChanged: @escaping (String, String, InspectorComponentParameterValue) -> Void,
+		onRawAttributeChanged: @escaping (String, String, String) -> Void,
+		onPasteComponent: @escaping (String) -> Void,
 		onDelete: @escaping () -> Void
 	) {
 		self.componentPath = componentPath
@@ -895,10 +923,17 @@ private struct ComponentParametersSection: View {
 		self.isActive = isActive
 		self.onToggleActive = onToggleActive
 		self.onParameterChanged = onParameterChanged
+		self.onRawAttributeChanged = onRawAttributeChanged
+		self.onPasteComponent = onPasteComponent
 		self.onDelete = onDelete
 		let layout = definition?.parameterLayout ?? []
 		let authoredMap = Self.authoredMap(from: authoredAttributes)
 		self._values = State(initialValue: Self.initialValues(layout: layout, authoredAttributes: authoredMap, identifier: definition?.identifier))
+		self._rawValues = State(
+			initialValue: Dictionary(
+				uniqueKeysWithValues: authoredAttributes.map { ($0.name, $0.value) }
+			)
+		)
 		self._isExpanded = State(initialValue: true)
 	}
 
@@ -916,10 +951,11 @@ private struct ComponentParametersSection: View {
 					Button("Copy Component Name") {
 						copyComponentName()
 					}
-					Button("Paste Component") {
-						// TODO: implement component paste from clipboard payload.
-					}
-					.disabled(true)
+						Button("Paste Component") {
+							guard let copiedIdentifier = copiedComponentIdentifierFromPasteboard() else { return }
+							onPasteComponent(copiedIdentifier)
+						}
+						.disabled(copiedComponentIdentifierFromPasteboard() == nil)
 
 					Divider()
 
@@ -967,12 +1003,18 @@ private struct ComponentParametersSection: View {
 					} else {
 						VStack(alignment: .leading, spacing: 8) {
 							ForEach(visibleAttributes, id: \.name) { attribute in
-								InspectorRow(label: attribute.name) {
-									Text(attribute.value)
-										.font(.system(size: 11))
-										.textSelection(.enabled)
-										.frame(maxWidth: .infinity, alignment: .leading)
-								}
+								GenericComponentAttributeRow(
+									name: attribute.name,
+									value: rawBinding(for: attribute.name, fallback: attribute.value),
+									onCommit: { newValue in
+										let value = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+										onRawAttributeChanged(
+											inferAttributeType(name: attribute.name, literal: value),
+											attribute.name,
+											value
+										)
+									}
+								)
 							}
 						}
 					}
@@ -1044,6 +1086,9 @@ private struct ComponentParametersSection: View {
 		.animation(.default, value: isActive)
 		.onChange(of: authoredAttributesSignature) { _, _ in
 			let layout = definition?.parameterLayout ?? []
+			rawValues = Dictionary(
+				uniqueKeysWithValues: authoredAttributes.map { ($0.name, $0.value) }
+			)
 			guard !layout.isEmpty else { return }
 			values = Self.initialValues(
 				layout: layout,
@@ -1095,6 +1140,54 @@ private struct ComponentParametersSection: View {
 	private func notifyParameterChange(key: String, value: InspectorComponentParameterValue) {
 		guard let componentIdentifier else { return }
 		onParameterChanged(componentIdentifier, key, value)
+	}
+
+	private func rawBinding(for key: String, fallback: String) -> Binding<String> {
+		Binding(
+			get: { rawValues[key] ?? fallback },
+			set: { rawValues[key] = $0 }
+		)
+	}
+
+	private func inferAttributeType(name: String, literal: String) -> String {
+		let trimmed = literal.trimmingCharacters(in: .whitespacesAndNewlines)
+		let lowerName = name.lowercased()
+		if lowerName.contains("color"), trimmed.hasPrefix("("), trimmed.hasSuffix(")") {
+			let commaCount = trimmed.filter { $0 == "," }.count
+			return commaCount == 2 ? "color3f" : "color4f"
+		}
+		if trimmed.hasPrefix("("), trimmed.hasSuffix(")") {
+			let commaCount = trimmed.filter { $0 == "," }.count
+			return switch commaCount {
+			case 1: "float2"
+			case 2: "float3"
+			case 3: "float4"
+			default: "float3"
+			}
+		}
+		let lower = trimmed.lowercased()
+		if lower == "true" || lower == "false" {
+			return "bool"
+		}
+		if trimmed.first == "\"", trimmed.last == "\"" {
+			return "string"
+		}
+		if Int(trimmed) != nil {
+			return "int"
+		}
+		if Double(trimmed) != nil {
+			return "float"
+		}
+		return "token"
+	}
+
+	private func copiedComponentIdentifierFromPasteboard() -> String? {
+		let pasteboard = NSPasteboard.general
+		guard let payload = pasteboard.string(forType: .string) else { return nil }
+		guard let data = payload.data(using: .utf8) else { return nil }
+		guard let object = try? JSONSerialization.jsonObject(with: data) else { return nil }
+		guard let dictionary = object as? [String: Any] else { return nil }
+		return dictionary["identifier"] as? String
 	}
 
 	private func copyComponentName() {
@@ -1233,6 +1326,24 @@ private struct ComponentParametersSection: View {
 		return inner
 			.replacingOccurrences(of: "\\\"", with: "\"")
 			.replacingOccurrences(of: "\\\\", with: "\\")
+	}
+}
+
+private struct GenericComponentAttributeRow: View {
+	let name: String
+	@Binding var value: String
+	let onCommit: (String) -> Void
+
+	var body: some View {
+		VStack(alignment: .leading, spacing: 4) {
+			Text(name)
+				.font(.system(size: 11))
+				.foregroundStyle(.secondary)
+			TextField("", text: $value)
+				.textFieldStyle(.roundedBorder)
+				.font(.system(size: 11))
+				.onSubmit { onCommit(value) }
+		}
 	}
 }
 

@@ -155,6 +155,14 @@ import USDInteropAdvancedCore
 			)
 			case setComponentParameterSucceeded(componentPath: String, attributeName: String)
 			case setComponentParameterFailed(String)
+			case setRawComponentAttributeRequested(
+				componentPath: String,
+				attributeType: String,
+				attributeName: String,
+				valueLiteral: String
+			)
+			case setRawComponentAttributeSucceeded(componentPath: String, attributeName: String)
+			case setRawComponentAttributeFailed(String)
 			case deleteComponentRequested(componentPath: String)
 			case deleteComponentSucceeded(componentPath: String)
 			case deleteComponentFailed(String)
@@ -772,6 +780,41 @@ import USDInteropAdvancedCore
 
 				case let .setComponentParameterFailed(message):
 					state.primErrorMessage = "Failed to set component parameter: \(message)"
+					return .none
+
+				case let .setRawComponentAttributeRequested(componentPath, attributeType, attributeName, valueLiteral):
+					guard let url = state.sceneURL else {
+						return .none
+					}
+					return .run { send in
+						do {
+							try DeconstructedUSDInterop.setRealityKitComponentParameter(
+								url: url,
+								componentPrimPath: componentPath,
+								attributeType: attributeType,
+								attributeName: attributeName,
+								valueLiteral: valueLiteral
+							)
+							let refreshed = DeconstructedUSDInterop.getPrimAttributes(
+								url: url,
+								primPath: componentPath
+							)?.authoredAttributes ?? []
+							await send(.componentAuthoredAttributesLoaded([componentPath: refreshed]))
+							await send(.setRawComponentAttributeSucceeded(
+								componentPath: componentPath,
+								attributeName: attributeName
+							))
+						} catch {
+							await send(.setRawComponentAttributeFailed(error.localizedDescription))
+						}
+					}
+
+				case .setRawComponentAttributeSucceeded:
+					state.primErrorMessage = nil
+					return .none
+
+				case let .setRawComponentAttributeFailed(message):
+					state.primErrorMessage = "Failed to set component attribute: \(message)"
 					return .none
 
 				case let .deleteComponentRequested(componentPath):
