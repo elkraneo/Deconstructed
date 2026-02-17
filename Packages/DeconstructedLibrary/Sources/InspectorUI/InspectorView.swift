@@ -153,19 +153,19 @@ public struct InspectorView: View {
 											?? componentPath.split(separator: "/").last.map(String.init)
 											?? componentPath
 										let isActive = store.componentActiveByPath[componentPath] ?? true
-										let authoredAttributes =
-											store.componentAuthoredAttributesByPath[componentPath] ?? []
-										let descendantAttributes =
-											store.componentDescendantAttributesByPath[componentPath] ?? []
-										ComponentParametersSection(
-											componentPath: componentPath,
-											componentName: componentName,
-											definition: InspectorComponentCatalog.definition(
-												forAuthoredPrimName: componentName
-											),
-											authoredAttributes: authoredAttributes,
-											descendantAttributes: descendantAttributes,
-											isActive: isActive,
+											let authoredAttributes =
+												store.componentAuthoredAttributesByPath[componentPath] ?? []
+											let descendantAttributes =
+												store.componentDescendantAttributesByPath[componentPath] ?? []
+											ComponentParametersSection(
+												componentPath: componentPath,
+												componentName: componentName,
+												definition: InspectorComponentCatalog.definition(
+													forAuthoredPrimName: componentName
+												),
+												authoredAttributes: authoredAttributes,
+												descendantAttributes: descendantAttributes,
+												isActive: isActive,
 											onToggleActive: { newValue in
 												store.send(
 													.setComponentActiveRequested(
@@ -1339,19 +1339,23 @@ private struct ComponentParametersSection: View {
 		}
 	}
 
-	private var audioLibraryResources: [AudioLibraryResourceRow] {
+	private var audioLibraryResources: [AudioLibraryResource] {
 		guard let resourcesNode = descendantAttributes.first(where: {
-			$0.displayName == "resources" || $0.primPath.hasSuffix("/resources")
+			$0.displayName == "resources"
+				|| $0.displayName.lowercased().contains("resources")
+				|| $0.primPath.hasSuffix("/resources")
 		}) else {
 			return []
 		}
-		let map = Dictionary(uniqueKeysWithValues: resourcesNode.authoredAttributes.map { ($0.name, $0.value) })
-		let keys = parseUSDStringArray(map["keys"] ?? "")
-		let values = parseUSDRelationshipTargets(map["values"] ?? "")
+		let attrs = resourcesNode.authoredAttributes
+		let keys = parseUSDStringArray(Self.authoredLiteral(in: attrs, names: ["keys"]))
+		let values = parseUSDRelationshipTargets(Self.authoredLiteral(in: attrs, names: ["values"]))
 		guard !keys.isEmpty else { return [] }
 		return keys.enumerated().map { index, key in
-			let valueTarget = index < values.count ? values[index] : ""
-			return AudioLibraryResourceRow(key: key, valueTarget: valueTarget)
+			AudioLibraryResource(
+				key: key,
+				valueTarget: index < values.count ? values[index] : ""
+			)
 		}
 	}
 
@@ -1489,13 +1493,20 @@ private struct ComponentParametersSection: View {
 
 	private func parseUSDStringArray(_ raw: String) -> [String] {
 		let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-		guard trimmed.hasPrefix("["), trimmed.hasSuffix("]"), trimmed.count >= 2 else {
-			return []
+		guard !trimmed.isEmpty else { return [] }
+		if trimmed.hasPrefix("["), trimmed.hasSuffix("]"), trimmed.count >= 2 {
+			let body = String(trimmed.dropFirst().dropLast())
+			return body.split(separator: ",", omittingEmptySubsequences: true).map { token in
+				Self.parseUSDString(String(token).trimmingCharacters(in: .whitespacesAndNewlines))
+			}
 		}
-		let body = String(trimmed.dropFirst().dropLast())
-		return body.split(separator: ",", omittingEmptySubsequences: true).map { token in
-			Self.parseUSDString(String(token).trimmingCharacters(in: .whitespacesAndNewlines))
+		if trimmed.hasPrefix("("), trimmed.hasSuffix(")"), trimmed.count >= 2 {
+			let body = String(trimmed.dropFirst().dropLast())
+			return body.split(separator: ",", omittingEmptySubsequences: true).map { token in
+				Self.parseUSDString(String(token).trimmingCharacters(in: .whitespacesAndNewlines))
+			}
 		}
+		return [Self.parseUSDString(trimmed)]
 	}
 
 	private func parseUSDRelationshipTargets(_ raw: String) -> [String] {
@@ -1710,11 +1721,30 @@ private struct ComponentParametersSection: View {
 		}
 		return trimmed
 	}
-}
 
-private struct AudioLibraryResourceRow: Hashable {
-	let key: String
-	let valueTarget: String
+	private static func authoredLiteral(
+		in attributes: [USDPrimAttributes.AuthoredAttribute],
+		names: [String]
+	) -> String {
+		let lowered = Set(names.map { $0.lowercased() })
+		if let exact = attributes.first(where: { lowered.contains($0.name.lowercased()) }) {
+			return exact.value
+		}
+		if let typed = attributes.first(where: { attribute in
+			let key = attribute.name.lowercased()
+			return lowered.contains(where: { key.hasSuffix(" \($0)") })
+		}) {
+			return typed.value
+		}
+		if let loose = attributes.first(where: { attribute in
+			let key = attribute.name.lowercased()
+			return lowered.contains(where: { key.contains($0) })
+		}) {
+			return loose.value
+		}
+		return ""
+	}
+
 }
 
 private struct GenericComponentAttributeRow: View {
