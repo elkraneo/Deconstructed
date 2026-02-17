@@ -2396,13 +2396,139 @@ private func componentParameterAuthoringSpec(
 			operation: .set(valueLiteral: formatUSDUInt(numberValue)),
 			primPathSuffix: nil
 		)
-		case ("RealityKit.Collider", "type", .string(let value)):
-			return ComponentParameterAuthoringSpec(
-				attributeType: "token",
-				attributeName: "type",
-				operation: .set(valueLiteral: quoteUSDString(value)),
-				primPathSuffix: nil
-			)
+	case ("RealityKit.Collider", "type", .string(let value)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "token",
+			attributeName: "type",
+			operation: .set(valueLiteral: quoteUSDString(value)),
+			primPathSuffix: nil
+		)
+	case ("RealityKit.RigidBody", "motionType", .string(let value)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "token",
+			attributeName: "motionType",
+			operation: .set(valueLiteral: quoteUSDString(value)),
+			primPathSuffix: nil
+		)
+	case ("RealityKit.RigidBody", "isCCDEnabled", .bool(let boolValue)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "bool",
+			attributeName: "isCCDEnabled",
+			operation: .set(valueLiteral: boolValue ? "true" : "false"),
+			primPathSuffix: nil
+		)
+	case ("RealityKit.RigidBody", "gravityEnabled", .bool(let boolValue)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "bool",
+			attributeName: "gravityEnabled",
+			operation: .set(valueLiteral: boolValue ? "true" : "false"),
+			primPathSuffix: nil
+		)
+	case ("RealityKit.RigidBody", "angularDamping", .double(let value)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "float",
+			attributeName: "angularDamping",
+			operation: .set(valueLiteral: formatUSDFloat(value)),
+			primPathSuffix: nil
+		)
+	case ("RealityKit.RigidBody", "linearDamping", .double(let value)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "float",
+			attributeName: "linearDamping",
+			operation: .set(valueLiteral: formatUSDFloat(value)),
+			primPathSuffix: nil
+		)
+	case ("RealityKit.RigidBody", "staticFriction", .double(let value)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "double",
+			attributeName: "staticFriction",
+			operation: .set(valueLiteral: formatUSDFloat(value)),
+			primPathSuffix: "material"
+		)
+	case ("RealityKit.RigidBody", "dynamicFriction", .double(let value)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "double",
+			attributeName: "dynamicFriction",
+			operation: .set(valueLiteral: formatUSDFloat(value)),
+			primPathSuffix: "material"
+		)
+	case ("RealityKit.RigidBody", "restitution", .double(let value)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "double",
+			attributeName: "restitution",
+			operation: .set(valueLiteral: formatUSDFloat(value)),
+			primPathSuffix: "material"
+		)
+	case ("RealityKit.RigidBody", "m_mass", .double(let value)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "float",
+			attributeName: "m_mass",
+			operation: .set(valueLiteral: formatUSDFloat(value)),
+			primPathSuffix: "massFrame"
+		)
+	case ("RealityKit.RigidBody", "m_inertia", .string(let value)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "float3",
+			attributeName: "m_inertia",
+			operation: .set(valueLiteral: formatUSDFloat3(value, fallback: "(0, 0, 0)")),
+			primPathSuffix: "massFrame"
+		)
+	case ("RealityKit.RigidBody", "position", .string(let value)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "float3",
+			attributeName: "position",
+			operation: .set(valueLiteral: formatUSDFloat3(value, fallback: "(0, 0, 0)")),
+			primPathSuffix: "massFrame/m_pose"
+		)
+	case ("RealityKit.RigidBody", "orientation", .string(let value)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "quatf",
+			attributeName: "orientation",
+			operation: .set(valueLiteral: formatUSDFloat4(value, fallback: "(1, 0, 0, 0)")),
+			primPathSuffix: "massFrame/m_pose"
+		)
+	case ("RealityKit.RigidBody", "lockTranslationX", .bool(let boolValue)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "bool",
+			attributeName: "lockTranslationX",
+			operation: .set(valueLiteral: boolValue ? "true" : "false"),
+			primPathSuffix: nil
+		)
+	case ("RealityKit.RigidBody", "lockTranslationY", .bool(let boolValue)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "bool",
+			attributeName: "lockTranslationY",
+			operation: .set(valueLiteral: boolValue ? "true" : "false"),
+			primPathSuffix: nil
+		)
+	case ("RealityKit.RigidBody", "lockTranslationZ", .bool(let boolValue)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "bool",
+			attributeName: "lockTranslationZ",
+			operation: .set(valueLiteral: boolValue ? "true" : "false"),
+			primPathSuffix: nil
+		)
+	case ("RealityKit.RigidBody", "lockRotationX", .bool(let boolValue)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "bool",
+			attributeName: "lockRotationX",
+			operation: .set(valueLiteral: boolValue ? "true" : "false"),
+			primPathSuffix: nil
+		)
+	case ("RealityKit.RigidBody", "lockRotationY", .bool(let boolValue)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "bool",
+			attributeName: "lockRotationY",
+			operation: .set(valueLiteral: boolValue ? "true" : "false"),
+			primPathSuffix: nil
+		)
+	case ("RealityKit.RigidBody", "lockRotationZ", .bool(let boolValue)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "bool",
+			attributeName: "lockRotationZ",
+			operation: .set(valueLiteral: boolValue ? "true" : "false"),
+			primPathSuffix: nil
+		)
 		case ("RealityKit.MotionState", "linearVelocity", .string(let value)):
 			return ComponentParameterAuthoringSpec(
 				attributeType: "float3",
@@ -2713,6 +2839,21 @@ private func formatUSDFloat3(_ raw: String, fallback: String) -> String {
 		.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
 	if parts.count == 3 {
 		return "(\(parts[0]), \(parts[1]), \(parts[2]))"
+	}
+	return fallback
+}
+
+private func formatUSDFloat4(_ raw: String, fallback: String) -> String {
+	let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+	if trimmed.hasPrefix("("), trimmed.hasSuffix(")") {
+		return trimmed
+	}
+	let parts =
+		trimmed
+		.split(separator: ",")
+		.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+	if parts.count == 4 {
+		return "(\(parts[0]), \(parts[1]), \(parts[2]), \(parts[3]))"
 	}
 	return fallback
 }

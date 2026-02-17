@@ -1116,6 +1116,10 @@ private struct ComponentParametersSection: View {
 	@State private var isExpanded: Bool
 	@State private var selectedAudioResourceKey: String?
 	@State private var selectedPreviewResourceTarget: String?
+	@State private var isMaterialExpanded: Bool
+	@State private var isMassPropertiesExpanded: Bool
+	@State private var isCenterOfMassExpanded: Bool
+	@State private var isMovementLockingExpanded: Bool
 
 	init(
 		componentPath: String,
@@ -1164,6 +1168,10 @@ private struct ComponentParametersSection: View {
 		self._isExpanded = State(initialValue: true)
 		self._selectedAudioResourceKey = State(initialValue: nil)
 		self._selectedPreviewResourceTarget = State(initialValue: nil)
+		self._isMaterialExpanded = State(initialValue: true)
+		self._isMassPropertiesExpanded = State(initialValue: true)
+		self._isCenterOfMassExpanded = State(initialValue: true)
+		self._isMovementLockingExpanded = State(initialValue: true)
 	}
 
 	var body: some View {
@@ -1225,6 +1233,8 @@ private struct ComponentParametersSection: View {
 				let parameters = definition?.parameterLayout ?? []
 				if componentIdentifier == "RealityKit.AudioLibrary" {
 					audioLibraryEditor
+				} else if componentIdentifier == "RealityKit.RigidBody" {
+					physicsBodyEditor
 				} else if parameters.isEmpty {
 					let visibleAttributes = authoredAttributes.filter { $0.name != "info:id" }
 					if visibleAttributes.isEmpty {
@@ -1502,6 +1512,246 @@ private struct ComponentParametersSection: View {
 		let target = resource.valueTarget.trimmingCharacters(in: .whitespacesAndNewlines)
 		guard !target.isEmpty else { return resource.key }
 		return target.split(separator: "/").last.map(String.init) ?? resource.key
+	}
+
+	private var physicsBodyEditor: some View {
+		VStack(alignment: .leading, spacing: 10) {
+			InspectorRow(label: "Mode") {
+				Picker("", selection: stringBinding(for: "motionType", fallback: "Dynamic")) {
+					Text("Dynamic").tag("Dynamic")
+					Text("Kinematic").tag("Kinematic")
+					Text("Static").tag("Static")
+				}
+				.labelsHidden()
+				.pickerStyle(.menu)
+				.frame(width: 170)
+			}
+
+			Toggle(
+				"Detect Continuous Collision",
+				isOn: boolBinding(for: "isCCDEnabled", fallback: false)
+			)
+			.font(.system(size: 11))
+			.toggleStyle(.checkbox)
+
+			Toggle(
+				"Affected by Gravity",
+				isOn: boolBinding(for: "gravityEnabled", fallback: true)
+			)
+			.font(.system(size: 11))
+			.toggleStyle(.checkbox)
+
+			InspectorRow(label: "Angular Damping") {
+				TextField(
+					"",
+					value: doubleBinding(for: "angularDamping", fallback: 0),
+					format: .number.precision(.fractionLength(0...3))
+				)
+				.textFieldStyle(.roundedBorder)
+				.frame(width: 90)
+				.font(.system(size: 11))
+			}
+
+			InspectorRow(label: "Linear Damping") {
+				TextField(
+					"",
+					value: doubleBinding(for: "linearDamping", fallback: 0),
+					format: .number.precision(.fractionLength(0...3))
+				)
+				.textFieldStyle(.roundedBorder)
+				.frame(width: 90)
+				.font(.system(size: 11))
+			}
+
+			physicsSubsection(title: "Material", isExpanded: $isMaterialExpanded) {
+				InspectorRow(label: "Static Friction") {
+					TextField(
+						"",
+						value: doubleBinding(for: "staticFriction", fallback: 0),
+						format: .number.precision(.fractionLength(0...3))
+					)
+					.textFieldStyle(.roundedBorder)
+					.frame(width: 90)
+					.font(.system(size: 11))
+				}
+				InspectorRow(label: "Dynamic Friction") {
+					TextField(
+						"",
+						value: doubleBinding(for: "dynamicFriction", fallback: 0),
+						format: .number.precision(.fractionLength(0...3))
+					)
+					.textFieldStyle(.roundedBorder)
+					.frame(width: 90)
+					.font(.system(size: 11))
+				}
+				InspectorRow(label: "Restitution") {
+					TextField(
+						"",
+						value: doubleBinding(for: "restitution", fallback: 0),
+						format: .number.precision(.fractionLength(0...3))
+					)
+					.textFieldStyle(.roundedBorder)
+					.frame(width: 90)
+					.font(.system(size: 11))
+				}
+			}
+
+			physicsSubsection(title: "Mass Properties", isExpanded: $isMassPropertiesExpanded) {
+				InspectorRow(label: "Mass") {
+					HStack(spacing: 6) {
+						Text("g")
+							.font(.system(size: 10))
+							.foregroundStyle(.secondary)
+						TextField(
+							"",
+							value: doubleBinding(for: "m_mass", fallback: 1),
+							format: .number.precision(.fractionLength(0...3))
+						)
+						.textFieldStyle(.roundedBorder)
+						.frame(width: 90)
+						.font(.system(size: 11))
+					}
+				}
+				physicsVectorRow(
+					label: "Inertia",
+					unit: "kg·m²",
+					value: stringBinding(for: "m_inertia", fallback: "(0.1, 0.1, 0.1)")
+				)
+
+				physicsSubsection(title: "Center of Mass", isExpanded: $isCenterOfMassExpanded) {
+					physicsVectorRow(
+						label: "Position",
+						unit: "cm",
+						value: stringBinding(for: "position", fallback: "(0, 0, 0)")
+					)
+					physicsQuaternionRow(
+						label: "Orientation",
+						value: stringBinding(for: "orientation", fallback: "(1, 0, 0, 0)")
+					)
+				}
+			}
+
+			physicsSubsection(title: "Movement Locking", isExpanded: $isMovementLockingExpanded) {
+				physicsLockingRow(
+					label: "Translation Locked",
+					x: boolBinding(for: "lockTranslationX", fallback: false),
+					y: boolBinding(for: "lockTranslationY", fallback: false),
+					z: boolBinding(for: "lockTranslationZ", fallback: false)
+				)
+				physicsLockingRow(
+					label: "Rotation Locked",
+					x: boolBinding(for: "lockRotationX", fallback: false),
+					y: boolBinding(for: "lockRotationY", fallback: false),
+					z: boolBinding(for: "lockRotationZ", fallback: false)
+				)
+			}
+		}
+	}
+
+	private func physicsSubsection<Content: View>(
+		title: String,
+		isExpanded: Binding<Bool>,
+		@ViewBuilder content: () -> Content
+	) -> some View {
+		VStack(alignment: .leading, spacing: 8) {
+			Button(action: { isExpanded.wrappedValue.toggle() }) {
+				HStack(spacing: 6) {
+					Image(systemName: isExpanded.wrappedValue ? "chevron.down" : "chevron.right")
+						.font(.system(size: 9))
+						.foregroundStyle(.secondary)
+					Text(title)
+						.font(.system(size: 11, weight: .semibold))
+					Spacer()
+				}
+			}
+			.buttonStyle(.plain)
+			if isExpanded.wrappedValue {
+				content()
+			}
+		}
+	}
+
+	private func physicsVectorRow(label: String, unit: String, value: Binding<String>) -> some View {
+		let components = Self.parseVector3(value.wrappedValue)
+		return InspectorRow(label: label) {
+			HStack(spacing: 6) {
+				if !unit.isEmpty {
+					Text(unit)
+						.font(.system(size: 10))
+						.foregroundStyle(.secondary)
+				}
+				physicsAxisTextField(label: "X", value: components.x) { x in
+					value.wrappedValue = Self.formatVector3(x: x, y: components.y, z: components.z)
+				}
+				physicsAxisTextField(label: "Y", value: components.y) { y in
+					value.wrappedValue = Self.formatVector3(x: components.x, y: y, z: components.z)
+				}
+				physicsAxisTextField(label: "Z", value: components.z) { z in
+					value.wrappedValue = Self.formatVector3(x: components.x, y: components.y, z: z)
+				}
+			}
+		}
+	}
+
+	private func physicsQuaternionRow(label: String, value: Binding<String>) -> some View {
+		let parsed = Self.parseQuaternionComponents(value.wrappedValue)
+		return InspectorRow(label: label) {
+			HStack(spacing: 6) {
+				physicsAxisTextField(label: "X", value: parsed.xyz.x) { x in
+					value.wrappedValue = Self.formatQuaternionLiteral(
+						w: parsed.w,
+						x: x,
+						y: parsed.xyz.y,
+						z: parsed.xyz.z
+					)
+				}
+				physicsAxisTextField(label: "Y", value: parsed.xyz.y) { y in
+					value.wrappedValue = Self.formatQuaternionLiteral(
+						w: parsed.w,
+						x: parsed.xyz.x,
+						y: y,
+						z: parsed.xyz.z
+					)
+				}
+				physicsAxisTextField(label: "Z", value: parsed.xyz.z) { z in
+					value.wrappedValue = Self.formatQuaternionLiteral(
+						w: parsed.w,
+						x: parsed.xyz.x,
+						y: parsed.xyz.y,
+						z: z
+					)
+				}
+			}
+		}
+	}
+
+	private func physicsAxisTextField(
+		label: String,
+		value: Double,
+		onCommit: @escaping (Double) -> Void
+	) -> some View {
+		EditableAxisField(value: value, label: label, onCommit: onCommit)
+	}
+
+	private func physicsLockingRow(
+		label: String,
+		x: Binding<Bool>,
+		y: Binding<Bool>,
+		z: Binding<Bool>
+	) -> some View {
+		InspectorRow(label: label) {
+			HStack(spacing: 8) {
+				Toggle("X", isOn: x)
+					.toggleStyle(.checkbox)
+					.font(.system(size: 11))
+				Toggle("Y", isOn: y)
+					.toggleStyle(.checkbox)
+					.font(.system(size: 11))
+				Toggle("Z", isOn: z)
+					.toggleStyle(.checkbox)
+					.font(.system(size: 11))
+			}
+		}
 	}
 
 	private func boolBinding(for key: String, fallback: Bool) -> Binding<Bool> {
@@ -1830,6 +2080,44 @@ private struct ComponentParametersSection: View {
 				return key
 			}
 		}
+
+	private static func parseVector3(_ raw: String) -> SIMD3<Double> {
+		let values = parseTuple(raw)
+		guard values.count >= 3 else { return SIMD3<Double>(0, 0, 0) }
+		return SIMD3<Double>(values[0], values[1], values[2])
+	}
+
+	private static func formatVector3(x: Double, y: Double, z: Double) -> String {
+		"(\(formatComponent(x)), \(formatComponent(y)), \(formatComponent(z)))"
+	}
+
+	private static func parseQuaternionComponents(_ raw: String) -> (w: Double, xyz: SIMD3<Double>) {
+		let values = parseTuple(raw)
+		guard values.count >= 4 else { return (1, SIMD3<Double>(0, 0, 0)) }
+		return (values[0], SIMD3<Double>(values[1], values[2], values[3]))
+	}
+
+	private static func formatQuaternionLiteral(w: Double, x: Double, y: Double, z: Double) -> String {
+		"(\(formatComponent(w)), \(formatComponent(x)), \(formatComponent(y)), \(formatComponent(z)))"
+	}
+
+	private static func parseTuple(_ raw: String) -> [Double] {
+		let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+		guard trimmed.hasPrefix("("), trimmed.hasSuffix(")"), trimmed.count >= 2 else { return [] }
+		let body = String(trimmed.dropFirst().dropLast())
+		return body
+			.split(separator: ",", omittingEmptySubsequences: true)
+			compactMap { Double($0.trimmingCharacters(in: .whitespacesAndNewlines)) }
+	}
+
+	private static func formatComponent(_ value: Double) -> String {
+		let formatted = String(format: "%.6f", value)
+		return formatted.replacingOccurrences(
+			of: #"(\.\d*?[1-9])0+$|\.0+$"#,
+			with: "$1",
+			options: .regularExpression
+		)
+	}
 
 	private static func parseUSDBool(_ raw: String) -> Bool? {
 		switch raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
