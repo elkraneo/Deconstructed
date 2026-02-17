@@ -23,6 +23,7 @@ Only these component IDs currently have authored parameter lines in the fixture 
 8. `RealityKit.PointLight` (from `ComponentFieldExploration` diffs)
 9. `RealityKit.DirectionalLight` (from `ComponentFieldExploration` diffs)
 10. `RealityKit.HierarchicalFade` (from `ComponentFieldExploration` diffs)
+11. `RealityKit.AmbientAudio` (from `ComponentFieldExploration` diffs)
 
 All other components in the fixture set are present as component prims but currently only author `info:id` (no parameter lines yet).
 
@@ -105,6 +106,12 @@ All other components in the fixture set are present as component prims but curre
 
 1. Top-level field:
    - `float opacity = ...`
+
+### RealityKit.AmbientAudio
+
+1. Top-level field:
+   - `float gain = ...`
+2. In current fixtures, no additional authored field for Preview/Resource is present.
 
 ### RealityKit.MeshSorting (Model Sorting)
 

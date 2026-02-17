@@ -1682,6 +1682,13 @@ private func componentParameterAuthoringSpec(
 			operation: .set(valueLiteral: quoteUSDString(token)),
 			primPathSuffix: nil
 		)
+	case ("RealityKit.AmbientAudio", "gain", .double(let value)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "float",
+			attributeName: "gain",
+			operation: .set(valueLiteral: formatUSDFloat(value)),
+			primPathSuffix: nil
+		)
 	case ("RealityKit.HierarchicalFade", "opacity", .double(let value)):
 		return ComponentParameterAuthoringSpec(
 			attributeType: "float",

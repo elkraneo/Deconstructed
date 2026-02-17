@@ -164,6 +164,14 @@ public struct InspectorComponentDefinition: Equatable, Sendable, Identifiable, H
 					kind: .scalar(defaultValue: 1, unit: nil)
 				)
 			]
+		case "RealityKit.AmbientAudio":
+			return [
+				InspectorComponentParameter(
+					key: "gain",
+					label: "Gain",
+					kind: .scalar(defaultValue: 0, unit: "dB")
+				)
+			]
 		case "RealityKit.MeshSorting":
 			return [
 				InspectorComponentParameter(
