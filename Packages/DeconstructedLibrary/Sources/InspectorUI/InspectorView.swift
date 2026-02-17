@@ -194,6 +194,22 @@ public struct InspectorView: View {
 													)
 												)
 											},
+											onAddAudioResource: { targetPath, sourceURL in
+												store.send(
+													.addAudioLibraryResourceRequested(
+														componentPath: targetPath,
+														sourceURL: sourceURL
+													)
+												)
+											},
+											onRemoveAudioResource: { targetPath, resourceKey in
+												store.send(
+													.removeAudioLibraryResourceRequested(
+														componentPath: targetPath,
+														resourceKey: resourceKey
+													)
+												)
+											},
 											onPasteComponent: { copiedIdentifier in
 												if let copiedDefinition = InspectorComponentCatalog.all.first(
 													where: { $0.identifier == copiedIdentifier }
@@ -955,7 +971,7 @@ private struct MeshSortingGroupSection: View {
 	private var currentDepthPass: String {
 		attributes
 			.first(where: { $0.name == "depthPass" })
-			.map(parseUSDString) ?? "None"
+			.map { parseUSDString($0.value) } ?? "None"
 	}
 
 	private func parseUSDString(_ raw: String) -> String {
@@ -979,12 +995,15 @@ private struct ComponentParametersSection: View {
 	let onToggleActive: (Bool) -> Void
 	let onParameterChanged: (String, String, InspectorComponentParameterValue) -> Void
 	let onRawAttributeChanged: (String, String, String, String) -> Void
+	let onAddAudioResource: (String, URL) -> Void
+	let onRemoveAudioResource: (String, String) -> Void
 	let onPasteComponent: (String) -> Void
 	let onDelete: () -> Void
 	@State private var values: [String: InspectorComponentParameterValue]
 	@State private var rawValues: [String: String]
 	@State private var rawAttributeTypes: [String: String]
 	@State private var isExpanded: Bool
+	@State private var selectedAudioResourceKey: String?
 
 	init(
 		componentPath: String,
@@ -996,6 +1015,8 @@ private struct ComponentParametersSection: View {
 		onToggleActive: @escaping (Bool) -> Void,
 		onParameterChanged: @escaping (String, String, InspectorComponentParameterValue) -> Void,
 		onRawAttributeChanged: @escaping (String, String, String, String) -> Void,
+		onAddAudioResource: @escaping (String, URL) -> Void,
+		onRemoveAudioResource: @escaping (String, String) -> Void,
 		onPasteComponent: @escaping (String) -> Void,
 		onDelete: @escaping () -> Void
 	) {
@@ -1008,6 +1029,8 @@ private struct ComponentParametersSection: View {
 		self.onToggleActive = onToggleActive
 		self.onParameterChanged = onParameterChanged
 		self.onRawAttributeChanged = onRawAttributeChanged
+		self.onAddAudioResource = onAddAudioResource
+		self.onRemoveAudioResource = onRemoveAudioResource
 		self.onPasteComponent = onPasteComponent
 		self.onDelete = onDelete
 		let layout = definition?.parameterLayout ?? []
@@ -1020,11 +1043,12 @@ private struct ComponentParametersSection: View {
 			)
 		)
 		self._rawAttributeTypes = State(
-			initialValue: inferredTypeMap(
+			initialValue: Self.inferredTypeMap(
 				for: authoredAttributes + descendantAttributes.flatMap(\.authoredAttributes)
 			)
 		)
 		self._isExpanded = State(initialValue: true)
+		self._selectedAudioResourceKey = State(initialValue: nil)
 	}
 
 	var body: some View {
@@ -1084,7 +1108,9 @@ private struct ComponentParametersSection: View {
 
 			Group {
 				let parameters = definition?.parameterLayout ?? []
-				if parameters.isEmpty {
+				if componentIdentifier == "RealityKit.AudioLibrary" {
+					audioLibraryEditor
+				} else if parameters.isEmpty {
 					let visibleAttributes = authoredAttributes.filter { $0.name != "info:id" }
 					if visibleAttributes.isEmpty {
 						Text("No editable parameters mapped yet.")
@@ -1093,17 +1119,17 @@ private struct ComponentParametersSection: View {
 					} else {
 						VStack(alignment: .leading, spacing: 8) {
 							ForEach(visibleAttributes, id: \.name) { attribute in
-								GenericComponentAttributeRow(
-									name: attribute.name,
-									attributeType: rawAttributeTypes[attribute.name]
-										?? inferAttributeType(name: attribute.name, literal: attribute.value),
-									value: rawBinding(for: attribute.name, fallback: attribute.value),
-									onCommit: { newValue in
-										let type = rawAttributeTypes[attribute.name]
-											?? inferAttributeType(name: attribute.name, literal: attribute.value)
-										let value = normalizeLiteral(
-											newValue,
-											attributeType: type
+									GenericComponentAttributeRow(
+										name: attribute.name,
+										attributeType: rawAttributeTypes[attribute.name]
+											?? Self.inferAttributeType(name: attribute.name, literal: attribute.value),
+										value: rawBinding(for: attribute.name, fallback: attribute.value),
+										onCommit: { newValue in
+											let type = rawAttributeTypes[attribute.name]
+												?? Self.inferAttributeType(name: attribute.name, literal: attribute.value)
+											let value = normalizeLiteral(
+												newValue,
+												attributeType: type
 										)
 										rawValues[attribute.name] = value
 										rawAttributeTypes[attribute.name] = type
@@ -1129,21 +1155,21 @@ private struct ComponentParametersSection: View {
 										.font(.system(size: 11, weight: .semibold))
 										.foregroundStyle(.secondary)
 									ForEach(visibleDescendantAttrs, id: \.name) { attribute in
-										GenericComponentAttributeRow(
-											name: "\(descendant.displayName).\(attribute.name)",
-											attributeType: rawAttributeTypes["\(descendant.primPath)#\(attribute.name)"]
-												?? inferAttributeType(name: attribute.name, literal: attribute.value),
-											value: rawBinding(
-												for: "\(descendant.primPath)#\(attribute.name)",
-												fallback: attribute.value
+											GenericComponentAttributeRow(
+												name: "\(descendant.displayName).\(attribute.name)",
+												attributeType: rawAttributeTypes["\(descendant.primPath)#\(attribute.name)"]
+													?? Self.inferAttributeType(name: attribute.name, literal: attribute.value),
+												value: rawBinding(
+													for: "\(descendant.primPath)#\(attribute.name)",
+													fallback: attribute.value
 											),
-											onCommit: { newValue in
-												let storageKey = "\(descendant.primPath)#\(attribute.name)"
-												let type = rawAttributeTypes[storageKey]
-													?? inferAttributeType(name: attribute.name, literal: attribute.value)
-												let value = normalizeLiteral(
-													newValue,
-													attributeType: type
+												onCommit: { newValue in
+													let storageKey = "\(descendant.primPath)#\(attribute.name)"
+													let type = rawAttributeTypes[storageKey]
+														?? Self.inferAttributeType(name: attribute.name, literal: attribute.value)
+													let value = normalizeLiteral(
+														newValue,
+														attributeType: type
 												)
 												rawValues[storageKey] = value
 												rawAttributeTypes[storageKey] = type
@@ -1231,9 +1257,13 @@ private struct ComponentParametersSection: View {
 			rawValues = Dictionary(
 				uniqueKeysWithValues: authoredAttributes.map { ($0.name, $0.value) }
 			)
-			rawAttributeTypes = inferredTypeMap(
+			rawAttributeTypes = Self.inferredTypeMap(
 				for: authoredAttributes + descendantAttributes.flatMap(\.authoredAttributes)
 			)
+			let availableKeys = Set(audioLibraryResources.map(\.key))
+			if let selectedAudioResourceKey, !availableKeys.contains(selectedAudioResourceKey) {
+				self.selectedAudioResourceKey = nil
+			}
 			guard !layout.isEmpty else { return }
 			let allAuthoredAttributes = authoredAttributes + descendantAttributes.flatMap(\.authoredAttributes)
 			values = Self.initialValues(
@@ -1241,6 +1271,85 @@ private struct ComponentParametersSection: View {
 				authoredAttributes: Self.authoredMap(from: allAuthoredAttributes),
 				identifier: componentIdentifier
 			)
+		}
+	}
+
+	private var audioLibraryEditor: some View {
+		VStack(alignment: .leading, spacing: 8) {
+			VStack(alignment: .leading, spacing: 0) {
+				if audioLibraryResources.isEmpty {
+					Text("No audio resources.")
+						.font(.system(size: 11))
+						.foregroundStyle(.secondary)
+						.padding(10)
+						.frame(maxWidth: .infinity, alignment: .leading)
+				} else {
+					ForEach(audioLibraryResources, id: \.key) { resource in
+						Button {
+							selectedAudioResourceKey = resource.key
+						} label: {
+							HStack(spacing: 8) {
+								Image(systemName: "waveform")
+									.font(.system(size: 11))
+									.foregroundStyle(.cyan)
+								Text(resource.key)
+									.font(.system(size: 11))
+									.lineLimit(1)
+								Spacer(minLength: 0)
+							}
+							.padding(.horizontal, 8)
+							.padding(.vertical, 6)
+							.frame(maxWidth: .infinity, alignment: .leading)
+							.background(
+								selectedAudioResourceKey == resource.key
+									? Color.accentColor.opacity(0.22)
+									: Color.clear
+							)
+						}
+						.buttonStyle(.plain)
+					}
+				}
+			}
+			.frame(minHeight: 120, maxHeight: 180)
+			.background(.quaternary.opacity(0.35))
+			.clipShape(RoundedRectangle(cornerRadius: 8))
+
+			HStack(spacing: 10) {
+				Button {
+					guard let selectedURL = selectAudioFileURL() else { return }
+					onAddAudioResource(componentPath, selectedURL)
+				} label: {
+					Image(systemName: "plus")
+						.font(.system(size: 12, weight: .medium))
+				}
+				.buttonStyle(.plain)
+				Button {
+					guard let selectedAudioResourceKey else { return }
+					onRemoveAudioResource(componentPath, selectedAudioResourceKey)
+					self.selectedAudioResourceKey = nil
+				} label: {
+					Image(systemName: "minus")
+						.font(.system(size: 12, weight: .medium))
+				}
+				.buttonStyle(.plain)
+				.disabled(selectedAudioResourceKey == nil)
+				Spacer()
+			}
+			.padding(.horizontal, 4)
+		}
+	}
+
+	private var audioLibraryResources: [AudioLibraryResourceRow] {
+		guard let resourcesNode = descendantAttributes.first(where: { $0.displayName == "resources" }) else {
+			return []
+		}
+		let map = Dictionary(uniqueKeysWithValues: resourcesNode.authoredAttributes.map { ($0.name, $0.value) })
+		let keys = parseUSDStringArray(map["keys"] ?? "")
+		let values = parseUSDRelationshipTargets(map["values"] ?? "")
+		let count = min(keys.count, values.count)
+		guard count > 0 else { return [] }
+		return (0..<count).map { index in
+			AudioLibraryResourceRow(key: keys[index], valueTarget: values[index])
 		}
 	}
 
@@ -1295,7 +1404,7 @@ private struct ComponentParametersSection: View {
 		)
 	}
 
-	private func inferAttributeType(name: String, literal: String) -> String {
+	private static func inferAttributeType(name: String, literal: String) -> String {
 		let trimmed = literal.trimmingCharacters(in: .whitespacesAndNewlines)
 		let lowerName = name.lowercased()
 		if lowerName.contains("color"), trimmed.hasPrefix("("), trimmed.hasSuffix(")") {
@@ -1345,12 +1454,12 @@ private struct ComponentParametersSection: View {
 		return "token"
 	}
 
-	private func inferredTypeMap(
+	private static func inferredTypeMap(
 		for attributes: [USDPrimAttributes.AuthoredAttribute]
 	) -> [String: String] {
 		var result: [String: String] = [:]
 		for attribute in attributes {
-			result[attribute.name] = inferAttributeType(name: attribute.name, literal: attribute.value)
+			result[attribute.name] = Self.inferAttributeType(name: attribute.name, literal: attribute.value)
 		}
 		return result
 	}
@@ -1374,6 +1483,40 @@ private struct ComponentParametersSection: View {
 		default:
 			return trimmed
 		}
+	}
+
+	private func parseUSDStringArray(_ raw: String) -> [String] {
+		let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+		guard trimmed.hasPrefix("["), trimmed.hasSuffix("]"), trimmed.count >= 2 else {
+			return []
+		}
+		let body = String(trimmed.dropFirst().dropLast())
+		return body.split(separator: ",", omittingEmptySubsequences: true).map { token in
+			Self.parseUSDString(String(token).trimmingCharacters(in: .whitespacesAndNewlines))
+		}
+	}
+
+	private func parseUSDRelationshipTargets(_ raw: String) -> [String] {
+		let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+		if trimmed.hasPrefix("["), trimmed.hasSuffix("]"), trimmed.count >= 2 {
+			let body = String(trimmed.dropFirst().dropLast())
+			return body
+				.split(separator: ",", omittingEmptySubsequences: true)
+				.map { Self.parseUSDRelationshipTarget(String($0)) }
+				.filter { !$0.isEmpty }
+		}
+		let single = Self.parseUSDRelationshipTarget(trimmed)
+		return single.isEmpty ? [] : [single]
+	}
+
+	private func selectAudioFileURL() -> URL? {
+		let panel = NSOpenPanel()
+		panel.canChooseDirectories = false
+		panel.canChooseFiles = true
+		panel.allowsMultipleSelection = false
+		panel.allowedContentTypes = [.audio]
+		panel.prompt = "Add"
+		return panel.runModal() == .OK ? panel.url : nil
 	}
 
 	private func copiedComponentIdentifierFromPasteboard() -> String? {
@@ -1565,6 +1708,11 @@ private struct ComponentParametersSection: View {
 		}
 		return trimmed
 	}
+}
+
+private struct AudioLibraryResourceRow: Hashable {
+	let key: String
+	let valueTarget: String
 }
 
 private struct GenericComponentAttributeRow: View {
