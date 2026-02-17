@@ -1375,6 +1375,11 @@ private struct ComponentParametersSection: View {
 		authoredAttributes: [String: String],
 		identifier: String?
 	) -> InspectorComponentParameterValue {
+		if identifier == "RealityKit.MeshSorting", parameter.key == "group" {
+			let raw = authoredAttributes["group"] ?? "None"
+			let target = parseUSDRelationshipTarget(raw)
+			return .string(target.isEmpty ? "None" : target)
+		}
 		let authoredName = authoredNameForParameter(
 			key: parameter.key,
 			componentIdentifier: identifier
@@ -1474,6 +1479,14 @@ private struct ComponentParametersSection: View {
 		return inner
 			.replacingOccurrences(of: "\\\"", with: "\"")
 			.replacingOccurrences(of: "\\\\", with: "\\")
+	}
+
+	private static func parseUSDRelationshipTarget(_ raw: String) -> String {
+		let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+		if trimmed.hasPrefix("<"), trimmed.hasSuffix(">"), trimmed.count >= 2 {
+			return String(trimmed.dropFirst().dropLast())
+		}
+		return trimmed
 	}
 }
 

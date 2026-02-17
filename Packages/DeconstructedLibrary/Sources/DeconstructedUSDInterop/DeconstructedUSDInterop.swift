@@ -539,6 +539,57 @@ public enum DeconstructedUSDInterop {
 		return "\(primPath)/\(componentName)"
 	}
 
+	@discardableResult
+	public static func ensureRealityKitMeshSortingGroup(
+		url: URL,
+		groupPrimPath: String
+	) throws -> String {
+		guard url.pathExtension.lowercased() == "usda" else {
+			throw DeconstructedUSDInteropError.componentAuthoringFailed(
+				reason: "Only .usda scenes are supported for model sorting group authoring."
+			)
+		}
+		if getPrimAttributes(url: url, primPath: groupPrimPath) != nil {
+			return groupPrimPath
+		}
+		guard let parentPath = parentPath(of: groupPrimPath),
+		      let groupName = primName(of: groupPrimPath)
+		else {
+			throw DeconstructedUSDInteropError.componentAuthoringFailed(
+				reason: "Invalid model sorting group path: \(groupPrimPath)"
+			)
+		}
+		let source: String
+		do {
+			source = try String(contentsOf: url, encoding: .utf8)
+		} catch {
+			throw DeconstructedUSDInteropError.componentAuthoringFailed(
+				reason: "Unable to read USDA scene."
+			)
+		}
+		let updated = try insertTypedPrimInUSDA(
+			source,
+			parentPrimPath: parentPath,
+			typeName: "RealityKitMeshSortingGroup",
+			primName: groupName
+		)
+		do {
+			try updated.write(to: url, atomically: true, encoding: .utf8)
+		} catch {
+			throw DeconstructedUSDInteropError.componentAuthoringFailed(
+				reason: "Unable to write USDA scene."
+			)
+		}
+		try setRealityKitComponentParameter(
+			url: url,
+			componentPrimPath: groupPrimPath,
+			attributeType: "token",
+			attributeName: "depthPass",
+			valueLiteral: "\"None\""
+		)
+		return groupPrimPath
+	}
+
 	public static func setRealityKitComponentActive(
 		url: URL,
 		componentPrimPath: String,
@@ -1249,4 +1300,97 @@ private func removeRealityKitComponentParameterInUSDA(
 	updatedLines.remove(at: removeIndex)
 	let updated = updatedLines.joined(separator: "\n")
 	return source.hasSuffix("\n") ? updated + "\n" : updated
+}
+
+private func insertTypedPrimInUSDA(
+	_ source: String,
+	parentPrimPath: String,
+	typeName: String,
+	primName: String
+) throws -> String {
+	let lines = source.split(whereSeparator: \.isNewline).map(String.init)
+	let indentUnit = source.contains("\t") ? "\t" : "    "
+	var stack: [USDAPrimContext] = []
+	var pending: USDAPrimContext?
+	var insertionLineIndex: Int?
+	var parentIndent: String?
+	var existingPrimPath: String?
+
+	for (index, line) in lines.enumerated() {
+		if let declaration = parsePrimDeclarationLine(line) {
+			let path = if let parent = stack.last?.path {
+				"\(parent)/\(declaration.primName)"
+			} else {
+				"/\(declaration.primName)"
+			}
+			if path == "\(parentPrimPath)/\(primName)" {
+				existingPrimPath = path
+			}
+			let context = USDAPrimContext(path: path, indent: declaration.indent)
+			if line.contains("{") {
+				stack.append(context)
+				if context.path == parentPrimPath {
+					parentIndent = context.indent
+				}
+			} else {
+				pending = context
+			}
+		}
+		if line.contains("{"), let pendingContext = pending {
+			stack.append(pendingContext)
+			if pendingContext.path == parentPrimPath {
+				parentIndent = pendingContext.indent
+			}
+			pending = nil
+		}
+		let closingCount = line.filter { $0 == "}" }.count
+		if closingCount > 0 {
+			for _ in 0..<closingCount {
+				guard let current = stack.last else { break }
+				if current.path == parentPrimPath && insertionLineIndex == nil {
+					insertionLineIndex = index
+				}
+				_ = stack.popLast()
+			}
+		}
+	}
+
+	if existingPrimPath != nil {
+		return source
+	}
+
+	guard let insertionLineIndex, let parentIndent else {
+		throw DeconstructedUSDInteropError.componentAuthoringFailed(
+			reason: "Parent prim not found for insertion: \(parentPrimPath)"
+		)
+	}
+
+	let childIndent = parentIndent + indentUnit
+	let block: [String] = [
+		"",
+		"\(childIndent)def \(typeName) \"\(primName)\" (",
+		"\(childIndent)\(indentUnit)active = true",
+		"\(childIndent))",
+		"\(childIndent){",
+		"\(childIndent)}"
+	]
+
+	var updatedLines = lines
+	updatedLines.insert(contentsOf: block, at: insertionLineIndex)
+	let updated = updatedLines.joined(separator: "\n")
+	return source.hasSuffix("\n") ? updated + "\n" : updated
+}
+
+private func parentPath(of primPath: String) -> String? {
+	let trimmed = primPath.trimmingCharacters(in: .whitespacesAndNewlines)
+	guard trimmed.hasPrefix("/"), trimmed.count > 1 else { return nil }
+	let parts = trimmed.split(separator: "/").map(String.init)
+	guard parts.count > 1 else { return nil }
+	return "/" + parts.dropLast().joined(separator: "/")
+}
+
+private func primName(of primPath: String) -> String? {
+	let trimmed = primPath.trimmingCharacters(in: .whitespacesAndNewlines)
+	guard trimmed.hasPrefix("/"), trimmed.count > 1 else { return nil }
+	return trimmed.split(separator: "/").last.map(String.init)
 }

@@ -156,6 +156,32 @@ public struct InspectorComponentDefinition: Equatable, Sendable, Identifiable, H
 					)
 				)
 			]
+		case "RealityKit.HierarchicalFade":
+			return [
+				InspectorComponentParameter(
+					key: "opacity",
+					label: "Opacity",
+					kind: .scalar(defaultValue: 1, unit: nil)
+				)
+			]
+		case "RealityKit.MeshSorting":
+			return [
+				InspectorComponentParameter(
+					key: "group",
+					label: "Group",
+					kind: .text(defaultValue: "None", placeholder: "/Root/Model_Sorting_Group")
+				),
+				InspectorComponentParameter(
+					key: "priorityInGroup",
+					label: "Priority In Group",
+					kind: .scalar(defaultValue: 0, unit: nil)
+				),
+				InspectorComponentParameter(
+					key: "depthPass",
+					label: "Depth Pass",
+					kind: .choice(defaultValue: "None", options: ["None", "prePass", "postPass"])
+				)
+			]
 		case "RealityKit.ImageBasedLight":
 			return [
 				InspectorComponentParameter(

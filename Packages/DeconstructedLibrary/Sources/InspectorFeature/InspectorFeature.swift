@@ -333,7 +333,11 @@ import USDInteropAdvancedCore
 								url: url,
 								primPath: componentPath
 							)?.authoredAttributes {
-								componentAttributes[componentPath] = attrs
+								componentAttributes[componentPath] = mergedComponentAuthoredAttributes(
+									componentPath: componentPath,
+									authoredAttributes: attrs,
+									url: url
+								)
 							}
 							let descendants = loadComponentDescendantAttributes(
 								componentPath: componentPath,
@@ -766,6 +770,46 @@ import USDInteropAdvancedCore
 						return .none
 					}
 					let sceneNodesSnapshot = state.sceneNodes
+					if componentIdentifier == "RealityKit.MeshSorting" {
+						return .run { send in
+							do {
+								try applyMeshSortingParameterChange(
+									url: url,
+									componentPath: componentPath,
+									parameterKey: parameterKey,
+									value: value
+								)
+								let refreshed = DeconstructedUSDInterop.getPrimAttributes(
+									url: url,
+									primPath: componentPath
+								)?.authoredAttributes ?? []
+								await send(
+									.componentAuthoredAttributesLoaded([
+										componentPath: mergedComponentAuthoredAttributes(
+											componentPath: componentPath,
+											authoredAttributes: refreshed,
+											url: url
+										)
+									])
+								)
+								await send(
+									.componentDescendantAttributesLoaded([
+										componentPath: loadComponentDescendantAttributes(
+											componentPath: componentPath,
+											sceneNodes: sceneNodesSnapshot,
+											url: url
+										)
+									])
+								)
+								await send(.setComponentParameterSucceeded(
+									componentPath: componentPath,
+									attributeName: parameterKey
+								))
+							} catch {
+								await send(.setComponentParameterFailed(error.localizedDescription))
+							}
+						}
+					}
 					guard let spec = componentParameterAuthoringSpec(
 						componentIdentifier: componentIdentifier,
 						parameterKey: parameterKey,
@@ -829,7 +873,15 @@ import USDInteropAdvancedCore
 								url: url,
 								primPath: componentPath
 							)?.authoredAttributes ?? []
-							await send(.componentAuthoredAttributesLoaded([componentPath: refreshed]))
+							await send(
+								.componentAuthoredAttributesLoaded([
+									componentPath: mergedComponentAuthoredAttributes(
+										componentPath: componentPath,
+										authoredAttributes: refreshed,
+										url: url
+									)
+								])
+							)
 							await send(
 								.componentDescendantAttributesLoaded([
 									componentPath: loadComponentDescendantAttributes(
@@ -874,7 +926,15 @@ import USDInteropAdvancedCore
 								url: url,
 								primPath: componentPath
 							)?.authoredAttributes ?? []
-							await send(.componentAuthoredAttributesLoaded([componentPath: refreshed]))
+							await send(
+								.componentAuthoredAttributesLoaded([
+									componentPath: mergedComponentAuthoredAttributes(
+										componentPath: componentPath,
+										authoredAttributes: refreshed,
+										url: url
+									)
+								])
+							)
 							await send(
 								.componentDescendantAttributesLoaded([
 									componentPath: loadComponentDescendantAttributes(
@@ -1305,6 +1365,140 @@ private func flattenedDescendants(of node: SceneNode) -> [SceneNode] {
 	return result
 }
 
+private func mergedComponentAuthoredAttributes(
+	componentPath: String,
+	authoredAttributes: [USDPrimAttributes.AuthoredAttribute],
+	url: URL
+) -> [USDPrimAttributes.AuthoredAttribute] {
+	guard componentIdentifier(from: authoredAttributes) == "RealityKit.MeshSorting" else {
+		return authoredAttributes
+	}
+	guard let groupPath = meshSortingGroupPath(from: authoredAttributes),
+	      let groupAttributes = DeconstructedUSDInterop.getPrimAttributes(
+	      	url: url,
+	      	primPath: groupPath
+	      )?.authoredAttributes
+	else {
+		return authoredAttributes
+	}
+
+	var merged = authoredAttributes
+	for groupAttr in groupAttributes where groupAttr.name == "depthPass" {
+		merged.removeAll { $0.name == groupAttr.name }
+		merged.append(groupAttr)
+	}
+	return merged
+}
+
+private func componentIdentifier(
+	from authoredAttributes: [USDPrimAttributes.AuthoredAttribute]
+) -> String? {
+	authoredAttributes
+		.first(where: { $0.name == "info:id" })?
+		.value
+		.trimmingCharacters(in: CharacterSet(charactersIn: "\""))
+}
+
+private func meshSortingGroupPath(
+	from authoredAttributes: [USDPrimAttributes.AuthoredAttribute]
+) -> String? {
+	guard let raw = authoredAttributes.first(where: { $0.name == "group" })?.value else {
+		return nil
+	}
+	return parseUSDRelationshipTarget(raw)
+}
+
+private func parseUSDRelationshipTarget(_ raw: String) -> String {
+	let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+	if trimmed.hasPrefix("<"), trimmed.hasSuffix(">"), trimmed.count >= 2 {
+		return String(trimmed.dropFirst().dropLast())
+	}
+	return trimmed
+}
+
+private func applyMeshSortingParameterChange(
+	url: URL,
+	componentPath: String,
+	parameterKey: String,
+	value: InspectorComponentParameterValue
+) throws {
+	switch (parameterKey, value) {
+	case ("group", .string(let input)):
+		let normalized = normalizedMeshSortingGroupPath(input)
+		if let groupPath = normalized {
+			_ = try DeconstructedUSDInterop.ensureRealityKitMeshSortingGroup(
+				url: url,
+				groupPrimPath: groupPath
+			)
+			try DeconstructedUSDInterop.setRealityKitComponentParameter(
+				url: url,
+				componentPrimPath: componentPath,
+				attributeType: "rel",
+				attributeName: "group",
+				valueLiteral: "<\(groupPath)>"
+			)
+		} else {
+			try DeconstructedUSDInterop.deleteRealityKitComponentParameter(
+				url: url,
+				componentPrimPath: componentPath,
+				attributeName: "group"
+			)
+		}
+	case ("priorityInGroup", .double(let number)):
+		try DeconstructedUSDInterop.setRealityKitComponentParameter(
+			url: url,
+			componentPrimPath: componentPath,
+			attributeType: "int",
+			attributeName: "priorityInGroup",
+			valueLiteral: String(Int(number.rounded()))
+		)
+	case ("depthPass", .string(let selected)):
+		let componentAttrs = DeconstructedUSDInterop.getPrimAttributes(
+			url: url,
+			primPath: componentPath
+		)?.authoredAttributes ?? []
+		let existingGroup = meshSortingGroupPath(from: componentAttrs)
+		let groupPath = existingGroup ?? "/Root/Model_Sorting_Group"
+		_ = try DeconstructedUSDInterop.ensureRealityKitMeshSortingGroup(
+			url: url,
+			groupPrimPath: groupPath
+		)
+		if existingGroup == nil {
+			try DeconstructedUSDInterop.setRealityKitComponentParameter(
+				url: url,
+				componentPrimPath: componentPath,
+				attributeType: "rel",
+				attributeName: "group",
+				valueLiteral: "<\(groupPath)>"
+			)
+		}
+		try DeconstructedUSDInterop.setRealityKitComponentParameter(
+			url: url,
+			componentPrimPath: groupPath,
+			attributeType: "token",
+			attributeName: "depthPass",
+			valueLiteral: quoteUSDString(selected)
+		)
+	default:
+		throw NSError(
+			domain: "InspectorFeature",
+			code: 1,
+			userInfo: [NSLocalizedDescriptionKey: "Unsupported MeshSorting parameter: \(parameterKey)"]
+		)
+	}
+}
+
+private func normalizedMeshSortingGroupPath(_ raw: String) -> String? {
+	let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+	if trimmed.isEmpty || trimmed == "None" {
+		return nil
+	}
+	if trimmed.hasPrefix("/") {
+		return trimmed
+	}
+	return "/Root/\(trimmed)"
+}
+
 private func parentPrimPath(of path: String) -> String? {
 	let components = path.split(separator: "/")
 	guard components.count > 1 else { return nil }
@@ -1394,6 +1588,13 @@ private func componentParameterAuthoringSpec(
 			attributeType: "token",
 			attributeName: "reverbPreset",
 			operation: .set(valueLiteral: quoteUSDString(token)),
+			primPathSuffix: nil
+		)
+	case ("RealityKit.HierarchicalFade", "opacity", .double(let value)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "float",
+			attributeName: "opacity",
+			operation: .set(valueLiteral: formatUSDFloat(value)),
 			primPathSuffix: nil
 		)
 	case ("RealityKit.ImageBasedLight", "isGlobalIBL", .bool(let boolValue)):

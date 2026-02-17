@@ -1,8 +1,9 @@
 # Inspector Verified Field Matrix
 
-Last updated: 2026-02-16
+Last updated: 2026-02-17
 Source fixture set:
 - `/Volumes/Plutonian/_Developer/Deconstructed/references/ComponentExploration/Sources/ComponentExploration/ComponentExploration.rkassets`
+- `/Volumes/Plutonian/_Developer/Deconstructed/references/ComponentFieldExploration/Sources/ComponentFieldExploration/ComponentFieldExploration.rkassets`
 
 ## Intent
 
@@ -21,6 +22,7 @@ Only these component IDs currently have authored parameter lines in the fixture 
 7. `RealityKit.SpotLight` (from `ComponentFieldExploration` diffs)
 8. `RealityKit.PointLight` (from `ComponentFieldExploration` diffs)
 9. `RealityKit.DirectionalLight` (from `ComponentFieldExploration` diffs)
+10. `RealityKit.HierarchicalFade` (from `ComponentFieldExploration` diffs)
 
 All other components in the fixture set are present as component prims but currently only author `info:id` (no parameter lines yet).
 
@@ -99,6 +101,21 @@ All other components in the fixture set are present as component prims but curre
    - `float orthographicScale = ...` (authored together with `projectionType = "Fixed"` in current fixtures)
    - `float2 zBounds = (...)` (authored together with `projectionType = "Fixed"` in current fixtures)
 
+### RealityKit.HierarchicalFade (Opacity)
+
+1. Top-level field:
+   - `float opacity = ...`
+
+### RealityKit.MeshSorting (Model Sorting)
+
+1. Top-level component fields:
+   - `rel group = </Root/Model_Sorting_Group>`
+   - `int priorityInGroup = ...`
+2. Group prim is authored separately:
+   - `def RealityKitMeshSortingGroup "Model_Sorting_Group"`
+3. Group prim field:
+   - `token depthPass = "None"|"prePass"|"postPass"`
+
 ## What This Means For Implementation
 
 1. Typed mappings should be considered authoritative only for fields above.
@@ -107,7 +124,7 @@ All other components in the fixture set are present as component prims but curre
 
 ## Next Research Pass Needed
 
-For each high-priority component (Point Light, Spot Light, Directional Light, Opacity, Model Sorting, Ambient/Spatial/Channel audio, Physics Body, Physics Motion):
+For each high-priority component (Ambient/Spatial/Channel audio, Physics Body, Physics Motion):
 
 1. Create one scene with only that component.
 2. Change one parameter at a time in RCP.
