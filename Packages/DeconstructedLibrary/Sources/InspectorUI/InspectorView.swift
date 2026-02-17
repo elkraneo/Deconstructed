@@ -79,24 +79,34 @@ public struct InspectorView: View {
 								.padding()
 							}
 						case .prim:
-							if let selectedNode = store.selectedNode {
-								let graphComponentNodesByPath = Dictionary(
-									uniqueKeysWithValues: selectedNode.children
-										.filter {
+								if let selectedNode = store.selectedNode {
+									let isMeshSortingGroupSelection = selectedNode.typeName == "RealityKitMeshSortingGroup"
+									let graphComponentNodesByPath = Dictionary(
+										uniqueKeysWithValues: selectedNode.children
+											.filter {
 											$0.typeName == "RealityKitComponent"
 											|| $0.typeName == "RealityKitCustomComponent"
 											|| InspectorComponentCatalog.definition(forAuthoredPrimName: $0.name) != nil
 										}
 										.map { ($0.path, $0) }
 								)
-								let componentPaths = Set(graphComponentNodesByPath.keys)
-									.union(store.componentActiveByPath.keys)
-									.union(store.componentAuthoredAttributesByPath.keys)
-									.sorted()
-								VStack(alignment: .leading) {
-									if let transform = store.primTransform {
-										TransformSection(
-											transform: transform,
+									let componentPaths = Set(graphComponentNodesByPath.keys)
+										.union(store.componentActiveByPath.keys)
+										.union(store.componentAuthoredAttributesByPath.keys)
+										.sorted()
+									VStack(alignment: .leading) {
+										if isMeshSortingGroupSelection {
+											MeshSortingGroupSection(
+												attributes: store.primAttributes?.authoredAttributes ?? [],
+												members: store.meshSortingGroupMembers,
+												onDepthPassChanged: { value in
+													store.send(.setMeshSortingGroupDepthPassRequested(value))
+												}
+											)
+										}
+										if let transform = store.primTransform {
+											TransformSection(
+												transform: transform,
 											metersPerUnit: store.layerData?.metersPerUnit,
 											onTransformChanged: { store.send(.primTransformChanged($0)) }
 										)
@@ -136,8 +146,8 @@ public struct InspectorView: View {
 										}
 									)
 
-									ForEach(componentPaths, id: \.self) { componentPath in
-										let componentNode = graphComponentNodesByPath[componentPath]
+										ForEach(componentPaths, id: \.self) { componentPath in
+											let componentNode = graphComponentNodesByPath[componentPath]
 										let componentName =
 											componentNode?.name
 											?? componentPath.split(separator: "/").last.map(String.init)
@@ -236,10 +246,13 @@ public struct InspectorView: View {
 				.padding()
 			}
 
-			if case .prim = store.currentTarget, store.selectedNode != nil {
-				Divider()
-				InspectorAddComponentFooter { component in
-					store.send(.addComponentRequested(component))
+				if case .prim = store.currentTarget,
+				   let selectedNode = store.selectedNode,
+				   selectedNode.typeName != "RealityKitMeshSortingGroup"
+				{
+					Divider()
+					InspectorAddComponentFooter { component in
+						store.send(.addComponentRequested(component))
 				}
 			}
 		}
@@ -889,6 +902,70 @@ private struct InspectorAddComponentFooter: View {
 		}
 		.padding(12)
 		.background(.thinMaterial)
+	}
+}
+
+private struct MeshSortingGroupSection: View {
+	let attributes: [USDPrimAttributes.AuthoredAttribute]
+	let members: [String]
+	let onDepthPassChanged: (String) -> Void
+	@State private var isExpanded = true
+
+	var body: some View {
+		InspectorGroupBox(
+			title: "Model Sorting Group",
+			isExpanded: $isExpanded
+		) {
+			InspectorRow(label: "Depth Pass") {
+				Picker(
+					"",
+					selection: Binding(
+						get: { currentDepthPass },
+						set: { onDepthPassChanged($0) }
+					)
+				) {
+					Text("None").tag("None")
+					Text("Pre Pass").tag("prePass")
+					Text("Post Pass").tag("postPass")
+				}
+				.labelsHidden()
+				.pickerStyle(.menu)
+			}
+
+			VStack(alignment: .leading, spacing: 6) {
+				if members.isEmpty {
+					Text("No members assigned.")
+						.font(.system(size: 11))
+						.foregroundStyle(.secondary)
+				} else {
+					ForEach(members, id: \.self) { member in
+						Text(member)
+							.font(.system(size: 11))
+							.textSelection(.enabled)
+					}
+				}
+			}
+			.padding(8)
+			.frame(maxWidth: .infinity, alignment: .leading)
+			.background(.quaternary.opacity(0.4))
+			.clipShape(RoundedRectangle(cornerRadius: 8))
+		}
+	}
+
+	private var currentDepthPass: String {
+		attributes
+			.first(where: { $0.name == "depthPass" })
+			.map(parseUSDString) ?? "None"
+	}
+
+	private func parseUSDString(_ raw: String) -> String {
+		let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+		guard trimmed.count >= 2, trimmed.first == "\"", trimmed.last == "\"" else {
+			return trimmed
+		}
+		let start = trimmed.index(after: trimmed.startIndex)
+		let end = trimmed.index(before: trimmed.endIndex)
+		return String(trimmed[start..<end])
 	}
 }
 

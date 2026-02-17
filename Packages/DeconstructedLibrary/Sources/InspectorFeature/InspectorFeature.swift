@@ -32,6 +32,7 @@ import USDInteropAdvancedCore
 			public var primIsLoading: Bool
 			public var primErrorMessage: String?
 			public var pendingPrimLoads: Set<PrimLoadSection>
+			public var meshSortingGroupMembers: [String]
 		public var playbackIsPlaying: Bool
 		public var playbackCurrentTime: Double
 		public var playbackSpeed: Double
@@ -60,6 +61,7 @@ import USDInteropAdvancedCore
 				primIsLoading: Bool = false,
 				primErrorMessage: String? = nil,
 				pendingPrimLoads: Set<PrimLoadSection> = [],
+				meshSortingGroupMembers: [String] = [],
 			playbackIsPlaying: Bool = false,
 			playbackCurrentTime: Double = 0,
 			playbackSpeed: Double = 1.0,
@@ -87,6 +89,7 @@ import USDInteropAdvancedCore
 				self.primIsLoading = primIsLoading
 				self.primErrorMessage = primErrorMessage
 				self.pendingPrimLoads = pendingPrimLoads
+				self.meshSortingGroupMembers = meshSortingGroupMembers
 			self.playbackIsPlaying = playbackIsPlaying
 			self.playbackCurrentTime = playbackCurrentTime
 			self.playbackSpeed = playbackSpeed
@@ -145,6 +148,7 @@ import USDInteropAdvancedCore
 			case componentActivationLoaded([String: Bool])
 			case componentAuthoredAttributesLoaded([String: [USDPrimAttributes.AuthoredAttribute]])
 			case componentDescendantAttributesLoaded([String: [ComponentDescendantAttributes]])
+			case meshSortingGroupMembersLoaded([String])
 			case addComponentRequested(InspectorComponentDefinition)
 			case addComponentSucceeded(String)
 			case addComponentFailed(String)
@@ -167,6 +171,9 @@ import USDInteropAdvancedCore
 			)
 			case setRawComponentAttributeSucceeded(componentPath: String, attributeName: String)
 			case setRawComponentAttributeFailed(String)
+			case setMeshSortingGroupDepthPassRequested(String)
+			case setMeshSortingGroupDepthPassSucceeded
+			case setMeshSortingGroupDepthPassFailed(String)
 			case deleteComponentRequested(componentPath: String)
 			case deleteComponentSucceeded(componentPath: String)
 			case deleteComponentFailed(String)
@@ -218,9 +225,10 @@ import USDInteropAdvancedCore
 					state.boundMaterial = nil
 					state.availableMaterials = []
 					state.primIsLoading = false
-					state.primErrorMessage = nil
-					state.pendingPrimLoads = []
-					state.sceneNodes = []
+						state.primErrorMessage = nil
+						state.pendingPrimLoads = []
+						state.meshSortingGroupMembers = []
+						state.sceneNodes = []
 				state.playbackIsPlaying = false
 				state.playbackCurrentTime = 0
 				state.playbackIsScrubbing = false
@@ -251,11 +259,12 @@ import USDInteropAdvancedCore
 					state.componentAuthoredAttributesByPath = [:]
 					state.componentDescendantAttributesByPath = [:]
 					state.boundMaterial = nil
-					state.primErrorMessage = nil
-					state.pendingPrimLoads = []
-					guard let nodeID, let url = state.sceneURL else {
-						state.primIsLoading = false
-						return .none
+						state.primErrorMessage = nil
+						state.pendingPrimLoads = []
+						state.meshSortingGroupMembers = []
+						guard let nodeID, let url = state.sceneURL else {
+							state.primIsLoading = false
+							return .none
 					}
 					let materialBindingPrimPath = resolvedMaterialBindingPrimPath(
 						from: nodeID,
@@ -350,6 +359,12 @@ import USDInteropAdvancedCore
 						}
 						await send(.componentAuthoredAttributesLoaded(componentAttributes))
 						await send(.componentDescendantAttributesLoaded(componentDescendants))
+						let groupMembers = loadMeshSortingGroupMembers(
+							selectedPrimPath: nodeID,
+							sceneNodes: sceneNodesSnapshot,
+							url: url
+						)
+						await send(.meshSortingGroupMembersLoaded(groupMembers))
 					}
 					.cancellable(
 						id: PrimAttributesLoadCancellationID.load,
@@ -616,6 +631,10 @@ import USDInteropAdvancedCore
 					for (path, attributes) in attributesByPath {
 						state.componentDescendantAttributesByPath[path] = attributes
 					}
+					return .none
+
+				case let .meshSortingGroupMembersLoaded(members):
+					state.meshSortingGroupMembers = members
 					return .none
 
 				case let .setMaterialBinding(materialPath):
@@ -959,6 +978,39 @@ import USDInteropAdvancedCore
 
 				case let .setRawComponentAttributeFailed(message):
 					state.primErrorMessage = "Failed to set component attribute: \(message)"
+					return .none
+
+				case let .setMeshSortingGroupDepthPassRequested(depthPass):
+					guard let url = state.sceneURL, let selectedPrimPath = state.selectedNodeID else {
+						return .none
+					}
+					return .run { send in
+						do {
+							try DeconstructedUSDInterop.setRealityKitComponentParameter(
+								url: url,
+								componentPrimPath: selectedPrimPath,
+								attributeType: "token",
+								attributeName: "depthPass",
+								valueLiteral: quoteUSDString(depthPass)
+							)
+							if let refreshed = DeconstructedUSDInterop.getPrimAttributes(
+								url: url,
+								primPath: selectedPrimPath
+							) {
+								await send(.primAttributesLoaded(refreshed))
+							}
+							await send(.setMeshSortingGroupDepthPassSucceeded)
+						} catch {
+							await send(.setMeshSortingGroupDepthPassFailed(error.localizedDescription))
+						}
+					}
+
+				case .setMeshSortingGroupDepthPassSucceeded:
+					state.primErrorMessage = nil
+					return .none
+
+				case let .setMeshSortingGroupDepthPassFailed(message):
+					state.primErrorMessage = "Failed to set model sorting group depth pass: \(message)"
 					return .none
 
 				case let .deleteComponentRequested(componentPath):
@@ -1354,6 +1406,46 @@ private func loadComponentDescendantAttributes(
 		)
 	}
 	return collected
+}
+
+private func loadMeshSortingGroupMembers(
+	selectedPrimPath: String,
+	sceneNodes: [SceneNode],
+	url: URL
+) -> [String] {
+	guard let selectedNode = findNode(id: selectedPrimPath, in: sceneNodes),
+	      selectedNode.typeName == "RealityKitMeshSortingGroup"
+	else {
+		return []
+	}
+	let primPaths = allNodePaths(in: sceneNodes)
+	var members: [String] = []
+	for primPath in primPaths {
+		let components = DeconstructedUSDInterop.listRealityKitComponentPrims(
+			url: url,
+			parentPrimPath: primPath
+		)
+		for component in components where component.primName == "MeshSorting" {
+			let attrs = DeconstructedUSDInterop.getPrimAttributes(
+				url: url,
+				primPath: component.path
+			)?.authoredAttributes ?? []
+			let groupPath = meshSortingGroupPath(from: attrs)
+			if groupPath == selectedPrimPath {
+				members.append(primPath)
+			}
+		}
+	}
+	return Array(Set(members)).sorted()
+}
+
+private func allNodePaths(in nodes: [SceneNode]) -> [String] {
+	var result: [String] = []
+	for node in nodes {
+		result.append(node.path)
+		result.append(contentsOf: allNodePaths(in: node.children))
+	}
+	return result
 }
 
 private func flattenedDescendants(of node: SceneNode) -> [SceneNode] {
