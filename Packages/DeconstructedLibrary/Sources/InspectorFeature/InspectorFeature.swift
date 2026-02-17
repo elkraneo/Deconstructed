@@ -1890,6 +1890,14 @@ private func audioLibraryResources(
 	}
 }
 
+#if DEBUG
+func testAudioLibraryResources(
+	from descendantAttributes: [ComponentDescendantAttributes]
+) -> [AudioLibraryResource] {
+	audioLibraryResources(from: descendantAttributes)
+}
+#endif
+
 private func authoredLiteral(
 	in attributes: [USDPrimAttributes.AuthoredAttribute],
 	names: [String]

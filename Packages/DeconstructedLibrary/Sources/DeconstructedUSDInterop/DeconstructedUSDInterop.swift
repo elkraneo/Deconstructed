@@ -590,6 +590,118 @@ public enum DeconstructedUSDInterop {
 		return groupPrimPath
 	}
 
+	@discardableResult
+	public static func ensureTypedPrim(
+		url: URL,
+		parentPrimPath: String,
+		typeName: String,
+		primName: String
+	) throws -> String {
+		guard url.pathExtension.lowercased() == "usda" else {
+			throw DeconstructedUSDInteropError.componentAuthoringFailed(
+				reason: "Only .usda scenes are supported for typed prim authoring."
+			)
+		}
+		let source: String
+		do {
+			source = try String(contentsOf: url, encoding: .utf8)
+		} catch {
+			throw DeconstructedUSDInteropError.componentAuthoringFailed(
+				reason: "Unable to read USDA scene."
+			)
+		}
+		let updated = try insertTypedPrimInUSDA(
+			source,
+			parentPrimPath: parentPrimPath,
+			typeName: typeName,
+			primName: primName
+		)
+		do {
+			try updated.write(to: url, atomically: true, encoding: .utf8)
+		} catch {
+			throw DeconstructedUSDInteropError.componentAuthoringFailed(
+				reason: "Unable to write USDA scene."
+			)
+		}
+		return "\(parentPrimPath)/\(primName)"
+	}
+
+	public static func setAudioLibraryResources(
+		url: URL,
+		audioLibraryComponentPath: String,
+		keys: [String],
+		valueTargets: [String]
+	) throws {
+		guard keys.count == valueTargets.count else {
+			throw DeconstructedUSDInteropError.componentAuthoringFailed(
+				reason: "AudioLibrary resources keys and values must have the same count."
+			)
+		}
+		let resourcesPath = "\(audioLibraryComponentPath)/resources"
+		_ = try ensureTypedPrim(
+			url: url,
+			parentPrimPath: audioLibraryComponentPath,
+			typeName: "RealityKitDict",
+			primName: "resources"
+		)
+		try setRealityKitComponentParameter(
+			url: url,
+			componentPrimPath: resourcesPath,
+			attributeType: "string[]",
+			attributeName: "keys",
+			valueLiteral: formatUSDStringArray(keys)
+		)
+		try setRealityKitComponentParameter(
+			url: url,
+			componentPrimPath: resourcesPath,
+			attributeType: "rel",
+			attributeName: "values",
+			valueLiteral: formatUSDRelationshipTargets(valueTargets)
+		)
+	}
+
+	public static func upsertRealityKitAudioFile(
+		url: URL,
+		primPath: String,
+		relativeAssetPath: String,
+		shouldLoop: Bool
+	) throws {
+		guard let parent = parentPath(of: primPath),
+		      let name = primName(of: primPath)
+		else {
+			throw DeconstructedUSDInteropError.componentAuthoringFailed(
+				reason: "Invalid RealityKitAudioFile path: \(primPath)"
+			)
+		}
+		_ = try ensureTypedPrim(
+			url: url,
+			parentPrimPath: parent,
+			typeName: "RealityKitAudioFile",
+			primName: name
+		)
+		try setRealityKitComponentParameter(
+			url: url,
+			componentPrimPath: primPath,
+			attributeType: "uniform asset",
+			attributeName: "file",
+			valueLiteral: "@\(relativeAssetPath)@"
+		)
+		try setRealityKitComponentParameter(
+			url: url,
+			componentPrimPath: primPath,
+			attributeType: "uniform bool",
+			attributeName: "shouldLoop",
+			valueLiteral: shouldLoop ? "1" : "0"
+		)
+	}
+
+	public static func deletePrimAtPath(
+		url: URL,
+		primPath: String
+	) throws {
+		try deletePrim(url: url, primPath: primPath)
+	}
+
 	public static func setRealityKitComponentActive(
 		url: URL,
 		componentPrimPath: String,
@@ -730,6 +842,25 @@ public enum DeconstructedUSDInterop {
 		return error
 	}
 
+}
+
+private func formatUSDStringArray(_ values: [String]) -> String {
+	let escaped = values.map { value in
+		"\"\(value.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\""))\""
+	}
+	return "[\(escaped.joined(separator: ", "))]"
+}
+
+private func formatUSDRelationshipTargets(_ primPaths: [String]) -> String {
+	let targets = primPaths.map { "<\($0)>" }
+	switch targets.count {
+	case 0:
+		return "[]"
+	case 1:
+		return targets[0]
+	default:
+		return "[\(targets.joined(separator: ", "))]"
+	}
 }
 
 private struct USDAPrimContext {

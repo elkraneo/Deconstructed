@@ -9,6 +9,10 @@ Source fixture set:
 
 Document only fields that are directly observed in authored USDA, not guessed from UI labels or schema names.
 
+Related deep-dive:
+
+- `Docs/Audio-Component-Library-Relationship.md`
+
 ## Observed Component IDs With Authored Fields
 
 Only these component IDs currently have authored parameter lines in the fixture set:
@@ -24,6 +28,9 @@ Only these component IDs currently have authored parameter lines in the fixture 
 9. `RealityKit.DirectionalLight` (from `ComponentFieldExploration` diffs)
 10. `RealityKit.HierarchicalFade` (from `ComponentFieldExploration` diffs)
 11. `RealityKit.AmbientAudio` (from `ComponentFieldExploration` diffs)
+12. `RealityKit.SpatialAudio` (from `ComponentFieldExploration` diffs)
+13. `RealityKit.ChannelAudio` (from `ComponentFieldExploration` diffs)
+14. `RealityKit.AudioLibrary` (from `ComponentFieldExploration` diffs)
 
 All other components in the fixture set are present as component prims but currently only author `info:id` (no parameter lines yet).
 
@@ -112,6 +119,41 @@ All other components in the fixture set are present as component prims but curre
 1. Top-level field:
    - `float gain = ...`
 2. In current fixtures, no additional authored field for Preview/Resource is present.
+
+### RealityKit.SpatialAudio
+
+1. Top-level fields:
+   - `float gain = ...`
+   - `float directLevel = ...`
+   - `float reverbLevel = ...`
+   - `float rolloffFactor = ...`
+   - `float directivityFocus = ...`
+2. In current fixtures, no additional authored field for Preview/Resource is present.
+
+### RealityKit.ChannelAudio
+
+1. Top-level field:
+   - `float gain = ...`
+2. In current fixtures, no additional authored field for Preview/Resource is present.
+
+### RealityKit.AudioLibrary
+
+1. Top-level component:
+   - `uniform token info:id = "RealityKit.AudioLibrary"`
+2. Descendant `def RealityKitDict "resources"` fields:
+   - `string[] keys = [...]`
+   - `rel values = </Root/...>`
+3. Audio file prims are authored separately (outside component):
+   - `def RealityKitAudioFile "<name>"`
+   - `uniform asset file = @...@`
+   - `uniform bool shouldLoop = 0|1`
+
+### Ambient/Spatial/Channel Audio + Audio Library coupling
+
+1. In current fixtures, selecting an Ambient Audio Preview resource does not author a direct field on `RealityKit.AmbientAudio`.
+2. In current fixtures, selecting a Spatial Audio Preview resource does not author a direct field on `RealityKit.SpatialAudio`.
+3. In current fixtures, selecting a Channel Audio Preview resource does not author a direct field on `RealityKit.ChannelAudio`.
+4. Persisted resource data appears to live in `RealityKit.AudioLibrary` + `RealityKitAudioFile` prims.
 
 ### RealityKit.MeshSorting (Model Sorting)
 

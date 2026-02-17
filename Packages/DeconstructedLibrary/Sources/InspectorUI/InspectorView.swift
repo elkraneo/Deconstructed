@@ -81,20 +81,28 @@ public struct InspectorView: View {
 						case .prim:
 								if let selectedNode = store.selectedNode {
 									let isMeshSortingGroupSelection = selectedNode.typeName == "RealityKitMeshSortingGroup"
-									let graphComponentNodesByPath = Dictionary(
-										uniqueKeysWithValues: selectedNode.children
-											.filter {
+								let graphComponentNodesByPath = Dictionary(
+									uniqueKeysWithValues: selectedNode.children
+										.filter {
 											$0.typeName == "RealityKitComponent"
 											|| $0.typeName == "RealityKitCustomComponent"
 											|| InspectorComponentCatalog.definition(forAuthoredPrimName: $0.name) != nil
 										}
 										.map { ($0.path, $0) }
 								)
-									let componentPaths = Set(graphComponentNodesByPath.keys)
-										.union(store.componentActiveByPath.keys)
-										.union(store.componentAuthoredAttributesByPath.keys)
-										.sorted()
-									VStack(alignment: .leading) {
+								let componentPaths = Set(graphComponentNodesByPath.keys)
+									.union(store.componentActiveByPath.keys)
+									.union(store.componentAuthoredAttributesByPath.keys)
+									.sorted()
+									let sharedAudioLibraryResources: [AudioLibraryResource] = componentPaths.compactMap { path -> [AudioLibraryResource]? in
+										let attrs = store.componentAuthoredAttributesByPath[path] ?? []
+										guard componentIdentifier(from: attrs) == "RealityKit.AudioLibrary" else {
+											return nil
+										}
+										let descendants = store.componentDescendantAttributesByPath[path] ?? []
+									return parseAudioLibraryResources(from: descendants)
+								}.first ?? []
+								VStack(alignment: .leading) {
 										if isMeshSortingGroupSelection {
 											MeshSortingGroupSection(
 												attributes: store.primAttributes?.authoredAttributes ?? [],
@@ -165,6 +173,7 @@ public struct InspectorView: View {
 												),
 												authoredAttributes: authoredAttributes,
 												descendantAttributes: descendantAttributes,
+												audioLibraryResources: sharedAudioLibraryResources,
 												isActive: isActive,
 											onToggleActive: { newValue in
 												store.send(
@@ -311,6 +320,107 @@ public struct InspectorView: View {
 			return "cube"
 		}
 	}
+}
+
+private func componentIdentifier(from attributes: [USDPrimAttributes.AuthoredAttribute]) -> String? {
+	attributes
+		.first(where: { $0.name == "info:id" })?
+		.value
+		.trimmingCharacters(in: CharacterSet(charactersIn: "\""))
+}
+
+private func parseAudioLibraryResources(
+	from descendantAttributes: [ComponentDescendantAttributes]
+) -> [AudioLibraryResource] {
+	guard let resourcesNode = descendantAttributes.first(where: {
+		$0.displayName == "resources"
+			|| $0.displayName.lowercased().contains("resources")
+			|| $0.primPath.hasSuffix("/resources")
+	}) else {
+		return []
+	}
+	let attrs = resourcesNode.authoredAttributes
+	let keys = parseUSDStringArrayLiteral(authoredLiteralValue(in: attrs, names: ["keys"]))
+	let values = parseUSDRelationshipTargetsLiteral(authoredLiteralValue(in: attrs, names: ["values"]))
+	guard !keys.isEmpty else { return [] }
+	return keys.enumerated().map { index, key in
+		AudioLibraryResource(key: key, valueTarget: index < values.count ? values[index] : "")
+	}
+}
+
+private func authoredLiteralValue(
+	in attributes: [USDPrimAttributes.AuthoredAttribute],
+	names: [String]
+) -> String {
+	let lowered = Set(names.map { $0.lowercased() })
+	if let exact = attributes.first(where: { lowered.contains($0.name.lowercased()) }) {
+		return exact.value
+	}
+	if let typed = attributes.first(where: { attribute in
+		let key = attribute.name.lowercased()
+		return lowered.contains(where: { key.hasSuffix(" \($0)") })
+	}) {
+		return typed.value
+	}
+	if let loose = attributes.first(where: { attribute in
+		let key = attribute.name.lowercased()
+		return lowered.contains(where: { key.contains($0) })
+	}) {
+		return loose.value
+	}
+	return ""
+}
+
+private func parseUSDStringArrayLiteral(_ raw: String) -> [String] {
+	let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+	guard !trimmed.isEmpty else { return [] }
+	if trimmed.hasPrefix("["), trimmed.hasSuffix("]"), trimmed.count >= 2 {
+		let body = String(trimmed.dropFirst().dropLast())
+		return body.split(separator: ",", omittingEmptySubsequences: true).map { token in
+			parseUSDStringLiteral(String(token).trimmingCharacters(in: .whitespacesAndNewlines))
+		}
+	}
+	if trimmed.hasPrefix("("), trimmed.hasSuffix(")"), trimmed.count >= 2 {
+		let body = String(trimmed.dropFirst().dropLast())
+		return body.split(separator: ",", omittingEmptySubsequences: true).map { token in
+			parseUSDStringLiteral(String(token).trimmingCharacters(in: .whitespacesAndNewlines))
+		}
+	}
+	return [parseUSDStringLiteral(trimmed)]
+}
+
+private func parseUSDRelationshipTargetsLiteral(_ raw: String) -> [String] {
+	let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+	if trimmed.hasPrefix("["), trimmed.hasSuffix("]"), trimmed.count >= 2 {
+		let body = String(trimmed.dropFirst().dropLast())
+		return body
+			.split(separator: ",", omittingEmptySubsequences: true)
+			.map { parseUSDRelationshipTargetLiteral(String($0)) }
+			.filter { !$0.isEmpty }
+	}
+	let single = parseUSDRelationshipTargetLiteral(trimmed)
+	return single.isEmpty ? [] : [single]
+}
+
+private func parseUSDStringLiteral(_ raw: String) -> String {
+	let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+	guard trimmed.count >= 2, trimmed.first == "\"", trimmed.last == "\"" else {
+		return trimmed
+	}
+	let start = trimmed.index(after: trimmed.startIndex)
+	let end = trimmed.index(before: trimmed.endIndex)
+	let inner = String(trimmed[start..<end])
+	return inner
+		.replacingOccurrences(of: "\\\"", with: "\"")
+		.replacingOccurrences(of: "\\\\", with: "\\")
+}
+
+private func parseUSDRelationshipTargetLiteral(_ raw: String) -> String {
+	let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+	if trimmed.hasPrefix("<"), trimmed.hasSuffix(">"), trimmed.count >= 2 {
+		return String(trimmed.dropFirst().dropLast())
+	}
+	return trimmed
 }
 
 private struct InspectorGroupBox<Content: View>: View {
@@ -991,6 +1101,7 @@ private struct ComponentParametersSection: View {
 	let definition: InspectorComponentDefinition?
 	let authoredAttributes: [USDPrimAttributes.AuthoredAttribute]
 	let descendantAttributes: [ComponentDescendantAttributes]
+	let audioLibraryResources: [AudioLibraryResource]
 	let isActive: Bool
 	let onToggleActive: (Bool) -> Void
 	let onParameterChanged: (String, String, InspectorComponentParameterValue) -> Void
@@ -1004,6 +1115,7 @@ private struct ComponentParametersSection: View {
 	@State private var rawAttributeTypes: [String: String]
 	@State private var isExpanded: Bool
 	@State private var selectedAudioResourceKey: String?
+	@State private var selectedPreviewResourceTarget: String?
 
 	init(
 		componentPath: String,
@@ -1011,6 +1123,7 @@ private struct ComponentParametersSection: View {
 		definition: InspectorComponentDefinition?,
 		authoredAttributes: [USDPrimAttributes.AuthoredAttribute],
 		descendantAttributes: [ComponentDescendantAttributes],
+		audioLibraryResources: [AudioLibraryResource],
 		isActive: Bool,
 		onToggleActive: @escaping (Bool) -> Void,
 		onParameterChanged: @escaping (String, String, InspectorComponentParameterValue) -> Void,
@@ -1025,6 +1138,7 @@ private struct ComponentParametersSection: View {
 		self.definition = definition
 		self.authoredAttributes = authoredAttributes
 		self.descendantAttributes = descendantAttributes
+		self.audioLibraryResources = audioLibraryResources
 		self.isActive = isActive
 		self.onToggleActive = onToggleActive
 		self.onParameterChanged = onParameterChanged
@@ -1049,6 +1163,7 @@ private struct ComponentParametersSection: View {
 		)
 		self._isExpanded = State(initialValue: true)
 		self._selectedAudioResourceKey = State(initialValue: nil)
+		self._selectedPreviewResourceTarget = State(initialValue: nil)
 	}
 
 	var body: some View {
@@ -1247,6 +1362,25 @@ private struct ComponentParametersSection: View {
 						}
 					}
 				}
+				if showsAudioPreviewSection {
+					Divider()
+						.padding(.vertical, 4)
+					VStack(alignment: .leading, spacing: 8) {
+						Text("Preview")
+							.font(.system(size: 11, weight: .semibold))
+							.foregroundStyle(.secondary)
+						InspectorRow(label: "Resource") {
+							Picker("", selection: previewResourceSelection) {
+								ForEach(audioLibraryResources, id: \.valueTarget) { resource in
+									Text(previewResourceLabel(for: resource)).tag(resource.valueTarget)
+								}
+							}
+							.labelsHidden()
+							.pickerStyle(.menu)
+							.disabled(audioLibraryResources.isEmpty)
+						}
+					}
+				}
 			}
 			.disabled(!isActive)
 		}
@@ -1263,6 +1397,12 @@ private struct ComponentParametersSection: View {
 			let availableKeys = Set(audioLibraryResources.map(\.key))
 			if let selectedAudioResourceKey, !availableKeys.contains(selectedAudioResourceKey) {
 				self.selectedAudioResourceKey = nil
+			}
+			let availablePreviewTargets = Set(audioLibraryResources.map(\.valueTarget))
+			if let selectedPreviewResourceTarget,
+				!availablePreviewTargets.contains(selectedPreviewResourceTarget)
+			{
+				self.selectedPreviewResourceTarget = nil
 			}
 			guard !layout.isEmpty else { return }
 			let allAuthoredAttributes = authoredAttributes + descendantAttributes.flatMap(\.authoredAttributes)
@@ -1339,24 +1479,29 @@ private struct ComponentParametersSection: View {
 		}
 	}
 
-	private var audioLibraryResources: [AudioLibraryResource] {
-		guard let resourcesNode = descendantAttributes.first(where: {
-			$0.displayName == "resources"
-				|| $0.displayName.lowercased().contains("resources")
-				|| $0.primPath.hasSuffix("/resources")
-		}) else {
-			return []
-		}
-		let attrs = resourcesNode.authoredAttributes
-		let keys = parseUSDStringArray(Self.authoredLiteral(in: attrs, names: ["keys"]))
-		let values = parseUSDRelationshipTargets(Self.authoredLiteral(in: attrs, names: ["values"]))
-		guard !keys.isEmpty else { return [] }
-		return keys.enumerated().map { index, key in
-			AudioLibraryResource(
-				key: key,
-				valueTarget: index < values.count ? values[index] : ""
-			)
-		}
+	private var showsAudioPreviewSection: Bool {
+		guard let componentIdentifier else { return false }
+		return componentIdentifier == "RealityKit.ChannelAudio"
+			|| componentIdentifier == "RealityKit.SpatialAudio"
+			|| componentIdentifier == "RealityKit.AmbientAudio"
+	}
+
+	private var previewResourceSelection: Binding<String> {
+		Binding(
+			get: {
+				if let selectedPreviewResourceTarget {
+					return selectedPreviewResourceTarget
+				}
+				return audioLibraryResources.first?.valueTarget ?? ""
+			},
+			set: { selectedPreviewResourceTarget = $0 }
+		)
+	}
+
+	private func previewResourceLabel(for resource: AudioLibraryResource) -> String {
+		let target = resource.valueTarget.trimmingCharacters(in: .whitespacesAndNewlines)
+		guard !target.isEmpty else { return resource.key }
+		return target.split(separator: "/").last.map(String.init) ?? resource.key
 	}
 
 	private func boolBinding(for key: String, fallback: Bool) -> Binding<Bool> {

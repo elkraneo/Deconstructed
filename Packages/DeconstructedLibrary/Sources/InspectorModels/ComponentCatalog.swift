@@ -172,6 +172,42 @@ public struct InspectorComponentDefinition: Equatable, Sendable, Identifiable, H
 					kind: .scalar(defaultValue: 0, unit: "dB")
 				)
 			]
+		case "RealityKit.SpatialAudio":
+			return [
+				InspectorComponentParameter(
+					key: "gain",
+					label: "Gain",
+					kind: .scalar(defaultValue: 0, unit: "dB")
+				),
+				InspectorComponentParameter(
+					key: "directLevel",
+					label: "Direct Level",
+					kind: .scalar(defaultValue: 0, unit: "dB")
+				),
+				InspectorComponentParameter(
+					key: "reverbLevel",
+					label: "Reverb Level",
+					kind: .scalar(defaultValue: 0, unit: "dB")
+				),
+				InspectorComponentParameter(
+					key: "rolloffFactor",
+					label: "Rolloff Factor",
+					kind: .scalar(defaultValue: 1, unit: nil)
+				),
+				InspectorComponentParameter(
+					key: "directivityFocus",
+					label: "Focus",
+					kind: .scalar(defaultValue: 0, unit: nil)
+				)
+			]
+		case "RealityKit.ChannelAudio":
+			return [
+				InspectorComponentParameter(
+					key: "gain",
+					label: "Gain",
+					kind: .scalar(defaultValue: 0, unit: "dB")
+				)
+			]
 		case "RealityKit.MeshSorting":
 			return [
 				InspectorComponentParameter(
