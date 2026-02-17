@@ -1793,7 +1793,7 @@ private struct ComponentParametersSection: View {
 		key: String,
 		componentIdentifier: String?
 	) -> String {
-		switch (componentIdentifier, key) {
+			switch (componentIdentifier, key) {
 		case ("RealityKit.Reverb", "preset"):
 			return "reverbPreset"
 		case ("RealityKit.PointLight", "attenuationFalloff"):
@@ -1820,12 +1820,16 @@ private struct ComponentParametersSection: View {
 			return "projectionType"
 		case ("RealityKit.DirectionalLight", "shadowOrthographicScale"):
 			return "orthographicScale"
-		case ("RealityKit.DirectionalLight", "shadowZBounds"):
-			return "zBounds"
-		default:
-			return key
+			case ("RealityKit.DirectionalLight", "shadowZBounds"):
+				return "zBounds"
+			case ("RealityKit.MotionState", "linearVelocity"):
+				return "m_userSetLinearVelocity"
+			case ("RealityKit.MotionState", "angularVelocity"):
+				return "m_userSetAngularVelocity"
+			default:
+				return key
+			}
 		}
-	}
 
 	private static func parseUSDBool(_ raw: String) -> Bool? {
 		switch raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {

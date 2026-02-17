@@ -2396,18 +2396,32 @@ private func componentParameterAuthoringSpec(
 			operation: .set(valueLiteral: formatUSDUInt(numberValue)),
 			primPathSuffix: nil
 		)
-	case ("RealityKit.Collider", "type", .string(let value)):
-		return ComponentParameterAuthoringSpec(
-			attributeType: "token",
-			attributeName: "type",
-			operation: .set(valueLiteral: quoteUSDString(value)),
-			primPathSuffix: nil
-		)
-	case ("RealityKit.PointLight", "color", .string(let value)):
-		return ComponentParameterAuthoringSpec(
-			attributeType: "float3",
-			attributeName: "color",
-			operation: .set(valueLiteral: formatUSDColor3(value)),
+		case ("RealityKit.Collider", "type", .string(let value)):
+			return ComponentParameterAuthoringSpec(
+				attributeType: "token",
+				attributeName: "type",
+				operation: .set(valueLiteral: quoteUSDString(value)),
+				primPathSuffix: nil
+			)
+		case ("RealityKit.MotionState", "linearVelocity", .string(let value)):
+			return ComponentParameterAuthoringSpec(
+				attributeType: "float3",
+				attributeName: "m_userSetLinearVelocity",
+				operation: .set(valueLiteral: formatUSDFloat3(value, fallback: "(0, 0, 0)")),
+				primPathSuffix: nil
+			)
+		case ("RealityKit.MotionState", "angularVelocity", .string(let value)):
+			return ComponentParameterAuthoringSpec(
+				attributeType: "float3",
+				attributeName: "m_userSetAngularVelocity",
+				operation: .set(valueLiteral: formatUSDFloat3(value, fallback: "(0, 0, 0)")),
+				primPathSuffix: nil
+			)
+		case ("RealityKit.PointLight", "color", .string(let value)):
+			return ComponentParameterAuthoringSpec(
+				attributeType: "float3",
+				attributeName: "color",
+				operation: .set(valueLiteral: formatUSDColor3(value)),
 			primPathSuffix: nil
 		)
 	case ("RealityKit.PointLight", "intensity", .double(let value)):
@@ -2685,6 +2699,10 @@ private func formatUSDUInt(_ value: Double) -> String {
 }
 
 private func formatUSDColor3(_ raw: String) -> String {
+	formatUSDFloat3(raw, fallback: "(1, 1, 1)")
+}
+
+private func formatUSDFloat3(_ raw: String, fallback: String) -> String {
 	let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
 	if trimmed.hasPrefix("("), trimmed.hasSuffix(")") {
 		return trimmed
@@ -2696,7 +2714,7 @@ private func formatUSDColor3(_ raw: String) -> String {
 	if parts.count == 3 {
 		return "(\(parts[0]), \(parts[1]), \(parts[2]))"
 	}
-	return "(1, 1, 1)"
+	return fallback
 }
 
 private func formatUSDFloat2(_ raw: String) -> String {

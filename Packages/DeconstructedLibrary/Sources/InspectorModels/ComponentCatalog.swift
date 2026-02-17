@@ -263,6 +263,19 @@ public struct InspectorComponentDefinition: Equatable, Sendable, Identifiable, H
 					kind: .text(defaultValue: "Default", placeholder: "Collision type token")
 				)
 			]
+		case "RealityKit.MotionState":
+			return [
+				InspectorComponentParameter(
+					key: "linearVelocity",
+					label: "Linear Velocity",
+					kind: .text(defaultValue: "(0, 0, 0)", placeholder: "(x, y, z)")
+				),
+				InspectorComponentParameter(
+					key: "angularVelocity",
+					label: "Angular Velocity",
+					kind: .text(defaultValue: "(0, 0, 0)", placeholder: "(x, y, z)")
+				)
+			]
 		case "RealityKit.PointLight":
 			return [
 				InspectorComponentParameter(
