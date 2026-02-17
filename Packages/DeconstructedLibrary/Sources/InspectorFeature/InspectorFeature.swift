@@ -163,6 +163,12 @@ import USDInteropAdvancedCore
 			)
 			case setComponentParameterSucceeded(componentPath: String, attributeName: String)
 			case setComponentParameterFailed(String)
+			case addAudioLibraryResourceRequested(componentPath: String, sourceURL: URL)
+			case addAudioLibraryResourceSucceeded(componentPath: String)
+			case addAudioLibraryResourceFailed(String)
+			case removeAudioLibraryResourceRequested(componentPath: String, resourceKey: String)
+			case removeAudioLibraryResourceSucceeded(componentPath: String)
+			case removeAudioLibraryResourceFailed(String)
 			case setRawComponentAttributeRequested(
 				componentPath: String,
 				attributeType: String,
@@ -927,6 +933,140 @@ import USDInteropAdvancedCore
 					state.primErrorMessage = "Failed to set component parameter: \(message)"
 					return .none
 
+				case let .addAudioLibraryResourceRequested(componentPath, sourceURL):
+					guard let url = state.sceneURL else {
+						return .none
+					}
+					let sceneNodesSnapshot = state.sceneNodes
+					let existingResources = audioLibraryResources(
+						from: state.componentDescendantAttributesByPath[componentPath] ?? []
+					)
+					return .run { send in
+						do {
+							let copied = try importAudioResource(
+								sourceURL: sourceURL,
+								sceneURL: url
+							)
+							let rootPrimPath = sceneNodesSnapshot.first?.path ?? "/Root"
+							let audioFilePrimPath = uniqueAudioFilePrimPath(
+								baseName: copied.resourceKey,
+								rootPrimPath: rootPrimPath,
+								existingTargets: existingResources.map(\.valueTarget)
+							)
+							let merged = existingResources + [
+								AudioLibraryResourceEntry(
+									key: copied.resourceKey,
+									valueTarget: audioFilePrimPath
+								)
+							]
+							try DeconstructedUSDInterop.setAudioLibraryResources(
+								url: url,
+								audioLibraryComponentPath: componentPath,
+								keys: merged.map(\.key),
+								valueTargets: merged.map(\.valueTarget)
+							)
+							try DeconstructedUSDInterop.upsertRealityKitAudioFile(
+								url: url,
+								primPath: audioFilePrimPath,
+								relativeAssetPath: copied.relativeAssetPath,
+								shouldLoop: false
+							)
+							let refreshed = DeconstructedUSDInterop.getPrimAttributes(
+								url: url,
+								primPath: componentPath
+							)?.authoredAttributes ?? []
+							await send(
+								.componentAuthoredAttributesLoaded([
+									componentPath: mergedComponentAuthoredAttributes(
+										componentPath: componentPath,
+										authoredAttributes: refreshed,
+										url: url
+									)
+								])
+							)
+							await send(
+								.componentDescendantAttributesLoaded([
+									componentPath: loadComponentDescendantAttributes(
+										componentPath: componentPath,
+										sceneNodes: sceneNodesSnapshot,
+										url: url
+									)
+								])
+							)
+							await send(.addAudioLibraryResourceSucceeded(componentPath: componentPath))
+						} catch {
+							await send(.addAudioLibraryResourceFailed(error.localizedDescription))
+						}
+					}
+
+				case .addAudioLibraryResourceSucceeded:
+					state.primErrorMessage = nil
+					return .none
+
+				case let .addAudioLibraryResourceFailed(message):
+					state.primErrorMessage = "Failed to add audio resource: \(message)"
+					return .none
+
+				case let .removeAudioLibraryResourceRequested(componentPath, resourceKey):
+					guard let url = state.sceneURL else {
+						return .none
+					}
+					let sceneNodesSnapshot = state.sceneNodes
+					let existingResources = audioLibraryResources(
+						from: state.componentDescendantAttributesByPath[componentPath] ?? []
+					)
+					guard let removalIndex = existingResources.firstIndex(where: { $0.key == resourceKey }) else {
+						state.primErrorMessage = "Resource '\(resourceKey)' not found in Audio Library."
+						return .none
+					}
+					var remainingResources = existingResources
+					remainingResources.remove(at: removalIndex)
+					let remainingKeys = remainingResources.map(\.key)
+					let remainingTargets = remainingResources.map(\.valueTarget)
+					return .run { send in
+						do {
+							try DeconstructedUSDInterop.setAudioLibraryResources(
+								url: url,
+								audioLibraryComponentPath: componentPath,
+								keys: remainingKeys,
+								valueTargets: remainingTargets
+							)
+							let refreshed = DeconstructedUSDInterop.getPrimAttributes(
+								url: url,
+								primPath: componentPath
+							)?.authoredAttributes ?? []
+							await send(
+								.componentAuthoredAttributesLoaded([
+									componentPath: mergedComponentAuthoredAttributes(
+										componentPath: componentPath,
+										authoredAttributes: refreshed,
+										url: url
+									)
+								])
+							)
+							await send(
+								.componentDescendantAttributesLoaded([
+									componentPath: loadComponentDescendantAttributes(
+										componentPath: componentPath,
+										sceneNodes: sceneNodesSnapshot,
+										url: url
+									)
+								])
+							)
+							await send(.removeAudioLibraryResourceSucceeded(componentPath: componentPath))
+						} catch {
+							await send(.removeAudioLibraryResourceFailed(error.localizedDescription))
+						}
+					}
+
+				case .removeAudioLibraryResourceSucceeded:
+					state.primErrorMessage = nil
+					return .none
+
+				case let .removeAudioLibraryResourceFailed(message):
+					state.primErrorMessage = "Failed to remove audio resource: \(message)"
+					return .none
+
 				case let .setRawComponentAttributeRequested(componentPath, attributeType, attributeName, valueLiteral):
 					guard let url = state.sceneURL else {
 						return .none
@@ -1405,6 +1545,22 @@ private func loadComponentDescendantAttributes(
 			)
 		)
 	}
+	let resourcesPath = "\(componentPath)/resources"
+	if !collected.contains(where: { $0.primPath == resourcesPath }) {
+		let resourcesAttributes = DeconstructedUSDInterop.getPrimAttributes(
+			url: url,
+			primPath: resourcesPath
+		)?.authoredAttributes ?? []
+		if !resourcesAttributes.isEmpty {
+			collected.append(
+				ComponentDescendantAttributes(
+					primPath: resourcesPath,
+					displayName: "resources",
+					authoredAttributes: resourcesAttributes
+				)
+			)
+		}
+	}
 	return collected
 }
 
@@ -1506,6 +1662,169 @@ private func parseUSDRelationshipTarget(_ raw: String) -> String {
 		return String(trimmed.dropFirst().dropLast())
 	}
 	return trimmed
+}
+
+private struct AudioLibraryResourceEntry: Sendable, Equatable {
+	let key: String
+	let valueTarget: String
+}
+
+private struct ImportedAudioResource: Sendable, Equatable {
+	let resourceKey: String
+	let relativeAssetPath: String
+}
+
+private func audioLibraryResources(
+	from descendantAttributes: [ComponentDescendantAttributes]
+) -> [AudioLibraryResourceEntry] {
+	guard let resourcesNode = descendantAttributes.first(where: {
+		$0.displayName == "resources" || $0.primPath.hasSuffix("/resources")
+	}) else {
+		return []
+	}
+	let attrs = Dictionary(
+		uniqueKeysWithValues: resourcesNode.authoredAttributes.map { ($0.name, $0.value) }
+	)
+	let keys = parseUSDStringArray(attrs["keys"] ?? "")
+	let values = parseUSDRelationshipTargets(attrs["values"] ?? "")
+	guard !keys.isEmpty else { return [] }
+	return keys.enumerated().map { index, key in
+		let valueTarget = index < values.count ? values[index] : ""
+		return AudioLibraryResourceEntry(key: key, valueTarget: valueTarget)
+	}
+}
+
+private func parseUSDStringArray(_ raw: String) -> [String] {
+	let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+	guard trimmed.hasPrefix("["), trimmed.hasSuffix("]"), trimmed.count >= 2 else {
+		return []
+	}
+	let body = String(trimmed.dropFirst().dropLast())
+	let parts = body.split(separator: ",", omittingEmptySubsequences: true)
+	return parts.map { part in
+		let token = String(part).trimmingCharacters(in: .whitespacesAndNewlines)
+		guard token.count >= 2, token.first == "\"", token.last == "\"" else {
+			return token
+		}
+		let start = token.index(after: token.startIndex)
+		let end = token.index(before: token.endIndex)
+		return String(token[start..<end])
+			.replacingOccurrences(of: "\\\"", with: "\"")
+			.replacingOccurrences(of: "\\\\", with: "\\")
+	}
+}
+
+private func parseUSDRelationshipTargets(_ raw: String) -> [String] {
+	let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+	if trimmed.hasPrefix("["), trimmed.hasSuffix("]"), trimmed.count >= 2 {
+		let body = String(trimmed.dropFirst().dropLast())
+		return body
+			.split(separator: ",", omittingEmptySubsequences: true)
+			.map { parseUSDRelationshipTarget(String($0)) }
+			.filter { !$0.isEmpty }
+	}
+	let single = parseUSDRelationshipTarget(trimmed)
+	return single.isEmpty ? [] : [single]
+}
+
+private func importAudioResource(
+	sourceURL: URL,
+	sceneURL: URL
+) throws -> ImportedAudioResource {
+	let fileManager = FileManager.default
+	guard let rkassetsURL = resolveRKAssetsRoot(for: sceneURL) else {
+		throw NSError(
+			domain: "InspectorFeature",
+			code: 1,
+			userInfo: [NSLocalizedDescriptionKey: "Unable to resolve .rkassets root for scene."]
+		)
+	}
+	var destinationURL = rkassetsURL.appendingPathComponent(sourceURL.lastPathComponent)
+	if fileManager.fileExists(atPath: destinationURL.path) {
+		let stem = sourceURL.deletingPathExtension().lastPathComponent
+		let ext = sourceURL.pathExtension
+		var index = 2
+		while fileManager.fileExists(atPath: destinationURL.path) {
+			let candidate = "\(stem)-\(index)"
+			let filename = ext.isEmpty ? candidate : "\(candidate).\(ext)"
+			destinationURL = rkassetsURL.appendingPathComponent(filename)
+			index += 1
+		}
+	}
+	try fileManager.copyItem(at: sourceURL, to: destinationURL)
+	let relativePath = relativePathFromSceneDirectory(
+		sceneURL: sceneURL,
+		targetURL: destinationURL
+	)
+	return ImportedAudioResource(
+		resourceKey: destinationURL.lastPathComponent,
+		relativeAssetPath: relativePath
+	)
+}
+
+private func resolveRKAssetsRoot(for sceneURL: URL) -> URL? {
+	var current = sceneURL.deletingLastPathComponent()
+	while current.path != "/" {
+		if current.pathExtension.lowercased() == "rkassets" {
+			return current
+		}
+		current = current.deletingLastPathComponent()
+	}
+	return nil
+}
+
+private func relativePathFromSceneDirectory(sceneURL: URL, targetURL: URL) -> String {
+	let baseComponents = sceneURL.deletingLastPathComponent().standardizedFileURL.pathComponents
+	let targetComponents = targetURL.standardizedFileURL.pathComponents
+	var common = 0
+	while common < baseComponents.count,
+	      common < targetComponents.count,
+	      baseComponents[common] == targetComponents[common] {
+		common += 1
+	}
+	let upCount = max(0, baseComponents.count - common)
+	let upParts = Array(repeating: "..", count: upCount)
+	let downParts = Array(targetComponents.dropFirst(common))
+	let parts = upParts + downParts
+	return parts.isEmpty ? "." : parts.joined(separator: "/")
+}
+
+private func uniqueAudioFilePrimPath(
+	baseName: String,
+	rootPrimPath: String,
+	existingTargets: [String]
+) -> String {
+	let sanitized = sanitizeAudioFilePrimName(baseName)
+	var candidate = "\(rootPrimPath)/\(sanitized)"
+	var index = 2
+	let existing = Set(existingTargets)
+	while existing.contains(candidate) {
+		candidate = "\(rootPrimPath)/\(sanitized)_\(index)"
+		index += 1
+	}
+	return candidate
+}
+
+private func sanitizeAudioFilePrimName(_ key: String) -> String {
+	let base = key
+		.replacingOccurrences(of: ".", with: "_")
+		.replacingOccurrences(of: "-", with: "_")
+	let filtered = base.map { char -> Character in
+		let isValid = char.unicodeScalars.allSatisfy {
+			CharacterSet.alphanumerics.contains($0) || $0 == "_"
+		}
+		if isValid {
+			return char
+		}
+		return "_"
+	}
+	var name = String(filtered)
+	if let first = name.unicodeScalars.first,
+	   CharacterSet.decimalDigits.contains(first)
+	{
+		name = "_" + name
+	}
+	return name.isEmpty ? "_audio" : name
 }
 
 private func applyMeshSortingParameterChange(
@@ -1683,6 +2002,48 @@ private func componentParameterAuthoringSpec(
 			primPathSuffix: nil
 		)
 	case ("RealityKit.AmbientAudio", "gain", .double(let value)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "float",
+			attributeName: "gain",
+			operation: .set(valueLiteral: formatUSDFloat(value)),
+			primPathSuffix: nil
+		)
+	case ("RealityKit.SpatialAudio", "gain", .double(let value)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "float",
+			attributeName: "gain",
+			operation: .set(valueLiteral: formatUSDFloat(value)),
+			primPathSuffix: nil
+		)
+	case ("RealityKit.SpatialAudio", "directLevel", .double(let value)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "float",
+			attributeName: "directLevel",
+			operation: .set(valueLiteral: formatUSDFloat(value)),
+			primPathSuffix: nil
+		)
+	case ("RealityKit.SpatialAudio", "reverbLevel", .double(let value)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "float",
+			attributeName: "reverbLevel",
+			operation: .set(valueLiteral: formatUSDFloat(value)),
+			primPathSuffix: nil
+		)
+	case ("RealityKit.SpatialAudio", "rolloffFactor", .double(let value)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "float",
+			attributeName: "rolloffFactor",
+			operation: .set(valueLiteral: formatUSDFloat(value)),
+			primPathSuffix: nil
+		)
+	case ("RealityKit.SpatialAudio", "directivityFocus", .double(let value)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "float",
+			attributeName: "directivityFocus",
+			operation: .set(valueLiteral: formatUSDFloat(value)),
+			primPathSuffix: nil
+		)
+	case ("RealityKit.ChannelAudio", "gain", .double(let value)):
 		return ComponentParameterAuthoringSpec(
 			attributeType: "float",
 			attributeName: "gain",

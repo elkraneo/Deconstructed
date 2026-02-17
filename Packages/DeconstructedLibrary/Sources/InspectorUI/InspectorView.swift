@@ -1340,16 +1340,18 @@ private struct ComponentParametersSection: View {
 	}
 
 	private var audioLibraryResources: [AudioLibraryResourceRow] {
-		guard let resourcesNode = descendantAttributes.first(where: { $0.displayName == "resources" }) else {
+		guard let resourcesNode = descendantAttributes.first(where: {
+			$0.displayName == "resources" || $0.primPath.hasSuffix("/resources")
+		}) else {
 			return []
 		}
 		let map = Dictionary(uniqueKeysWithValues: resourcesNode.authoredAttributes.map { ($0.name, $0.value) })
 		let keys = parseUSDStringArray(map["keys"] ?? "")
 		let values = parseUSDRelationshipTargets(map["values"] ?? "")
-		let count = min(keys.count, values.count)
-		guard count > 0 else { return [] }
-		return (0..<count).map { index in
-			AudioLibraryResourceRow(key: keys[index], valueTarget: values[index])
+		guard !keys.isEmpty else { return [] }
+		return keys.enumerated().map { index, key in
+			let valueTarget = index < values.count ? values[index] : ""
+			return AudioLibraryResourceRow(key: key, valueTarget: valueTarget)
 		}
 	}
 
