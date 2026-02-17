@@ -445,7 +445,18 @@ let package = Package(
 		),
 		.testTarget(
 			name: "DeconstructedCoreTests",
-			dependencies: ["RCPPackage"]
+			dependencies: [
+				"RCPPackage",
+				"InspectorFeature",
+				.product(
+					name: "ComposableArchitecture",
+					package: "swift-composable-architecture"
+				),
+				.product(name: "USDInterfaces", package: "USDInterop"),
+			],
+			swiftSettings: [
+				.interoperabilityMode(.Cxx)
+			]
 		),
 		.testTarget(
 			name: "ProjectBrowserFeatureTests",

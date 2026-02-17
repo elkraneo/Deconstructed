@@ -8,6 +8,7 @@ import Sharing
 import SwiftUI
 import UniformTypeIdentifiers
 import USDInterfaces
+import USDInteropAdvancedCore
 
 public struct InspectorView: View {
 	@Bindable public var store: StoreOf<InspectorFeature>
@@ -78,11 +79,42 @@ public struct InspectorView: View {
 								.padding()
 							}
 						case .prim:
-							if let selectedNode = store.selectedNode {
+								if let selectedNode = store.selectedNode {
+									let isMeshSortingGroupSelection = selectedNode.typeName == "RealityKitMeshSortingGroup"
+								let graphComponentNodesByPath = Dictionary(
+									uniqueKeysWithValues: selectedNode.children
+										.filter {
+											$0.typeName == "RealityKitComponent"
+											|| $0.typeName == "RealityKitCustomComponent"
+											|| InspectorComponentCatalog.definition(forAuthoredPrimName: $0.name) != nil
+										}
+										.map { ($0.path, $0) }
+								)
+								let componentPaths = Set(graphComponentNodesByPath.keys)
+									.union(store.componentActiveByPath.keys)
+									.union(store.componentAuthoredAttributesByPath.keys)
+									.sorted()
+									let sharedAudioLibraryResources: [AudioLibraryResource] = componentPaths.compactMap { path -> [AudioLibraryResource]? in
+										let attrs = store.componentAuthoredAttributesByPath[path] ?? []
+										guard componentIdentifier(from: attrs) == "RealityKit.AudioLibrary" else {
+											return nil
+										}
+										let descendants = store.componentDescendantAttributesByPath[path] ?? []
+									return parseAudioLibraryResources(from: descendants)
+								}.first ?? []
 								VStack(alignment: .leading) {
-									if let transform = store.primTransform {
-										TransformSection(
-											transform: transform,
+										if isMeshSortingGroupSelection {
+											MeshSortingGroupSection(
+												attributes: store.primAttributes?.authoredAttributes ?? [],
+												members: store.meshSortingGroupMembers,
+												onDepthPassChanged: { value in
+													store.send(.setMeshSortingGroupDepthPassRequested(value))
+												}
+											)
+										}
+										if let transform = store.primTransform {
+											TransformSection(
+												transform: transform,
 											metersPerUnit: store.layerData?.metersPerUnit,
 											onTransformChanged: { store.send(.primTransformChanged($0)) }
 										)
@@ -122,6 +154,94 @@ public struct InspectorView: View {
 										}
 									)
 
+										ForEach(componentPaths, id: \.self) { componentPath in
+											let componentNode = graphComponentNodesByPath[componentPath]
+										let componentName =
+											componentNode?.name
+											?? componentPath.split(separator: "/").last.map(String.init)
+											?? componentPath
+										let isActive = store.componentActiveByPath[componentPath] ?? true
+											let authoredAttributes =
+												store.componentAuthoredAttributesByPath[componentPath] ?? []
+											let descendantAttributes =
+												store.componentDescendantAttributesByPath[componentPath] ?? []
+											ComponentParametersSection(
+												componentPath: componentPath,
+												componentName: componentName,
+												definition: InspectorComponentCatalog.definition(
+													forAuthoredPrimName: componentName
+												),
+												authoredAttributes: authoredAttributes,
+												descendantAttributes: descendantAttributes,
+												audioLibraryResources: sharedAudioLibraryResources,
+												isActive: isActive,
+											onToggleActive: { newValue in
+												store.send(
+													.setComponentActiveRequested(
+														componentPath: componentPath,
+														isActive: newValue
+													)
+												)
+											},
+											onParameterChanged: { identifier, parameterKey, value in
+												store.send(
+													.setComponentParameterRequested(
+														componentPath: componentPath,
+														componentIdentifier: identifier,
+														parameterKey: parameterKey,
+														value: value
+													)
+												)
+											},
+											onRawAttributeChanged: { targetPrimPath, attributeType, attributeName, valueLiteral in
+												store.send(
+													.setRawComponentAttributeRequested(
+														componentPath: targetPrimPath,
+														attributeType: attributeType,
+														attributeName: attributeName,
+														valueLiteral: valueLiteral
+													)
+												)
+											},
+											onAddAudioResource: { targetPath, sourceURL in
+												store.send(
+													.addAudioLibraryResourceRequested(
+														componentPath: targetPath,
+														sourceURL: sourceURL
+													)
+												)
+											},
+											onRemoveAudioResource: { targetPath, resourceKey in
+												store.send(
+													.removeAudioLibraryResourceRequested(
+														componentPath: targetPath,
+														resourceKey: resourceKey
+													)
+												)
+											},
+											onPasteComponent: { copiedIdentifier in
+												if let copiedDefinition = InspectorComponentCatalog.all.first(
+													where: { $0.identifier == copiedIdentifier }
+												) {
+													store.send(.addComponentRequested(copiedDefinition))
+												} else {
+													store.send(
+														.addComponentFailed(
+															"Copied component '\(copiedIdentifier)' is not available in the catalog."
+														)
+													)
+												}
+											},
+											onDelete: {
+												store.send(
+													.deleteComponentRequested(
+														componentPath: componentPath
+													)
+												)
+											}
+										)
+									}
+
 									if store.primIsLoading {
 										ProgressView()
 											.frame(maxWidth: .infinity, alignment: .center)
@@ -149,6 +269,16 @@ public struct InspectorView: View {
 					}
 				}
 				.padding()
+			}
+
+				if case .prim = store.currentTarget,
+				   let selectedNode = store.selectedNode,
+				   selectedNode.typeName != "RealityKitMeshSortingGroup"
+				{
+					Divider()
+					InspectorAddComponentFooter { component in
+						store.send(.addComponentRequested(component))
+				}
 			}
 		}
 		.background(.background)
@@ -190,6 +320,107 @@ public struct InspectorView: View {
 			return "cube"
 		}
 	}
+}
+
+private func componentIdentifier(from attributes: [USDPrimAttributes.AuthoredAttribute]) -> String? {
+	attributes
+		.first(where: { $0.name == "info:id" })?
+		.value
+		.trimmingCharacters(in: CharacterSet(charactersIn: "\""))
+}
+
+private func parseAudioLibraryResources(
+	from descendantAttributes: [ComponentDescendantAttributes]
+) -> [AudioLibraryResource] {
+	guard let resourcesNode = descendantAttributes.first(where: {
+		$0.displayName == "resources"
+			|| $0.displayName.lowercased().contains("resources")
+			|| $0.primPath.hasSuffix("/resources")
+	}) else {
+		return []
+	}
+	let attrs = resourcesNode.authoredAttributes
+	let keys = parseUSDStringArrayLiteral(authoredLiteralValue(in: attrs, names: ["keys"]))
+	let values = parseUSDRelationshipTargetsLiteral(authoredLiteralValue(in: attrs, names: ["values"]))
+	guard !keys.isEmpty else { return [] }
+	return keys.enumerated().map { index, key in
+		AudioLibraryResource(key: key, valueTarget: index < values.count ? values[index] : "")
+	}
+}
+
+private func authoredLiteralValue(
+	in attributes: [USDPrimAttributes.AuthoredAttribute],
+	names: [String]
+) -> String {
+	let lowered = Set(names.map { $0.lowercased() })
+	if let exact = attributes.first(where: { lowered.contains($0.name.lowercased()) }) {
+		return exact.value
+	}
+	if let typed = attributes.first(where: { attribute in
+		let key = attribute.name.lowercased()
+		return lowered.contains(where: { key.hasSuffix(" \($0)") })
+	}) {
+		return typed.value
+	}
+	if let loose = attributes.first(where: { attribute in
+		let key = attribute.name.lowercased()
+		return lowered.contains(where: { key.contains($0) })
+	}) {
+		return loose.value
+	}
+	return ""
+}
+
+private func parseUSDStringArrayLiteral(_ raw: String) -> [String] {
+	let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+	guard !trimmed.isEmpty else { return [] }
+	if trimmed.hasPrefix("["), trimmed.hasSuffix("]"), trimmed.count >= 2 {
+		let body = String(trimmed.dropFirst().dropLast())
+		return body.split(separator: ",", omittingEmptySubsequences: true).map { token in
+			parseUSDStringLiteral(String(token).trimmingCharacters(in: .whitespacesAndNewlines))
+		}
+	}
+	if trimmed.hasPrefix("("), trimmed.hasSuffix(")"), trimmed.count >= 2 {
+		let body = String(trimmed.dropFirst().dropLast())
+		return body.split(separator: ",", omittingEmptySubsequences: true).map { token in
+			parseUSDStringLiteral(String(token).trimmingCharacters(in: .whitespacesAndNewlines))
+		}
+	}
+	return [parseUSDStringLiteral(trimmed)]
+}
+
+private func parseUSDRelationshipTargetsLiteral(_ raw: String) -> [String] {
+	let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+	if trimmed.hasPrefix("["), trimmed.hasSuffix("]"), trimmed.count >= 2 {
+		let body = String(trimmed.dropFirst().dropLast())
+		return body
+			.split(separator: ",", omittingEmptySubsequences: true)
+			.map { parseUSDRelationshipTargetLiteral(String($0)) }
+			.filter { !$0.isEmpty }
+	}
+	let single = parseUSDRelationshipTargetLiteral(trimmed)
+	return single.isEmpty ? [] : [single]
+}
+
+private func parseUSDStringLiteral(_ raw: String) -> String {
+	let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+	guard trimmed.count >= 2, trimmed.first == "\"", trimmed.last == "\"" else {
+		return trimmed
+	}
+	let start = trimmed.index(after: trimmed.startIndex)
+	let end = trimmed.index(before: trimmed.endIndex)
+	let inner = String(trimmed[start..<end])
+	return inner
+		.replacingOccurrences(of: "\\\"", with: "\"")
+		.replacingOccurrences(of: "\\\\", with: "\\")
+}
+
+private func parseUSDRelationshipTargetLiteral(_ raw: String) -> String {
+	let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+	if trimmed.hasPrefix("<"), trimmed.hasSuffix(">"), trimmed.count >= 2 {
+		return String(trimmed.dropFirst().dropLast())
+	}
+	return trimmed
 }
 
 private struct InspectorGroupBox<Content: View>: View {
@@ -768,6 +999,934 @@ private struct PrimReferencesSection: View {
 
 		guard panel.runModal() == .OK, let url = panel.url else { return nil }
 		return USDReference(assetPath: url.path)
+	}
+}
+
+private struct InspectorAddComponentFooter: View {
+	let onAddComponent: (InspectorComponentDefinition) -> Void
+
+	var body: some View {
+		HStack {
+			Menu {
+				ForEach(InspectorComponentCatalog.grouped, id: \.0) { category, components in
+					Section(category.displayName) {
+						ForEach(components, id: \.id) { component in
+							Button(component.name) {
+								onAddComponent(component)
+							}
+							.disabled(!component.isEnabledForAuthoring)
+							.help(component.summary)
+						}
+					}
+				}
+			} label: {
+				Text("Add Component")
+					.font(.system(size: 12, weight: .semibold))
+					.frame(maxWidth: .infinity)
+			}
+			.menuStyle(.borderlessButton)
+		}
+		.padding(12)
+		.background(.thinMaterial)
+	}
+}
+
+private struct MeshSortingGroupSection: View {
+	let attributes: [USDPrimAttributes.AuthoredAttribute]
+	let members: [String]
+	let onDepthPassChanged: (String) -> Void
+	@State private var isExpanded = true
+
+	var body: some View {
+		InspectorGroupBox(
+			title: "Model Sorting Group",
+			isExpanded: $isExpanded
+		) {
+			InspectorRow(label: "Depth Pass") {
+				Picker(
+					"",
+					selection: Binding(
+						get: { currentDepthPass },
+						set: { onDepthPassChanged($0) }
+					)
+				) {
+					Text("None").tag("None")
+					Text("Pre Pass").tag("prePass")
+					Text("Post Pass").tag("postPass")
+				}
+				.labelsHidden()
+				.pickerStyle(.menu)
+			}
+
+			VStack(alignment: .leading, spacing: 6) {
+				if members.isEmpty {
+					Text("No members assigned.")
+						.font(.system(size: 11))
+						.foregroundStyle(.secondary)
+				} else {
+					ForEach(members, id: \.self) { member in
+						Text(member)
+							.font(.system(size: 11))
+							.textSelection(.enabled)
+					}
+				}
+			}
+			.padding(8)
+			.frame(maxWidth: .infinity, alignment: .leading)
+			.background(.quaternary.opacity(0.4))
+			.clipShape(RoundedRectangle(cornerRadius: 8))
+		}
+	}
+
+	private var currentDepthPass: String {
+		attributes
+			.first(where: { $0.name == "depthPass" })
+			.map { parseUSDString($0.value) } ?? "None"
+	}
+
+	private func parseUSDString(_ raw: String) -> String {
+		let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+		guard trimmed.count >= 2, trimmed.first == "\"", trimmed.last == "\"" else {
+			return trimmed
+		}
+		let start = trimmed.index(after: trimmed.startIndex)
+		let end = trimmed.index(before: trimmed.endIndex)
+		return String(trimmed[start..<end])
+	}
+}
+
+private struct ComponentParametersSection: View {
+	let componentPath: String
+	let componentName: String
+	let definition: InspectorComponentDefinition?
+	let authoredAttributes: [USDPrimAttributes.AuthoredAttribute]
+	let descendantAttributes: [ComponentDescendantAttributes]
+	let audioLibraryResources: [AudioLibraryResource]
+	let isActive: Bool
+	let onToggleActive: (Bool) -> Void
+	let onParameterChanged: (String, String, InspectorComponentParameterValue) -> Void
+	let onRawAttributeChanged: (String, String, String, String) -> Void
+	let onAddAudioResource: (String, URL) -> Void
+	let onRemoveAudioResource: (String, String) -> Void
+	let onPasteComponent: (String) -> Void
+	let onDelete: () -> Void
+	@State private var values: [String: InspectorComponentParameterValue]
+	@State private var rawValues: [String: String]
+	@State private var rawAttributeTypes: [String: String]
+	@State private var isExpanded: Bool
+	@State private var selectedAudioResourceKey: String?
+	@State private var selectedPreviewResourceTarget: String?
+
+	init(
+		componentPath: String,
+		componentName: String,
+		definition: InspectorComponentDefinition?,
+		authoredAttributes: [USDPrimAttributes.AuthoredAttribute],
+		descendantAttributes: [ComponentDescendantAttributes],
+		audioLibraryResources: [AudioLibraryResource],
+		isActive: Bool,
+		onToggleActive: @escaping (Bool) -> Void,
+		onParameterChanged: @escaping (String, String, InspectorComponentParameterValue) -> Void,
+		onRawAttributeChanged: @escaping (String, String, String, String) -> Void,
+		onAddAudioResource: @escaping (String, URL) -> Void,
+		onRemoveAudioResource: @escaping (String, String) -> Void,
+		onPasteComponent: @escaping (String) -> Void,
+		onDelete: @escaping () -> Void
+	) {
+		self.componentPath = componentPath
+		self.componentName = componentName
+		self.definition = definition
+		self.authoredAttributes = authoredAttributes
+		self.descendantAttributes = descendantAttributes
+		self.audioLibraryResources = audioLibraryResources
+		self.isActive = isActive
+		self.onToggleActive = onToggleActive
+		self.onParameterChanged = onParameterChanged
+		self.onRawAttributeChanged = onRawAttributeChanged
+		self.onAddAudioResource = onAddAudioResource
+		self.onRemoveAudioResource = onRemoveAudioResource
+		self.onPasteComponent = onPasteComponent
+		self.onDelete = onDelete
+		let layout = definition?.parameterLayout ?? []
+		let allAuthoredAttributes = authoredAttributes + descendantAttributes.flatMap(\.authoredAttributes)
+		let authoredMap = Self.authoredMap(from: allAuthoredAttributes)
+		self._values = State(initialValue: Self.initialValues(layout: layout, authoredAttributes: authoredMap, identifier: definition?.identifier))
+		self._rawValues = State(
+			initialValue: Dictionary(
+				uniqueKeysWithValues: authoredAttributes.map { ($0.name, $0.value) }
+			)
+		)
+		self._rawAttributeTypes = State(
+			initialValue: Self.inferredTypeMap(
+				for: authoredAttributes + descendantAttributes.flatMap(\.authoredAttributes)
+			)
+		)
+		self._isExpanded = State(initialValue: true)
+		self._selectedAudioResourceKey = State(initialValue: nil)
+		self._selectedPreviewResourceTarget = State(initialValue: nil)
+	}
+
+	var body: some View {
+		InspectorGroupBox(
+			title: definition?.name ?? componentName,
+			isExpanded: $isExpanded
+		) {
+			HStack(spacing: 8) {
+				Spacer()
+				Menu {
+					Button("Copy Component") {
+						copyComponentPayload()
+					}
+					Button("Copy Component Name") {
+						copyComponentName()
+					}
+						Button("Paste Component") {
+							guard let copiedIdentifier = copiedComponentIdentifierFromPasteboard() else { return }
+							onPasteComponent(copiedIdentifier)
+						}
+						.disabled(copiedComponentIdentifierFromPasteboard() == nil)
+
+					Divider()
+
+					Button(isActive ? "Deactivate" : "Activate") {
+						onToggleActive(!isActive)
+					}
+
+					Divider()
+
+					Button("Remove Overrides") {
+						// TODO: implement component override clearing semantics.
+					}
+					.disabled(true)
+
+					Divider()
+					Button("Delete", role: .destructive) {
+						onDelete()
+					}
+				} label: {
+					Image(systemName: "ellipsis")
+						.font(.system(size: 12, weight: .semibold))
+						.foregroundStyle(.secondary)
+						.frame(width: 20, height: 20)
+				}
+				.menuStyle(.borderlessButton)
+				Button {
+					onToggleActive(!isActive)
+				} label: {
+					Image(systemName: isActive ? "checkmark.circle" : "circle")
+						.font(.system(size: 16, weight: .semibold))
+						.foregroundStyle(isActive ? .orange : .secondary)
+				}
+				.buttonStyle(.plain)
+				.help(isActive ? "Deactivate component" : "Activate component")
+			}
+
+			Group {
+				let parameters = definition?.parameterLayout ?? []
+				if componentIdentifier == "RealityKit.AudioLibrary" {
+					audioLibraryEditor
+				} else if parameters.isEmpty {
+					let visibleAttributes = authoredAttributes.filter { $0.name != "info:id" }
+					if visibleAttributes.isEmpty {
+						Text("No editable parameters mapped yet.")
+							.font(.system(size: 11))
+							.foregroundStyle(.secondary)
+					} else {
+						VStack(alignment: .leading, spacing: 8) {
+							ForEach(visibleAttributes, id: \.name) { attribute in
+									GenericComponentAttributeRow(
+										name: attribute.name,
+										attributeType: rawAttributeTypes[attribute.name]
+											?? Self.inferAttributeType(name: attribute.name, literal: attribute.value),
+										value: rawBinding(for: attribute.name, fallback: attribute.value),
+										onCommit: { newValue in
+											let type = rawAttributeTypes[attribute.name]
+												?? Self.inferAttributeType(name: attribute.name, literal: attribute.value)
+											let value = normalizeLiteral(
+												newValue,
+												attributeType: type
+										)
+										rawValues[attribute.name] = value
+										rawAttributeTypes[attribute.name] = type
+										onRawAttributeChanged(
+											componentPath,
+											type,
+											attribute.name,
+											value
+										)
+									}
+								)
+							}
+						}
+					}
+					if !descendantAttributes.isEmpty {
+						Divider()
+							.padding(.vertical, 4)
+						VStack(alignment: .leading, spacing: 8) {
+							ForEach(descendantAttributes, id: \.primPath) { descendant in
+								let visibleDescendantAttrs = descendant.authoredAttributes.filter { $0.name != "info:id" }
+								if !visibleDescendantAttrs.isEmpty {
+									Text(descendant.displayName)
+										.font(.system(size: 11, weight: .semibold))
+										.foregroundStyle(.secondary)
+									ForEach(visibleDescendantAttrs, id: \.name) { attribute in
+											GenericComponentAttributeRow(
+												name: "\(descendant.displayName).\(attribute.name)",
+												attributeType: rawAttributeTypes["\(descendant.primPath)#\(attribute.name)"]
+													?? Self.inferAttributeType(name: attribute.name, literal: attribute.value),
+												value: rawBinding(
+													for: "\(descendant.primPath)#\(attribute.name)",
+													fallback: attribute.value
+											),
+												onCommit: { newValue in
+													let storageKey = "\(descendant.primPath)#\(attribute.name)"
+													let type = rawAttributeTypes[storageKey]
+														?? Self.inferAttributeType(name: attribute.name, literal: attribute.value)
+													let value = normalizeLiteral(
+														newValue,
+														attributeType: type
+												)
+												rawValues[storageKey] = value
+												rawAttributeTypes[storageKey] = type
+												onRawAttributeChanged(
+													descendant.primPath,
+													type,
+													attribute.name,
+													value
+												)
+											}
+										)
+									}
+								}
+							}
+						}
+					}
+				} else {
+					VStack(alignment: .leading, spacing: 10) {
+						ForEach(parameters, id: \.key) { parameter in
+							switch parameter.kind {
+							case let .toggle(defaultValue):
+								Toggle(
+									parameter.label,
+									isOn: boolBinding(for: parameter.key, fallback: defaultValue)
+								)
+								.font(.system(size: 11))
+								.toggleStyle(.checkbox)
+
+							case let .text(defaultValue, placeholder):
+								VStack(alignment: .leading, spacing: 4) {
+									Text(parameter.label)
+										.font(.system(size: 11))
+										.foregroundStyle(.secondary)
+									TextField(
+										placeholder,
+										text: stringBinding(for: parameter.key, fallback: defaultValue)
+									)
+									.textFieldStyle(.roundedBorder)
+									.font(.system(size: 11))
+								}
+
+							case let .scalar(defaultValue, unit):
+								InspectorRow(label: parameter.label) {
+									HStack(spacing: 8) {
+										TextField(
+											"",
+											value: doubleBinding(for: parameter.key, fallback: defaultValue),
+											format: .number.precision(.fractionLength(0...3))
+										)
+										.textFieldStyle(.roundedBorder)
+										.frame(width: 90)
+										.font(.system(size: 11))
+										if let unit {
+											Text(unit)
+												.font(.system(size: 10))
+												.foregroundStyle(.secondary)
+										}
+									}
+								}
+
+							case let .choice(defaultValue, options):
+								InspectorRow(label: parameter.label) {
+									Picker(
+										"",
+										selection: stringBinding(for: parameter.key, fallback: defaultValue)
+									) {
+										ForEach(options, id: \.self) { option in
+											Text(option).tag(option)
+										}
+									}
+									.labelsHidden()
+									.pickerStyle(.menu)
+								}
+							}
+						}
+					}
+				}
+				if showsAudioPreviewSection {
+					Divider()
+						.padding(.vertical, 4)
+					VStack(alignment: .leading, spacing: 8) {
+						Text("Preview")
+							.font(.system(size: 11, weight: .semibold))
+							.foregroundStyle(.secondary)
+						InspectorRow(label: "Resource") {
+							Picker("", selection: previewResourceSelection) {
+								ForEach(audioLibraryResources, id: \.valueTarget) { resource in
+									Text(previewResourceLabel(for: resource)).tag(resource.valueTarget)
+								}
+							}
+							.labelsHidden()
+							.pickerStyle(.menu)
+							.disabled(audioLibraryResources.isEmpty)
+						}
+					}
+				}
+			}
+			.disabled(!isActive)
+		}
+		.opacity(isActive ? 1 : 0.55)
+		.animation(.default, value: isActive)
+		.onChange(of: authoredAttributesSignature) { _, _ in
+			let layout = definition?.parameterLayout ?? []
+			rawValues = Dictionary(
+				uniqueKeysWithValues: authoredAttributes.map { ($0.name, $0.value) }
+			)
+			rawAttributeTypes = Self.inferredTypeMap(
+				for: authoredAttributes + descendantAttributes.flatMap(\.authoredAttributes)
+			)
+			let availableKeys = Set(audioLibraryResources.map(\.key))
+			if let selectedAudioResourceKey, !availableKeys.contains(selectedAudioResourceKey) {
+				self.selectedAudioResourceKey = nil
+			}
+			let availablePreviewTargets = Set(audioLibraryResources.map(\.valueTarget))
+			if let selectedPreviewResourceTarget,
+				!availablePreviewTargets.contains(selectedPreviewResourceTarget)
+			{
+				self.selectedPreviewResourceTarget = nil
+			}
+			guard !layout.isEmpty else { return }
+			let allAuthoredAttributes = authoredAttributes + descendantAttributes.flatMap(\.authoredAttributes)
+			values = Self.initialValues(
+				layout: layout,
+				authoredAttributes: Self.authoredMap(from: allAuthoredAttributes),
+				identifier: componentIdentifier
+			)
+		}
+	}
+
+	private var audioLibraryEditor: some View {
+		VStack(alignment: .leading, spacing: 8) {
+			VStack(alignment: .leading, spacing: 0) {
+				if audioLibraryResources.isEmpty {
+					Text("No audio resources.")
+						.font(.system(size: 11))
+						.foregroundStyle(.secondary)
+						.padding(10)
+						.frame(maxWidth: .infinity, alignment: .leading)
+				} else {
+					ForEach(audioLibraryResources, id: \.key) { resource in
+						Button {
+							selectedAudioResourceKey = resource.key
+						} label: {
+							HStack(spacing: 8) {
+								Image(systemName: "waveform")
+									.font(.system(size: 11))
+									.foregroundStyle(.cyan)
+								Text(resource.key)
+									.font(.system(size: 11))
+									.lineLimit(1)
+								Spacer(minLength: 0)
+							}
+							.padding(.horizontal, 8)
+							.padding(.vertical, 6)
+							.frame(maxWidth: .infinity, alignment: .leading)
+							.background(
+								selectedAudioResourceKey == resource.key
+									? Color.accentColor.opacity(0.22)
+									: Color.clear
+							)
+						}
+						.buttonStyle(.plain)
+					}
+				}
+			}
+			.frame(minHeight: 120, maxHeight: 180)
+			.background(.quaternary.opacity(0.35))
+			.clipShape(RoundedRectangle(cornerRadius: 8))
+
+			HStack(spacing: 10) {
+				Button {
+					guard let selectedURL = selectAudioFileURL() else { return }
+					onAddAudioResource(componentPath, selectedURL)
+				} label: {
+					Image(systemName: "plus")
+						.font(.system(size: 12, weight: .medium))
+				}
+				.buttonStyle(.plain)
+				Button {
+					guard let selectedAudioResourceKey else { return }
+					onRemoveAudioResource(componentPath, selectedAudioResourceKey)
+					self.selectedAudioResourceKey = nil
+				} label: {
+					Image(systemName: "minus")
+						.font(.system(size: 12, weight: .medium))
+				}
+				.buttonStyle(.plain)
+				.disabled(selectedAudioResourceKey == nil)
+				Spacer()
+			}
+			.padding(.horizontal, 4)
+		}
+	}
+
+	private var showsAudioPreviewSection: Bool {
+		guard let componentIdentifier else { return false }
+		return componentIdentifier == "RealityKit.ChannelAudio"
+			|| componentIdentifier == "RealityKit.SpatialAudio"
+			|| componentIdentifier == "RealityKit.AmbientAudio"
+	}
+
+	private var previewResourceSelection: Binding<String> {
+		Binding(
+			get: {
+				if let selectedPreviewResourceTarget {
+					return selectedPreviewResourceTarget
+				}
+				return audioLibraryResources.first?.valueTarget ?? ""
+			},
+			set: { selectedPreviewResourceTarget = $0 }
+		)
+	}
+
+	private func previewResourceLabel(for resource: AudioLibraryResource) -> String {
+		let target = resource.valueTarget.trimmingCharacters(in: .whitespacesAndNewlines)
+		guard !target.isEmpty else { return resource.key }
+		return target.split(separator: "/").last.map(String.init) ?? resource.key
+	}
+
+	private func boolBinding(for key: String, fallback: Bool) -> Binding<Bool> {
+		Binding(
+			get: {
+				if case let .bool(value)? = values[key] { return value }
+				return fallback
+			},
+			set: {
+				values[key] = .bool($0)
+				notifyParameterChange(key: key, value: .bool($0))
+			}
+		)
+	}
+
+	private func stringBinding(for key: String, fallback: String) -> Binding<String> {
+		Binding(
+			get: {
+				if case let .string(value)? = values[key] { return value }
+				return fallback
+			},
+			set: {
+				values[key] = .string($0)
+				notifyParameterChange(key: key, value: .string($0))
+			}
+		)
+	}
+
+	private func doubleBinding(for key: String, fallback: Double) -> Binding<Double> {
+		Binding(
+			get: {
+				if case let .double(value)? = values[key] { return value }
+				return fallback
+			},
+			set: {
+				values[key] = .double($0)
+				notifyParameterChange(key: key, value: .double($0))
+			}
+		)
+	}
+
+	private func notifyParameterChange(key: String, value: InspectorComponentParameterValue) {
+		guard let componentIdentifier else { return }
+		onParameterChanged(componentIdentifier, key, value)
+	}
+
+	private func rawBinding(for key: String, fallback: String) -> Binding<String> {
+		Binding(
+			get: { rawValues[key] ?? fallback },
+			set: { rawValues[key] = $0 }
+		)
+	}
+
+	private static func inferAttributeType(name: String, literal: String) -> String {
+		let trimmed = literal.trimmingCharacters(in: .whitespacesAndNewlines)
+		let lowerName = name.lowercased()
+		if lowerName.contains("color"), trimmed.hasPrefix("("), trimmed.hasSuffix(")") {
+			let commaCount = trimmed.filter { $0 == "," }.count
+			return commaCount == 2 ? "color3f" : "color4f"
+		}
+		if trimmed.hasPrefix("("), trimmed.hasSuffix(")") {
+			let commaCount = trimmed.filter { $0 == "," }.count
+			return switch commaCount {
+			case 1: "float2"
+			case 2: "float3"
+			case 3: "float4"
+			default: "float3"
+			}
+		}
+		let lower = trimmed.lowercased()
+		if lower == "true" || lower == "false" {
+			return "bool"
+		}
+		if lower == "0" || lower == "1" {
+			if lowerName.hasPrefix("is")
+				|| lowerName.hasPrefix("has")
+				|| lowerName.hasPrefix("enable")
+				|| lowerName.hasPrefix("use")
+			{
+				return "bool"
+			}
+		}
+		if trimmed.first == "\"", trimmed.last == "\"" {
+			if lowerName == "label"
+				|| lowerName == "value"
+				|| lowerName == "name"
+				|| lowerName == "title"
+				|| lowerName.hasSuffix("text")
+				|| lowerName.contains("description")
+			{
+				return "string"
+			}
+			return "token"
+		}
+		if Int(trimmed) != nil {
+			return "int"
+		}
+		if Double(trimmed) != nil {
+			return "float"
+		}
+		return "token"
+	}
+
+	private static func inferredTypeMap(
+		for attributes: [USDPrimAttributes.AuthoredAttribute]
+	) -> [String: String] {
+		var result: [String: String] = [:]
+		for attribute in attributes {
+			result[attribute.name] = Self.inferAttributeType(name: attribute.name, literal: attribute.value)
+		}
+		return result
+	}
+
+	private func normalizeLiteral(_ input: String, attributeType: String) -> String {
+		let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
+		switch attributeType {
+		case "string", "token":
+			if trimmed.first == "\"", trimmed.last == "\"" {
+				return trimmed
+			}
+			let escaped = trimmed
+				.replacingOccurrences(of: "\\", with: "\\\\")
+				.replacingOccurrences(of: "\"", with: "\\\"")
+			return "\"\(escaped)\""
+		case "bool":
+			let lower = trimmed.lowercased()
+			if lower == "1" || lower == "true" { return "true" }
+			if lower == "0" || lower == "false" { return "false" }
+			return "false"
+		default:
+			return trimmed
+		}
+	}
+
+	private func parseUSDStringArray(_ raw: String) -> [String] {
+		let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+		guard !trimmed.isEmpty else { return [] }
+		if trimmed.hasPrefix("["), trimmed.hasSuffix("]"), trimmed.count >= 2 {
+			let body = String(trimmed.dropFirst().dropLast())
+			return body.split(separator: ",", omittingEmptySubsequences: true).map { token in
+				Self.parseUSDString(String(token).trimmingCharacters(in: .whitespacesAndNewlines))
+			}
+		}
+		if trimmed.hasPrefix("("), trimmed.hasSuffix(")"), trimmed.count >= 2 {
+			let body = String(trimmed.dropFirst().dropLast())
+			return body.split(separator: ",", omittingEmptySubsequences: true).map { token in
+				Self.parseUSDString(String(token).trimmingCharacters(in: .whitespacesAndNewlines))
+			}
+		}
+		return [Self.parseUSDString(trimmed)]
+	}
+
+	private func parseUSDRelationshipTargets(_ raw: String) -> [String] {
+		let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+		if trimmed.hasPrefix("["), trimmed.hasSuffix("]"), trimmed.count >= 2 {
+			let body = String(trimmed.dropFirst().dropLast())
+			return body
+				.split(separator: ",", omittingEmptySubsequences: true)
+				.map { Self.parseUSDRelationshipTarget(String($0)) }
+				.filter { !$0.isEmpty }
+		}
+		let single = Self.parseUSDRelationshipTarget(trimmed)
+		return single.isEmpty ? [] : [single]
+	}
+
+	private func selectAudioFileURL() -> URL? {
+		let panel = NSOpenPanel()
+		panel.canChooseDirectories = false
+		panel.canChooseFiles = true
+		panel.allowsMultipleSelection = false
+		panel.allowedContentTypes = [.audio]
+		panel.prompt = "Add"
+		return panel.runModal() == .OK ? panel.url : nil
+	}
+
+	private func copiedComponentIdentifierFromPasteboard() -> String? {
+		let pasteboard = NSPasteboard.general
+		guard let payload = pasteboard.string(forType: .string) else { return nil }
+		guard let data = payload.data(using: .utf8) else { return nil }
+		guard let object = try? JSONSerialization.jsonObject(with: data) else { return nil }
+		guard let dictionary = object as? [String: Any] else { return nil }
+		return dictionary["identifier"] as? String
+	}
+
+	private func copyComponentName() {
+		let pasteboard = NSPasteboard.general
+		pasteboard.clearContents()
+		pasteboard.setString(definition?.name ?? componentName, forType: .string)
+	}
+
+	private func copyComponentPayload() {
+		let payloadName = definition?.name ?? componentName
+		let payloadIdentifier = definition?.identifier ?? "unknown"
+		let payload = """
+		{
+		  "name": "\(payloadName)",
+		  "authoredPrimName": "\(componentName)",
+		  "path": "\(componentPath)",
+		  "identifier": "\(payloadIdentifier)"
+		}
+		"""
+		let pasteboard = NSPasteboard.general
+		pasteboard.clearContents()
+		pasteboard.setString(payload, forType: .string)
+	}
+
+	private var componentIdentifier: String? {
+		definition?.identifier
+		?? authoredAttributes.first(where: { $0.name == "info:id" })?.value
+			.trimmingCharacters(in: CharacterSet(charactersIn: "\""))
+	}
+
+	private var authoredAttributesSignature: String {
+		(authoredAttributes + descendantAttributes.flatMap(\.authoredAttributes))
+			.map { "\($0.name)=\($0.value)" }
+			.sorted()
+			.joined(separator: "|")
+	}
+
+	private static func authoredMap(from attributes: [USDPrimAttributes.AuthoredAttribute]) -> [String: String] {
+		var map: [String: String] = [:]
+		for attribute in attributes {
+			map[attribute.name] = attribute.value
+		}
+		return map
+	}
+
+	private static func initialValues(
+		layout: [InspectorComponentParameter],
+		authoredAttributes: [String: String],
+		identifier: String?
+	) -> [String: InspectorComponentParameterValue] {
+		Dictionary(
+			uniqueKeysWithValues: layout.map { parameter in
+				(
+					parameter.key,
+					initialValue(
+						for: parameter,
+						authoredAttributes: authoredAttributes,
+						identifier: identifier
+					)
+				)
+			}
+		)
+	}
+
+	private static func initialValue(
+		for parameter: InspectorComponentParameter,
+		authoredAttributes: [String: String],
+		identifier: String?
+	) -> InspectorComponentParameterValue {
+		if identifier == "RealityKit.MeshSorting", parameter.key == "group" {
+			let raw = authoredAttributes["group"] ?? "None"
+			let target = parseUSDRelationshipTarget(raw)
+			return .string(target.isEmpty ? "None" : target)
+		}
+		let authoredName = authoredNameForParameter(
+			key: parameter.key,
+			componentIdentifier: identifier
+		)
+		let authoredRaw = authoredAttributes[authoredName]
+		switch parameter.kind {
+		case let .toggle(defaultValue):
+			guard let authoredRaw else {
+				return .bool(defaultValue)
+			}
+			return .bool(parseUSDBool(authoredRaw) ?? defaultValue)
+		case let .text(defaultValue, _):
+			guard let authoredRaw else {
+				return .string(defaultValue)
+			}
+			return .string(parseUSDString(authoredRaw))
+		case let .scalar(defaultValue, _):
+			guard let authoredRaw else {
+				return .double(defaultValue)
+			}
+			return .double(parseUSDDouble(authoredRaw) ?? defaultValue)
+		case let .choice(defaultValue, options):
+			guard let authoredRaw else {
+				return .string(defaultValue)
+			}
+			let parsed = parseUSDString(authoredRaw)
+			let resolved = options.contains(parsed) ? parsed : defaultValue
+			return .string(resolved)
+		}
+	}
+
+	private static func authoredNameForParameter(
+		key: String,
+		componentIdentifier: String?
+	) -> String {
+		switch (componentIdentifier, key) {
+		case ("RealityKit.Reverb", "preset"):
+			return "reverbPreset"
+		case ("RealityKit.PointLight", "attenuationFalloff"):
+			return "attenuationFalloffExponent"
+		case ("RealityKit.SpotLight", "attenuationFalloff"):
+			return "attenuationFalloffExponent"
+		case ("RealityKit.SpotLight", "shadowEnabled"):
+			return "isEnabled"
+		case ("RealityKit.SpotLight", "shadowBias"):
+			return "depthBias"
+		case ("RealityKit.SpotLight", "shadowCullMode"):
+			return "cullMode"
+		case ("RealityKit.SpotLight", "shadowNear"):
+			return "zNear"
+		case ("RealityKit.SpotLight", "shadowFar"):
+			return "zFar"
+		case ("RealityKit.DirectionalLight", "shadowEnabled"):
+			return "isEnabled"
+		case ("RealityKit.DirectionalLight", "shadowBias"):
+			return "depthBias"
+		case ("RealityKit.DirectionalLight", "shadowCullMode"):
+			return "cullMode"
+		case ("RealityKit.DirectionalLight", "shadowProjectionType"):
+			return "projectionType"
+		case ("RealityKit.DirectionalLight", "shadowOrthographicScale"):
+			return "orthographicScale"
+		case ("RealityKit.DirectionalLight", "shadowZBounds"):
+			return "zBounds"
+		default:
+			return key
+		}
+	}
+
+	private static func parseUSDBool(_ raw: String) -> Bool? {
+		switch raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+		case "true":
+			return true
+		case "false":
+			return false
+		case "1":
+			return true
+		case "0":
+			return false
+		default:
+			return nil
+		}
+	}
+
+	private static func parseUSDDouble(_ raw: String) -> Double? {
+		Double(raw.trimmingCharacters(in: .whitespacesAndNewlines))
+	}
+
+	private static func parseUSDString(_ raw: String) -> String {
+		let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+		guard trimmed.count >= 2, trimmed.first == "\"", trimmed.last == "\"" else {
+			return trimmed
+		}
+		let start = trimmed.index(after: trimmed.startIndex)
+		let end = trimmed.index(before: trimmed.endIndex)
+		let inner = String(trimmed[start..<end])
+		return inner
+			.replacingOccurrences(of: "\\\"", with: "\"")
+			.replacingOccurrences(of: "\\\\", with: "\\")
+	}
+
+	private static func parseUSDRelationshipTarget(_ raw: String) -> String {
+		let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+		if trimmed.hasPrefix("<"), trimmed.hasSuffix(">"), trimmed.count >= 2 {
+			return String(trimmed.dropFirst().dropLast())
+		}
+		return trimmed
+	}
+
+	private static func authoredLiteral(
+		in attributes: [USDPrimAttributes.AuthoredAttribute],
+		names: [String]
+	) -> String {
+		let lowered = Set(names.map { $0.lowercased() })
+		if let exact = attributes.first(where: { lowered.contains($0.name.lowercased()) }) {
+			return exact.value
+		}
+		if let typed = attributes.first(where: { attribute in
+			let key = attribute.name.lowercased()
+			return lowered.contains(where: { key.hasSuffix(" \($0)") })
+		}) {
+			return typed.value
+		}
+		if let loose = attributes.first(where: { attribute in
+			let key = attribute.name.lowercased()
+			return lowered.contains(where: { key.contains($0) })
+		}) {
+			return loose.value
+		}
+		return ""
+	}
+
+}
+
+private struct GenericComponentAttributeRow: View {
+	let name: String
+	let attributeType: String
+	@Binding var value: String
+	let onCommit: (String) -> Void
+
+	var body: some View {
+		VStack(alignment: .leading, spacing: 4) {
+			Text(name)
+				.font(.system(size: 11))
+				.foregroundStyle(.secondary)
+			switch attributeType {
+			case "bool":
+				Toggle(
+					"",
+					isOn: Binding(
+						get: {
+							let lower = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+							return lower == "true" || lower == "1"
+						},
+						set: { isOn in
+							value = isOn ? "true" : "false"
+							onCommit(value)
+						}
+					)
+				)
+				.labelsHidden()
+				.toggleStyle(.checkbox)
+			default:
+				TextField("", text: $value)
+					.textFieldStyle(.roundedBorder)
+					.font(.system(size: 11))
+					.onSubmit { onCommit(value) }
+			}
+		}
 	}
 }
 

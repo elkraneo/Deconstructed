@@ -1,8 +1,17 @@
+import CxxStdlib
 import Foundation
+@_implementationOnly import OpenUSD
 import USDInterfaces
 import USDInterop
 import USDInteropAdvanced
 import USDInteropAdvancedCore
+import USDInteropAdvancedEditing
+import USDInteropAdvancedInspection
+
+// Local aliases for OpenUSD imported C++ symbols.
+// Keep these fileprivate so OpenUSD internals never leak into the module API.
+fileprivate typealias UsdStage = pxrInternal_v0_25_8__pxrReserved__.UsdStage
+fileprivate typealias SdfPath = pxrInternal_v0_25_8__pxrReserved__.SdfPath
 
 public enum DeconstructedUSDInteropError: Error, LocalizedError, Sendable {
 	case stageOpenFailed(URL)
@@ -14,6 +23,7 @@ public enum DeconstructedUSDInteropError: Error, LocalizedError, Sendable {
 	case setUpAxisFailed(String)
 	case applySchemaFailed(schema: String, primPath: String)
 	case createPrimFailed(path: String, typeName: String)
+	case componentAuthoringFailed(reason: String)
 	case notImplemented
 
 	public var errorDescription: String? {
@@ -36,6 +46,8 @@ public enum DeconstructedUSDInteropError: Error, LocalizedError, Sendable {
 			return "Failed to apply schema \(schema) to prim \(primPath)."
 		case let .createPrimFailed(path, typeName):
 			return "Failed to create prim at \(path) with type \(typeName)."
+		case let .componentAuthoringFailed(reason):
+			return "Failed to author component: \(reason)"
 		case .notImplemented:
 			return "Operation is not implemented yet."
 		}
@@ -111,6 +123,20 @@ public struct SchemaSpec: Sendable, Hashable {
 
 public struct EditOp: Sendable, Hashable {
 	public init() {}
+}
+
+public struct RealityKitComponentPrimInfo: Sendable, Hashable {
+	public var path: String
+	public var primName: String
+	public var typeName: String
+	public var isActive: Bool
+
+	public init(path: String, primName: String, typeName: String, isActive: Bool) {
+		self.path = path
+		self.primName = primName
+		self.typeName = typeName
+		self.isActive = isActive
+	}
 }
 
 public struct USDSceneBounds: Sendable, Equatable {
@@ -473,6 +499,310 @@ public enum DeconstructedUSDInterop {
 		}
 	}
 
+	/// Adds a RealityKitComponent prim under the specified prim and authors its `info:id`.
+	///
+	/// - Important: Initial MVP implementation operates on USDA text.
+	@discardableResult
+	public static func addRealityKitComponent(
+		url: URL,
+		primPath: String,
+		componentName: String,
+		componentIdentifier: String
+	) throws -> String {
+		guard url.pathExtension.lowercased() == "usda" else {
+			throw DeconstructedUSDInteropError.componentAuthoringFailed(
+				reason: "Only .usda scenes are supported for initial component authoring."
+			)
+		}
+		let source: String
+		do {
+			source = try String(contentsOf: url, encoding: .utf8)
+		} catch {
+			throw DeconstructedUSDInteropError.componentAuthoringFailed(
+				reason: "Unable to read USDA scene."
+			)
+		}
+
+		let updated = try insertRealityKitComponent(
+			in: source,
+			primPath: primPath,
+			componentName: componentName,
+			componentIdentifier: componentIdentifier
+		)
+		do {
+			try updated.write(to: url, atomically: true, encoding: .utf8)
+		} catch {
+			throw DeconstructedUSDInteropError.componentAuthoringFailed(
+				reason: "Unable to write USDA scene."
+			)
+		}
+		return "\(primPath)/\(componentName)"
+	}
+
+	@discardableResult
+	public static func ensureRealityKitMeshSortingGroup(
+		url: URL,
+		groupPrimPath: String
+	) throws -> String {
+		guard url.pathExtension.lowercased() == "usda" else {
+			throw DeconstructedUSDInteropError.componentAuthoringFailed(
+				reason: "Only .usda scenes are supported for model sorting group authoring."
+			)
+		}
+		if getPrimAttributes(url: url, primPath: groupPrimPath) != nil {
+			return groupPrimPath
+		}
+		guard let parentPath = parentPath(of: groupPrimPath),
+		      let groupName = primName(of: groupPrimPath)
+		else {
+			throw DeconstructedUSDInteropError.componentAuthoringFailed(
+				reason: "Invalid model sorting group path: \(groupPrimPath)"
+			)
+		}
+		let source: String
+		do {
+			source = try String(contentsOf: url, encoding: .utf8)
+		} catch {
+			throw DeconstructedUSDInteropError.componentAuthoringFailed(
+				reason: "Unable to read USDA scene."
+			)
+		}
+		let updated = try insertTypedPrimInUSDA(
+			source,
+			parentPrimPath: parentPath,
+			typeName: "RealityKitMeshSortingGroup",
+			primName: groupName
+		)
+		do {
+			try updated.write(to: url, atomically: true, encoding: .utf8)
+		} catch {
+			throw DeconstructedUSDInteropError.componentAuthoringFailed(
+				reason: "Unable to write USDA scene."
+			)
+		}
+		try setRealityKitComponentParameter(
+			url: url,
+			componentPrimPath: groupPrimPath,
+			attributeType: "token",
+			attributeName: "depthPass",
+			valueLiteral: "\"None\""
+		)
+		return groupPrimPath
+	}
+
+	@discardableResult
+	public static func ensureTypedPrim(
+		url: URL,
+		parentPrimPath: String,
+		typeName: String,
+		primName: String
+	) throws -> String {
+		guard url.pathExtension.lowercased() == "usda" else {
+			throw DeconstructedUSDInteropError.componentAuthoringFailed(
+				reason: "Only .usda scenes are supported for typed prim authoring."
+			)
+		}
+		let source: String
+		do {
+			source = try String(contentsOf: url, encoding: .utf8)
+		} catch {
+			throw DeconstructedUSDInteropError.componentAuthoringFailed(
+				reason: "Unable to read USDA scene."
+			)
+		}
+		let updated = try insertTypedPrimInUSDA(
+			source,
+			parentPrimPath: parentPrimPath,
+			typeName: typeName,
+			primName: primName
+		)
+		do {
+			try updated.write(to: url, atomically: true, encoding: .utf8)
+		} catch {
+			throw DeconstructedUSDInteropError.componentAuthoringFailed(
+				reason: "Unable to write USDA scene."
+			)
+		}
+		return "\(parentPrimPath)/\(primName)"
+	}
+
+	public static func setAudioLibraryResources(
+		url: URL,
+		audioLibraryComponentPath: String,
+		keys: [String],
+		valueTargets: [String]
+	) throws {
+		guard keys.count == valueTargets.count else {
+			throw DeconstructedUSDInteropError.componentAuthoringFailed(
+				reason: "AudioLibrary resources keys and values must have the same count."
+			)
+		}
+		let resourcesPath = "\(audioLibraryComponentPath)/resources"
+		_ = try ensureTypedPrim(
+			url: url,
+			parentPrimPath: audioLibraryComponentPath,
+			typeName: "RealityKitDict",
+			primName: "resources"
+		)
+		try setRealityKitComponentParameter(
+			url: url,
+			componentPrimPath: resourcesPath,
+			attributeType: "string[]",
+			attributeName: "keys",
+			valueLiteral: formatUSDStringArray(keys)
+		)
+		try setRealityKitComponentParameter(
+			url: url,
+			componentPrimPath: resourcesPath,
+			attributeType: "rel",
+			attributeName: "values",
+			valueLiteral: formatUSDRelationshipTargets(valueTargets)
+		)
+	}
+
+	public static func upsertRealityKitAudioFile(
+		url: URL,
+		primPath: String,
+		relativeAssetPath: String,
+		shouldLoop: Bool
+	) throws {
+		guard let parent = parentPath(of: primPath),
+		      let name = primName(of: primPath)
+		else {
+			throw DeconstructedUSDInteropError.componentAuthoringFailed(
+				reason: "Invalid RealityKitAudioFile path: \(primPath)"
+			)
+		}
+		_ = try ensureTypedPrim(
+			url: url,
+			parentPrimPath: parent,
+			typeName: "RealityKitAudioFile",
+			primName: name
+		)
+		try setRealityKitComponentParameter(
+			url: url,
+			componentPrimPath: primPath,
+			attributeType: "uniform asset",
+			attributeName: "file",
+			valueLiteral: "@\(relativeAssetPath)@"
+		)
+		try setRealityKitComponentParameter(
+			url: url,
+			componentPrimPath: primPath,
+			attributeType: "uniform bool",
+			attributeName: "shouldLoop",
+			valueLiteral: shouldLoop ? "1" : "0"
+		)
+	}
+
+	public static func deletePrimAtPath(
+		url: URL,
+		primPath: String
+	) throws {
+		try deletePrim(url: url, primPath: primPath)
+	}
+
+	public static func setRealityKitComponentActive(
+		url: URL,
+		componentPrimPath: String,
+		isActive: Bool
+	) throws {
+		try setPrimActive(url: url, primPath: componentPrimPath, isActive: isActive)
+	}
+
+	public static func deleteRealityKitComponent(
+		url: URL,
+		componentPrimPath: String
+	) throws {
+		try deletePrim(url: url, primPath: componentPrimPath)
+	}
+
+	public static func setRealityKitComponentParameter(
+		url: URL,
+		componentPrimPath: String,
+		attributeType: String,
+		attributeName: String,
+		valueLiteral: String
+	) throws {
+		guard url.pathExtension.lowercased() == "usda" else {
+			throw DeconstructedUSDInteropError.componentAuthoringFailed(
+				reason: "Only .usda scenes are supported for initial component parameter editing."
+			)
+		}
+		let source: String
+		do {
+			source = try String(contentsOf: url, encoding: .utf8)
+		} catch {
+			throw DeconstructedUSDInteropError.componentAuthoringFailed(
+				reason: "Unable to read USDA scene."
+			)
+		}
+
+		let updated = try updateRealityKitComponentParameterInUSDA(
+			source,
+			componentPrimPath: componentPrimPath,
+			attributeType: attributeType,
+			attributeName: attributeName,
+			valueLiteral: valueLiteral
+		)
+		do {
+			try updated.write(to: url, atomically: true, encoding: .utf8)
+		} catch {
+			throw DeconstructedUSDInteropError.componentAuthoringFailed(
+				reason: "Unable to write USDA scene."
+			)
+		}
+	}
+
+	public static func deleteRealityKitComponentParameter(
+		url: URL,
+		componentPrimPath: String,
+		attributeName: String
+	) throws {
+		guard url.pathExtension.lowercased() == "usda" else {
+			throw DeconstructedUSDInteropError.componentAuthoringFailed(
+				reason: "Only .usda scenes are supported for initial component parameter editing."
+			)
+		}
+		let source: String
+		do {
+			source = try String(contentsOf: url, encoding: .utf8)
+		} catch {
+			throw DeconstructedUSDInteropError.componentAuthoringFailed(
+				reason: "Unable to read USDA scene."
+			)
+		}
+
+		let updated = try removeRealityKitComponentParameterInUSDA(
+			source,
+			componentPrimPath: componentPrimPath,
+			attributeName: attributeName
+		)
+		do {
+			try updated.write(to: url, atomically: true, encoding: .utf8)
+		} catch {
+			throw DeconstructedUSDInteropError.componentAuthoringFailed(
+				reason: "Unable to write USDA scene."
+			)
+		}
+	}
+
+	public static func listRealityKitComponentPrims(
+		url: URL,
+		parentPrimPath: String
+	) -> [RealityKitComponentPrimInfo] {
+		guard url.pathExtension.lowercased() == "usda" else {
+			return []
+		}
+		guard let source = try? String(contentsOf: url, encoding: .utf8) else {
+			return []
+		}
+		return parseRealityKitComponentPrimsFromUSDA(
+			source: source,
+			parentPrimPath: parentPrimPath
+		)
+	}
+
 	private static func mapSchemaKind(_ kind: SchemaSpec.Kind) -> USDSchemaSpec.Kind {
 		switch kind {
 		case .api:
@@ -512,4 +842,686 @@ public enum DeconstructedUSDInterop {
 		return error
 	}
 
+}
+
+private func formatUSDStringArray(_ values: [String]) -> String {
+	let escaped = values.map { value in
+		"\"\(value.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\""))\""
+	}
+	return "[\(escaped.joined(separator: ", "))]"
+}
+
+private func formatUSDRelationshipTargets(_ primPaths: [String]) -> String {
+	let targets = primPaths.map { "<\($0)>" }
+	switch targets.count {
+	case 0:
+		return "[]"
+	case 1:
+		return targets[0]
+	default:
+		return "[\(targets.joined(separator: ", "))]"
+	}
+}
+
+private struct USDAPrimContext {
+	let path: String
+	let indent: String
+}
+
+private struct ComponentTemplateLine {
+	let level: Int
+	let text: String
+}
+
+private struct ComponentTemplate {
+	let preInfo: [ComponentTemplateLine]
+	let postInfo: [ComponentTemplateLine]
+
+	static let none = ComponentTemplate(preInfo: [], postInfo: [])
+}
+
+private func template(for componentIdentifier: String) -> ComponentTemplate {
+	switch componentIdentifier {
+	case "RealityKit.Anchoring":
+		return ComponentTemplate(
+			preInfo: [],
+			postInfo: [
+				.init(level: 0, text: ""),
+				.init(level: 0, text: "def RealityKitStruct \"descriptor\""),
+				.init(level: 0, text: "{"),
+				.init(level: 0, text: "}")
+			]
+		)
+	case "RealityKit.CharacterController":
+		return ComponentTemplate(
+			preInfo: [],
+			postInfo: [
+				.init(level: 0, text: ""),
+				.init(level: 0, text: "def RealityKitStruct \"m_controllerDesc\""),
+				.init(level: 0, text: "{"),
+				.init(level: 1, text: "def RealityKitStruct \"collisionFilter\""),
+				.init(level: 1, text: "{"),
+				.init(level: 1, text: "}"),
+				.init(level: 0, text: "}")
+			]
+		)
+	case "RealityKit.CustomDockingRegion":
+		return ComponentTemplate(
+			preInfo: [],
+			postInfo: [
+				.init(level: 0, text: ""),
+				.init(level: 0, text: "def RealityKitStruct \"m_bounds\""),
+				.init(level: 0, text: "{"),
+				.init(level: 1, text: "float3 max = (1.2, 0.5, 0)"),
+				.init(level: 1, text: "float3 min = (-1.2, -0.5, -0)"),
+				.init(level: 0, text: "}")
+			]
+		)
+	case "RealityKit.VFXEmitter":
+		return ComponentTemplate(
+			preInfo: [],
+			postInfo: [
+				.init(level: 0, text: ""),
+				.init(level: 0, text: "def RealityKitStruct \"currentState\""),
+				.init(level: 0, text: "{"),
+				.init(level: 1, text: "def RealityKitStruct \"mainEmitter\""),
+				.init(level: 1, text: "{"),
+				.init(level: 1, text: "}"),
+				.init(level: 1, text: ""),
+				.init(level: 1, text: "def RealityKitStruct \"spawnedEmitter\""),
+				.init(level: 1, text: "{"),
+				.init(level: 1, text: "}"),
+				.init(level: 0, text: "}")
+			]
+		)
+	case "RealityKit.DirectionalLight", "RealityKit.SpotLight":
+		return ComponentTemplate(
+			preInfo: [],
+			postInfo: [
+				.init(level: 0, text: ""),
+				.init(level: 0, text: "def RealityKitStruct \"Shadow\""),
+				.init(level: 0, text: "{"),
+				.init(level: 0, text: "}")
+			]
+		)
+	case "RealityKit.VirtualEnvironmentProbe":
+		return ComponentTemplate(
+			preInfo: [
+				.init(level: 0, text: "token blendMode = \"single\"")
+			],
+			postInfo: [
+				.init(level: 0, text: ""),
+				.init(level: 0, text: "def RealityKitStruct \"Resource1\""),
+				.init(level: 0, text: "{"),
+				.init(level: 0, text: "}"),
+				.init(level: 0, text: ""),
+				.init(level: 0, text: "def RealityKitStruct \"Resource2\""),
+				.init(level: 0, text: "{"),
+				.init(level: 0, text: "}")
+			]
+		)
+	case "RealityKit.Collider":
+		return ComponentTemplate(
+			preInfo: [
+				.init(level: 0, text: "uint group = 1")
+			],
+			postInfo: [
+				.init(level: 0, text: "uint mask = 4294967295"),
+				.init(level: 0, text: "token type = \"Default\""),
+				.init(level: 0, text: ""),
+				.init(level: 0, text: "def RealityKitStruct \"Shape\""),
+				.init(level: 0, text: "{"),
+				.init(level: 1, text: "float3 extent = (0.2, 0.2, 0.2)"),
+				.init(level: 1, text: "token shapeType = \"Box\""),
+				.init(level: 1, text: ""),
+				.init(level: 1, text: "def RealityKitStruct \"pose\""),
+				.init(level: 1, text: "{"),
+				.init(level: 1, text: "}"),
+				.init(level: 0, text: "}")
+			]
+		)
+	case "RealityKit.RigidBody":
+		return ComponentTemplate(
+			preInfo: [],
+			postInfo: [
+				.init(level: 0, text: ""),
+				.init(level: 0, text: "def RealityKitStruct \"massFrame\""),
+				.init(level: 0, text: "{"),
+				.init(level: 1, text: "def RealityKitStruct \"m_pose\""),
+				.init(level: 1, text: "{"),
+				.init(level: 1, text: "}"),
+				.init(level: 0, text: "}"),
+				.init(level: 0, text: ""),
+				.init(level: 0, text: "def RealityKitStruct \"material\""),
+				.init(level: 0, text: "{"),
+				.init(level: 0, text: "}")
+			]
+		)
+	default:
+		return .none
+	}
+}
+
+private func renderTemplateLines(
+	_ lines: [ComponentTemplateLine],
+	fieldIndent: String,
+	indentUnit: String
+) -> [String] {
+	lines.map { line in
+		guard !line.text.isEmpty else { return "" }
+		let extraIndent = String(repeating: indentUnit, count: max(0, line.level))
+		return fieldIndent + extraIndent + line.text
+	}
+}
+
+private func insertRealityKitComponent(
+	in source: String,
+	primPath: String,
+	componentName: String,
+	componentIdentifier: String
+) throws -> String {
+	let lines = source.split(whereSeparator: \.isNewline).map(String.init)
+	let indentUnit = source.contains("\t") ? "\t" : "    "
+	let declarationRegex = /^(\s*)(def|over|class)\s+(?:([A-Za-z0-9_:]+)\s+)?\"([^\"]+)\"/
+
+	var stack: [USDAPrimContext] = []
+	var pending: USDAPrimContext?
+	var insertionLineIndex: Int?
+	var targetIndent: String?
+	var inTargetPrim = false
+
+	for (index, line) in lines.enumerated() {
+		if let match = line.firstMatch(of: declarationRegex) {
+			let indent = String(match.output.1)
+			let primName = String(match.output.4)
+			let path = if let parent = stack.last?.path {
+				"\(parent)/\(primName)"
+			} else {
+				"/\(primName)"
+			}
+			let context = USDAPrimContext(path: path, indent: indent)
+			if line.contains("{") {
+				stack.append(context)
+				inTargetPrim = context.path == primPath
+				if inTargetPrim {
+					targetIndent = context.indent
+				}
+			} else {
+				pending = context
+			}
+		}
+
+		if line.contains("{"), let pendingContext = pending {
+			stack.append(pendingContext)
+			inTargetPrim = pendingContext.path == primPath
+			if inTargetPrim {
+				targetIndent = pendingContext.indent
+			}
+			pending = nil
+		}
+
+		let closingCount = line.filter { $0 == "}" }.count
+		if closingCount > 0 {
+			for _ in 0..<closingCount {
+				guard let current = stack.last else { break }
+				if current.path == primPath && insertionLineIndex == nil {
+					insertionLineIndex = index
+				}
+				_ = stack.popLast()
+				inTargetPrim = stack.last?.path == primPath
+			}
+		}
+
+		if inTargetPrim,
+		   line.contains("def RealityKitComponent \"\(componentName)\"") {
+			throw DeconstructedUSDInteropError.componentAuthoringFailed(
+				reason: "Component '\(componentName)' already exists on prim \(primPath)."
+			)
+		}
+	}
+
+	guard let insertionLineIndex,
+	      let targetIndent else {
+		throw DeconstructedUSDInteropError.componentAuthoringFailed(
+			reason: "Target prim not found: \(primPath)"
+		)
+	}
+
+	let componentIndent = targetIndent + indentUnit
+	let fieldIndent = componentIndent + indentUnit
+	let componentTemplate = template(for: componentIdentifier)
+	let preInfoLines = renderTemplateLines(
+		componentTemplate.preInfo,
+		fieldIndent: fieldIndent,
+		indentUnit: indentUnit
+	)
+	let postInfoLines = renderTemplateLines(
+		componentTemplate.postInfo,
+		fieldIndent: fieldIndent,
+		indentUnit: indentUnit
+	)
+	let componentBlock: [String] = [
+		"",
+		"\(componentIndent)def RealityKitComponent \"\(componentName)\"",
+		"\(componentIndent){",
+	] + preInfoLines + [
+		"\(fieldIndent)uniform token info:id = \"\(componentIdentifier)\"",
+	] + postInfoLines + [
+		"\(componentIndent)}"
+	]
+
+	var updatedLines = lines
+	updatedLines.insert(contentsOf: componentBlock, at: insertionLineIndex)
+	let updated = updatedLines.joined(separator: "\n")
+	return source.hasSuffix("\n") ? updated + "\n" : updated
+}
+
+private func setPrimActive(
+	url: URL,
+	primPath: String,
+	isActive: Bool
+) throws {
+	let stagePtr = UsdStage.Open(std.string(url.path), UsdStage.InitialLoadSet.LoadAll)
+	guard stagePtr._isNonnull() else {
+		throw DeconstructedUSDInteropError.stageOpenFailed(url)
+	}
+	let stage = OpenUSD.Overlay.Dereference(stagePtr)
+	let prim = stage.GetPrimAtPath(SdfPath(std.string(primPath)))
+	guard prim.IsValid() else {
+		throw DeconstructedUSDInteropError.primNotFound(primPath)
+	}
+	prim.SetActive(isActive)
+	let rootLayerHandle = stage.GetRootLayer()
+	guard Bool(rootLayerHandle) else {
+		throw DeconstructedUSDInteropError.rootLayerMissing(url)
+	}
+	let rootLayer = OpenUSD.Overlay.Dereference(rootLayerHandle)
+	guard rootLayer.Save(false) else {
+		throw DeconstructedUSDInteropError.saveFailed(url)
+	}
+}
+
+private func deletePrim(
+	url: URL,
+	primPath: String
+) throws {
+	let stagePtr = UsdStage.Open(std.string(url.path), UsdStage.InitialLoadSet.LoadAll)
+	guard stagePtr._isNonnull() else {
+		throw DeconstructedUSDInteropError.stageOpenFailed(url)
+	}
+	let stage = OpenUSD.Overlay.Dereference(stagePtr)
+	let prim = stage.GetPrimAtPath(SdfPath(std.string(primPath)))
+	guard prim.IsValid() else {
+		throw DeconstructedUSDInteropError.primNotFound(primPath)
+	}
+	_ = stage.RemovePrim(SdfPath(std.string(primPath)))
+	let rootLayerHandle = stage.GetRootLayer()
+	guard Bool(rootLayerHandle) else {
+		throw DeconstructedUSDInteropError.rootLayerMissing(url)
+	}
+	let rootLayer = OpenUSD.Overlay.Dereference(rootLayerHandle)
+	guard rootLayer.Save(false) else {
+		throw DeconstructedUSDInteropError.saveFailed(url)
+	}
+}
+
+private struct ParsedPrimDeclaration {
+	let indent: String
+	let typeName: String?
+	let primName: String
+	let metadataText: String?
+}
+
+private func parsePrimDeclarationLine(_ line: String) -> ParsedPrimDeclaration? {
+	let declarationRegex = /^(\s*)(def|over|class)\s+(?:([A-Za-z0-9_:]+)\s+)?\"([^\"]+)\"(?:\s*\(([^)]*)\))?/
+	guard let match = line.firstMatch(of: declarationRegex) else {
+		return nil
+	}
+	let indent = String(match.output.1)
+	let typeName = match.output.3.map(String.init)
+	let primName = String(match.output.4)
+	let metadataText = match.output.5.map(String.init)
+	return ParsedPrimDeclaration(
+		indent: indent,
+		typeName: typeName,
+		primName: primName,
+		metadataText: metadataText
+	)
+}
+
+private func parseRealityKitComponentPrimsFromUSDA(
+	source: String,
+	parentPrimPath: String
+) -> [RealityKitComponentPrimInfo] {
+	let lines = source.split(whereSeparator: \.isNewline).map(String.init)
+	var stack: [USDAPrimContext] = []
+	var pending: USDAPrimContext?
+	var components: [RealityKitComponentPrimInfo] = []
+	var componentIndexByPath: [String: Int] = [:]
+	var pendingComponentPath: String?
+
+	for line in lines {
+		if let declaration = parsePrimDeclarationLine(line) {
+			let parentPath = stack.last?.path
+			let path = if let parent = stack.last?.path {
+				"\(parent)/\(declaration.primName)"
+			} else {
+				"/\(declaration.primName)"
+			}
+			let context = USDAPrimContext(path: path, indent: declaration.indent)
+			if line.contains("{") {
+				stack.append(context)
+			} else {
+				pending = context
+			}
+
+			let isComponentType = declaration.typeName == "RealityKitComponent"
+				|| declaration.typeName == "RealityKitCustomComponent"
+			if isComponentType, parentPath == parentPrimPath {
+				let info = RealityKitComponentPrimInfo(
+					path: path,
+					primName: declaration.primName,
+					typeName: declaration.typeName ?? "Unknown",
+					isActive: parseActiveFlag(from: declaration.metadataText) ?? true
+				)
+				components.append(info)
+				componentIndexByPath[path] = components.count - 1
+				pendingComponentPath = path
+			} else {
+				pendingComponentPath = nil
+			}
+		}
+
+		if let componentPath = pendingComponentPath,
+		   let index = componentIndexByPath[componentPath],
+		   let parsedActive = parseActiveFlag(from: line)
+		{
+			components[index].isActive = parsedActive
+		}
+
+		if line.contains("{"), let pendingContext = pending {
+			stack.append(pendingContext)
+			pending = nil
+			pendingComponentPath = nil
+		}
+
+		let closingCount = line.filter { $0 == "}" }.count
+		if closingCount > 0 {
+			for _ in 0..<closingCount {
+				_ = stack.popLast()
+			}
+			pendingComponentPath = nil
+		}
+	}
+
+	return components
+}
+
+private func parseActiveFlag(from text: String?) -> Bool? {
+	guard let text else { return nil }
+	let normalized = text.replacingOccurrences(of: "\t", with: " ")
+	if normalized.range(of: "active\\s*=\\s*false", options: .regularExpression) != nil {
+		return false
+	}
+	if normalized.range(of: "active\\s*=\\s*true", options: .regularExpression) != nil {
+		return true
+	}
+	return nil
+}
+
+private func updateRealityKitComponentParameterInUSDA(
+	_ source: String,
+	componentPrimPath: String,
+	attributeType: String,
+	attributeName: String,
+	valueLiteral: String
+) throws -> String {
+	let lines = source.split(whereSeparator: \.isNewline).map(String.init)
+	let indentUnit = source.contains("\t") ? "\t" : "    "
+	let attrRegex = try NSRegularExpression(
+		pattern: #"^\s*(?:uniform\s+)?[A-Za-z0-9_:\[\]]+\s+([A-Za-z_][A-Za-z0-9_:]*)\s*="#
+	)
+
+	var stack: [USDAPrimContext] = []
+	var pending: USDAPrimContext?
+	var componentIndent: String?
+	var inTarget = false
+	var insertIndex: Int?
+	var replaceIndex: Int?
+
+	for (index, line) in lines.enumerated() {
+		if let declaration = parsePrimDeclarationLine(line) {
+			let path = if let parent = stack.last?.path {
+				"\(parent)/\(declaration.primName)"
+			} else {
+				"/\(declaration.primName)"
+			}
+			let context = USDAPrimContext(path: path, indent: declaration.indent)
+			if line.contains("{") {
+				stack.append(context)
+				inTarget = context.path == componentPrimPath
+				if inTarget { componentIndent = context.indent }
+			} else {
+				pending = context
+			}
+		}
+
+		if line.contains("{"), let pendingContext = pending {
+			stack.append(pendingContext)
+			inTarget = pendingContext.path == componentPrimPath
+			if inTarget { componentIndent = pendingContext.indent }
+			pending = nil
+		}
+
+		if inTarget {
+			let nsLine = line as NSString
+			let range = NSRange(location: 0, length: nsLine.length)
+			if let match = attrRegex.firstMatch(in: line, options: [], range: range),
+			   match.numberOfRanges > 1
+			{
+				let nameRange = match.range(at: 1)
+				if nameRange.location != NSNotFound {
+					let name = nsLine.substring(with: nameRange)
+					if name == attributeName {
+						replaceIndex = index
+					}
+				}
+			}
+		}
+
+		let closingCount = line.filter { $0 == "}" }.count
+		if closingCount > 0 {
+			for _ in 0..<closingCount {
+				guard let current = stack.last else { break }
+				if current.path == componentPrimPath && insertIndex == nil {
+					insertIndex = index
+				}
+				_ = stack.popLast()
+				inTarget = stack.last?.path == componentPrimPath
+			}
+		}
+	}
+
+	guard let componentIndent, let insertIndex else {
+		throw DeconstructedUSDInteropError.componentAuthoringFailed(
+			reason: "Component prim not found: \(componentPrimPath)"
+		)
+	}
+
+	let fieldIndent = componentIndent + indentUnit
+	let authoredLine = "\(fieldIndent)\(attributeType) \(attributeName) = \(valueLiteral)"
+	var updatedLines = lines
+	if let replaceIndex {
+		updatedLines[replaceIndex] = authoredLine
+	} else {
+		updatedLines.insert(authoredLine, at: insertIndex)
+	}
+
+	let updated = updatedLines.joined(separator: "\n")
+	return source.hasSuffix("\n") ? updated + "\n" : updated
+}
+
+private func removeRealityKitComponentParameterInUSDA(
+	_ source: String,
+	componentPrimPath: String,
+	attributeName: String
+) throws -> String {
+	let lines = source.split(whereSeparator: \.isNewline).map(String.init)
+	let attrRegex = try NSRegularExpression(
+		pattern: #"^\s*(?:uniform\s+)?[A-Za-z0-9_:\[\]]+\s+([A-Za-z_][A-Za-z0-9_:]*)\s*="#
+	)
+
+	var stack: [USDAPrimContext] = []
+	var pending: USDAPrimContext?
+	var inTarget = false
+	var removeIndex: Int?
+
+	for (index, line) in lines.enumerated() {
+		if let declaration = parsePrimDeclarationLine(line) {
+			let path = if let parent = stack.last?.path {
+				"\(parent)/\(declaration.primName)"
+			} else {
+				"/\(declaration.primName)"
+			}
+			let context = USDAPrimContext(path: path, indent: declaration.indent)
+			if line.contains("{") {
+				stack.append(context)
+				inTarget = context.path == componentPrimPath
+			} else {
+				pending = context
+			}
+		}
+
+		if line.contains("{"), let pendingContext = pending {
+			stack.append(pendingContext)
+			inTarget = pendingContext.path == componentPrimPath
+			pending = nil
+		}
+
+		if inTarget {
+			let nsLine = line as NSString
+			let range = NSRange(location: 0, length: nsLine.length)
+			if let match = attrRegex.firstMatch(in: line, options: [], range: range),
+			   match.numberOfRanges > 1
+			{
+				let nameRange = match.range(at: 1)
+				if nameRange.location != NSNotFound {
+					let name = nsLine.substring(with: nameRange)
+					if name == attributeName {
+						removeIndex = index
+						break
+					}
+				}
+			}
+		}
+
+		let closingCount = line.filter { $0 == "}" }.count
+		if closingCount > 0 {
+			for _ in 0..<closingCount {
+				_ = stack.popLast()
+				inTarget = stack.last?.path == componentPrimPath
+			}
+		}
+	}
+
+	guard let removeIndex else {
+		return source
+	}
+	var updatedLines = lines
+	updatedLines.remove(at: removeIndex)
+	let updated = updatedLines.joined(separator: "\n")
+	return source.hasSuffix("\n") ? updated + "\n" : updated
+}
+
+private func insertTypedPrimInUSDA(
+	_ source: String,
+	parentPrimPath: String,
+	typeName: String,
+	primName: String
+) throws -> String {
+	let lines = source.split(whereSeparator: \.isNewline).map(String.init)
+	let indentUnit = source.contains("\t") ? "\t" : "    "
+	var stack: [USDAPrimContext] = []
+	var pending: USDAPrimContext?
+	var insertionLineIndex: Int?
+	var parentIndent: String?
+	var existingPrimPath: String?
+
+	for (index, line) in lines.enumerated() {
+		if let declaration = parsePrimDeclarationLine(line) {
+			let path = if let parent = stack.last?.path {
+				"\(parent)/\(declaration.primName)"
+			} else {
+				"/\(declaration.primName)"
+			}
+			if path == "\(parentPrimPath)/\(primName)" {
+				existingPrimPath = path
+			}
+			let context = USDAPrimContext(path: path, indent: declaration.indent)
+			if line.contains("{") {
+				stack.append(context)
+				if context.path == parentPrimPath {
+					parentIndent = context.indent
+				}
+			} else {
+				pending = context
+			}
+		}
+		if line.contains("{"), let pendingContext = pending {
+			stack.append(pendingContext)
+			if pendingContext.path == parentPrimPath {
+				parentIndent = pendingContext.indent
+			}
+			pending = nil
+		}
+		let closingCount = line.filter { $0 == "}" }.count
+		if closingCount > 0 {
+			for _ in 0..<closingCount {
+				guard let current = stack.last else { break }
+				if current.path == parentPrimPath && insertionLineIndex == nil {
+					insertionLineIndex = index
+				}
+				_ = stack.popLast()
+			}
+		}
+	}
+
+	if existingPrimPath != nil {
+		return source
+	}
+
+	guard let insertionLineIndex, let parentIndent else {
+		throw DeconstructedUSDInteropError.componentAuthoringFailed(
+			reason: "Parent prim not found for insertion: \(parentPrimPath)"
+		)
+	}
+
+	let childIndent = parentIndent + indentUnit
+	let block: [String] = [
+		"",
+		"\(childIndent)def \(typeName) \"\(primName)\" (",
+		"\(childIndent)\(indentUnit)active = true",
+		"\(childIndent))",
+		"\(childIndent){",
+		"\(childIndent)}"
+	]
+
+	var updatedLines = lines
+	updatedLines.insert(contentsOf: block, at: insertionLineIndex)
+	let updated = updatedLines.joined(separator: "\n")
+	return source.hasSuffix("\n") ? updated + "\n" : updated
+}
+
+private func parentPath(of primPath: String) -> String? {
+	let trimmed = primPath.trimmingCharacters(in: .whitespacesAndNewlines)
+	guard trimmed.hasPrefix("/"), trimmed.count > 1 else { return nil }
+	let parts = trimmed.split(separator: "/").map(String.init)
+	guard parts.count > 1 else { return nil }
+	return "/" + parts.dropLast().joined(separator: "/")
+}
+
+private func primName(of primPath: String) -> String? {
+	let trimmed = primPath.trimmingCharacters(in: .whitespacesAndNewlines)
+	guard trimmed.hasPrefix("/"), trimmed.count > 1 else { return nil }
+	return trimmed.split(separator: "/").last.map(String.init)
 }

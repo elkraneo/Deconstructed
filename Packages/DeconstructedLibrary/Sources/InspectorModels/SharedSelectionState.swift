@@ -10,6 +10,7 @@ public struct InspectorDisclosureState: Equatable, Sendable {
 	public var transformExpanded: Bool
 	public var variantsExpanded: Bool
 	public var referencesExpanded: Bool
+	public var componentsExpanded: Bool
 	public var scenePlaybackExpanded: Bool
 	public var layerDataExpanded: Bool
 
@@ -20,6 +21,7 @@ public struct InspectorDisclosureState: Equatable, Sendable {
 		transformExpanded: Bool = true,
 		variantsExpanded: Bool = true,
 		referencesExpanded: Bool = true,
+		componentsExpanded: Bool = true,
 		scenePlaybackExpanded: Bool = true,
 		layerDataExpanded: Bool = true
 	) {
@@ -29,6 +31,7 @@ public struct InspectorDisclosureState: Equatable, Sendable {
 		self.transformExpanded = transformExpanded
 		self.variantsExpanded = variantsExpanded
 		self.referencesExpanded = referencesExpanded
+		self.componentsExpanded = componentsExpanded
 		self.scenePlaybackExpanded = scenePlaybackExpanded
 		self.layerDataExpanded = layerDataExpanded
 	}
