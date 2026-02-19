@@ -41,7 +41,7 @@ let package = Package(
 	dependencies: [
 		.package(url: "https://github.com/pointfreeco/swift-composable-architecture", from: "1.23.1"),
 		.package(url: "https://github.com/pointfreeco/swift-sharing", from: "2.3.0"),
-		.package(url: "https://github.com/Reality2713/USDInterop", revision: "9a51edd955db053813d8467d088d07639d7aa46c"),
+		.package(url: "https://github.com/Reality2713/USDInterop", revision: "1e93a3be7fa7a855c312d5c2457a8bf5ccd77bc0"),
 		.package(url: "https://github.com/reality2713/StageView.git", branch: "main"),
         .package(
             name: "USDInteropAdvanced",
