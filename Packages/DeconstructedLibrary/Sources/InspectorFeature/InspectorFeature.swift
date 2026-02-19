@@ -2072,13 +2072,23 @@ private func loadComponentDescendantAttributes(
 						url: url,
 						primPath: node.path
 					)?.authoredAttributes ?? []
-				guard !attrs.isEmpty else { continue }
+				let finalAttrs: [USDPrimAttributes.AuthoredAttribute]
+				if attrs.isEmpty {
+					finalAttrs = [
+						USDPrimAttributes.AuthoredAttribute(
+							name: "path",
+							value: quoteUSDString(node.path)
+						)
+					]
+				} else {
+					finalAttrs = attrs
+				}
 				seenPaths.insert(node.path)
 				collected.append(
 					ComponentDescendantAttributes(
 						primPath: node.path,
 						displayName: node.name,
-						authoredAttributes: attrs
+						authoredAttributes: finalAttrs
 					)
 				)
 			}
