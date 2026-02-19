@@ -2219,6 +2219,17 @@ private struct ComponentParametersSection: View {
 				break
 			}
 		}
+		if identifier == "RealityKit.CustomDockingRegion" {
+			switch parameter.key {
+			case "width":
+				let maxBounds = parseVector3(authoredAttributes["max"] ?? "(1.2, 0.5, 0)")
+				let minBounds = parseVector3(authoredAttributes["min"] ?? "(-1.2, -0.5, 0)")
+				let widthCM = max(0.0, (maxBounds.x - minBounds.x) * 100.0)
+				return .double(widthCM)
+			default:
+				break
+			}
+		}
 		if identifier == "RealityKit.CharacterController" {
 			switch parameter.key {
 			case "height":

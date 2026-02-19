@@ -3305,6 +3305,13 @@ private func componentParameterAuthoringSpec(
 			operation: .set(valueLiteral: quoteUSDString(value)),
 			primPathSuffix: nil
 		)
+	case ("RealityKit.CustomDockingRegion", "width", .double(let valueCM)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "float3",
+			attributeName: "max",
+			operation: .set(valueLiteral: dockingRegionMaxLiteral(widthCM: valueCM)),
+			primPathSuffix: "m_bounds"
+		)
 	case ("RealityKit.Collider", "mode", .string(let value)):
 		return ComponentParameterAuthoringSpec(
 			attributeType: "token",
@@ -3798,7 +3805,16 @@ private func supplementalComponentAuthoringSpecs(
 					primPathSuffix: nil
 				)
 			]
-		}
+			}
+	case ("RealityKit.CustomDockingRegion", "width", .double(let valueCM)):
+		return [
+			ComponentParameterAuthoringSpec(
+				attributeType: "float3",
+				attributeName: "min",
+				operation: .set(valueLiteral: dockingRegionMinLiteral(widthCM: valueCM)),
+				primPathSuffix: "m_bounds"
+			)
+		]
 	default:
 		return []
 	}
@@ -3881,6 +3897,20 @@ private func formatCollisionExtent(_ raw: String) -> String {
 	}
 	let meters = cm / 100.0
 	return "(\(formatUSDFloat(meters.x)), \(formatUSDFloat(meters.y)), \(formatUSDFloat(meters.z)))"
+}
+
+private func dockingRegionMaxLiteral(widthCM: Double) -> String {
+	let clamped = max(0, widthCM)
+	let halfWidthMeters = clamped / 200.0
+	let halfHeightMeters = halfWidthMeters / 2.4
+	return "(\(formatUSDFloat(halfWidthMeters)), \(formatUSDFloat(halfHeightMeters)), 0)"
+}
+
+private func dockingRegionMinLiteral(widthCM: Double) -> String {
+	let clamped = max(0, widthCM)
+	let halfWidthMeters = clamped / 200.0
+	let halfHeightMeters = halfWidthMeters / 2.4
+	return "(\(formatUSDFloat(-halfWidthMeters)), \(formatUSDFloat(-halfHeightMeters)), 0)"
 }
 
 private func mapReverbPresetToToken(_ displayName: String) -> String {

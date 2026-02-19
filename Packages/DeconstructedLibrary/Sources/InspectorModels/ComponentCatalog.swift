@@ -162,6 +162,14 @@ public struct InspectorComponentDefinition: Equatable, Sendable, Identifiable, H
 					kind: .text(defaultValue: "(1, 1, 1)", placeholder: "(x, y, z)")
 				)
 			]
+		case "RealityKit.CustomDockingRegion":
+			return [
+				InspectorComponentParameter(
+					key: "width",
+					label: "Width",
+					kind: .scalar(defaultValue: 240, unit: "cm")
+				)
+			]
 		case "RealityKit.CharacterController":
 			return [
 				InspectorComponentParameter(
