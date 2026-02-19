@@ -1299,6 +1299,8 @@ private struct ComponentParametersSection: View {
 						audioLibraryEditor
 					} else if componentIdentifier == "RealityKit.AnimationLibrary" {
 						animationLibraryEditor
+					} else if componentIdentifier == "RealityKit.CustomDockingRegion" {
+						customDockingRegionEditor
 					} else if componentIdentifier == "RCP.BehaviorsContainer" {
 						behaviorsEditor
 					} else if componentIdentifier == "RealityKit.RigidBody" {
@@ -1741,10 +1743,50 @@ private struct ComponentParametersSection: View {
 		}
 	}
 
+	private var customDockingRegionEditor: some View {
+		VStack(alignment: .leading, spacing: 8) {
+			InspectorRow(label: "Width") {
+				HStack(spacing: 8) {
+					TextField(
+						"",
+						value: doubleBinding(for: "width", fallback: 240),
+						format: .number.precision(.fractionLength(0...3))
+					)
+					.textFieldStyle(.roundedBorder)
+					.frame(width: 90)
+					.font(.system(size: 11))
+					Text("cm")
+						.font(.system(size: 10))
+						.foregroundStyle(.secondary)
+				}
+			}
+
+			VStack(alignment: .leading, spacing: 4) {
+				Text("Preview Video")
+					.font(.system(size: 11))
+					.foregroundStyle(.secondary)
+				Text(previewVideoLabel)
+					.font(.system(size: 11))
+					.foregroundStyle(.primary)
+					.lineLimit(1)
+			}
+		}
+	}
+
 	private func previewResourceLabel(for resource: AudioLibraryResource) -> String {
 		let target = resource.valueTarget.trimmingCharacters(in: .whitespacesAndNewlines)
 		guard !target.isEmpty else { return resource.key }
 		return target.split(separator: "/").last.map(String.init) ?? resource.key
+	}
+
+	private var previewVideoLabel: String {
+		if let raw = rawValues["previewVideo"], !raw.isEmpty {
+			let parsed = parseUSDString(raw)
+			return parsed.isEmpty ? "None" : parsed
+		}
+		let fallback = authoredAttributes.first(where: { $0.name == "previewVideo" })?.value ?? ""
+		let parsed = parseUSDString(fallback)
+		return parsed.isEmpty ? "None" : parsed
 	}
 
 	private func parseBehaviorModels(

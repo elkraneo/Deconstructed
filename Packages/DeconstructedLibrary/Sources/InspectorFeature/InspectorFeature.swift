@@ -2177,6 +2177,23 @@ private func mergedComponentAuthoredAttributes(
 	authoredAttributes: [USDPrimAttributes.AuthoredAttribute],
 	url: URL
 ) -> [USDPrimAttributes.AuthoredAttribute] {
+	if componentIdentifier(from: authoredAttributes) == "RealityKit.CustomDockingRegion",
+	   let previewVideoAssetPath = DeconstructedUSDInterop.realityKitComponentCustomDataAsset(
+	   	url: url,
+	   	componentPrimPath: componentPath,
+	   	key: "previewVideo"
+	   )
+	{
+		var merged = authoredAttributes
+		merged.removeAll { $0.name == "previewVideo" }
+		merged.append(
+			USDPrimAttributes.AuthoredAttribute(
+				name: "previewVideo",
+				value: quoteUSDString(previewVideoAssetPath)
+			)
+		)
+		return merged
+	}
 	guard
 		componentIdentifier(from: authoredAttributes) == "RealityKit.MeshSorting"
 	else {

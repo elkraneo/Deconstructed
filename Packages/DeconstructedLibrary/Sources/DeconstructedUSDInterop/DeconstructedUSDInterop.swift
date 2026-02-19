@@ -844,6 +844,24 @@ public enum DeconstructedUSDInterop {
 		)
 	}
 
+	public static func realityKitComponentCustomDataAsset(
+		url: URL,
+		componentPrimPath: String,
+		key: String
+	) -> String? {
+		guard url.pathExtension.lowercased() == "usda" else {
+			return nil
+		}
+		guard let source = try? String(contentsOf: url, encoding: .utf8) else {
+			return nil
+		}
+		return parseComponentCustomDataAssetFromUSDA(
+			source: source,
+			componentPrimPath: componentPrimPath,
+			key: key
+		)
+	}
+
 	private static func mapSchemaKind(_ kind: SchemaSpec.Kind) -> USDSchemaSpec.Kind {
 		switch kind {
 		case .api:
@@ -1510,6 +1528,96 @@ private func parseRealityKitComponentPrimsFromUSDA(
 	}
 
 	return components
+}
+
+private func parseComponentCustomDataAssetFromUSDA(
+	source: String,
+	componentPrimPath: String,
+	key: String
+) -> String? {
+	let lines = source.split(whereSeparator: \.isNewline).map(String.init)
+	var stack: [USDAPrimContext] = []
+	var pending: USDAPrimContext?
+
+	for (index, line) in lines.enumerated() {
+		if let declaration = parsePrimDeclarationLine(line) {
+			let path = if let parent = stack.last?.path {
+				"\(parent)/\(declaration.primName)"
+			} else {
+				"/\(declaration.primName)"
+			}
+			let context = USDAPrimContext(path: path, indent: declaration.indent)
+			if line.contains("{") {
+				stack.append(context)
+			} else {
+				pending = context
+			}
+
+			if path == componentPrimPath,
+			   let metadata = parseComponentMetadataBlock(lines: lines, declarationIndex: index)
+			{
+				return parseCustomDataAsset(in: metadata, key: key)
+			}
+		}
+
+		if line.contains("{"), let pendingContext = pending {
+			stack.append(pendingContext)
+			pending = nil
+		}
+
+		let closingCount = line.filter { $0 == "}" }.count
+		if closingCount > 0 {
+			for _ in 0..<closingCount {
+				_ = stack.popLast()
+			}
+		}
+	}
+
+	return nil
+}
+
+private func parseComponentMetadataBlock(
+	lines: [String],
+	declarationIndex: Int
+) -> String? {
+	guard declarationIndex < lines.count else { return nil }
+	let declarationLine = lines[declarationIndex]
+	guard let openIndex = declarationLine.firstIndex(of: "(") else {
+		return nil
+	}
+	var metadata = String(declarationLine[declarationLine.index(after: openIndex)...])
+	var depth = metadata.filter { $0 == "(" }.count - metadata.filter { $0 == ")" }.count
+	if depth <= 0 {
+		return metadata
+	}
+	var cursor = declarationIndex + 1
+	while cursor < lines.count {
+		let line = lines[cursor]
+		metadata.append("\n")
+		metadata.append(line)
+		depth += line.filter { $0 == "(" }.count
+		depth -= line.filter { $0 == ")" }.count
+		if depth <= 0 {
+			return metadata
+		}
+		cursor += 1
+	}
+	return metadata
+}
+
+private func parseCustomDataAsset(in metadata: String, key: String) -> String? {
+	let escapedKey = NSRegularExpression.escapedPattern(for: key)
+	let pattern = "asset\\s+\(escapedKey)\\s*=\\s*@([^@]+)@"
+	guard let regex = try? NSRegularExpression(pattern: pattern) else {
+		return nil
+	}
+	let nsRange = NSRange(metadata.startIndex..<metadata.endIndex, in: metadata)
+	guard let match = regex.firstMatch(in: metadata, options: [], range: nsRange),
+		  let valueRange = Range(match.range(at: 1), in: metadata)
+	else {
+		return nil
+	}
+	return String(metadata[valueRange])
 }
 
 private func parseActiveFlag(from text: String?) -> Bool? {
