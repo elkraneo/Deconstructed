@@ -2469,7 +2469,7 @@ private struct ComponentParametersSection: View {
 		let body = String(trimmed.dropFirst().dropLast())
 		return body
 			.split(separator: ",", omittingEmptySubsequences: true)
-			.compactMap { Double($0.trimmingCharacters(in: .whitespacesAndNewlines)) }
+			.compactMap { parseUSDDouble(String($0).trimmingCharacters(in: .whitespacesAndNewlines)) }
 	}
 
 	private static func parseAnchoringTransform(_ raw: String) -> (
@@ -2551,7 +2551,19 @@ private struct ComponentParametersSection: View {
 	}
 
 	private static func parseUSDDouble(_ raw: String) -> Double? {
-		Double(raw.trimmingCharacters(in: .whitespacesAndNewlines))
+		let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+		if let direct = Double(trimmed) {
+			return direct
+		}
+		let pattern = #"[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?"#
+		guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
+		let range = NSRange(trimmed.startIndex..<trimmed.endIndex, in: trimmed)
+		guard let match = regex.firstMatch(in: trimmed, options: [], range: range),
+			  let swiftRange = Range(match.range, in: trimmed)
+		else {
+			return nil
+		}
+		return Double(trimmed[swiftRange])
 	}
 
 	private static func parseColorLiteral(_ raw: String) -> SIMD3<Double> {
