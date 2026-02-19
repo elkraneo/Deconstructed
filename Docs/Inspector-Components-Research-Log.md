@@ -335,3 +335,49 @@ Suggested structure for article sections:
 5. Handling root-only components and context-invalid entries.
 6. Incremental parity: simple components first, nested-struct components second.
 7. Open research: custom component field type support matrix.
+
+## Recovered Notes From Full Thread
+
+These notes were recovered from the full collaboration thread to avoid losing high-value context.
+
+### Product parity/UX constraints
+
+1. RCP-style inspector parity requires one module per component; no separate "Components module" card in the inspector body.
+2. Add Component should stay as footer action (fixed placement), independent from per-component module rendering.
+3. Component modules require individual lifecycle controls:
+   - active/inactive toggle,
+   - per-component menu (`Copy`, `Deactivate/Activate`, `Delete`, etc.),
+   - disabled visual state without deleting authored data.
+4. Deactivating a component should not make the module disappear; it should remain visible but disabled.
+5. Viewport and hierarchy selection must remain synchronized across component mutations (selection loss was observed as a critical UX regression risk).
+
+### Authoring model findings
+
+1. Components are not one flat ECS shape; authored patterns include:
+   - scalar fields,
+   - nested structs/descendant prims,
+   - resource registries,
+   - cross-prim relationships,
+   - graph components (Behaviors),
+   - dependency-driven/UI-gated controls.
+2. Behaviors are a graph container model (`RCP.BehaviorsContainer`) and not a simple parameterized component.
+3. Stacked behaviors are authored in explicit order and order can change in USDA (`Stacked.usda` vs `StackedReversed.usda`).
+4. Character Controller "Up Vector" currently behaves as transform-coupled authoring (orientation update), not as a dedicated component attribute in observed fixtures.
+5. Docking Region preview video is authored as `customData.previewVideo` asset path and can reference external files (no observed auto-import into `.rkassets` for strict parity).
+6. Docking Region can be created from both Add Component and hierarchy contextual path (`Environment > Video Dock`), implying multiple entry points to same authored structure.
+7. Animation Library adds/removes entries via child `RealityKitAnimationFile` prims; Frames/Seconds toggle has no observed scene USDA delta in current fixtures.
+
+### Research/process decisions
+
+1. Do not assert custom component field support as "any Codable" without fixture proof; maintain explicit type matrix research as open work.
+2. Template-based USDA insertion was chosen pragmatically for current phase; AST/semantic writer remains future work when maintenance cost justifies.
+3. For this workspace, dependency resolution must follow workspace-local overrides (local USDInterop/USDInteropAdvanced), not inner package-only `swift build` assumptions.
+4. Known build noise/blocker remains external to inspector changes in this branch: local `USDReference` / `USDAdvancedClient` API mismatch.
+
+### Stability observations
+
+1. RCP crash captured during Up Vector experimentation:
+   - `EXC_BREAKPOINT (SIGTRAP)`,
+   - `CoreRE` assertion `Bitset<64>::toWordIndex`,
+   - deep AppKit layout recursion in stack.
+2. Treat this as an upstream tooling instability note during reverse engineering, not necessarily an authored scene invalidation by fixture alone.

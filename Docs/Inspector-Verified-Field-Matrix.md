@@ -1,6 +1,6 @@
 # Inspector Verified Field Matrix
 
-Last updated: 2026-02-17
+Last updated: 2026-02-19
 Source fixture set:
 - `/Volumes/Plutonian/_Developer/Deconstructed/references/ComponentExploration/Sources/ComponentExploration/ComponentExploration.rkassets`
 - `/Volumes/Plutonian/_Developer/Deconstructed/references/ComponentFieldExploration/Sources/ComponentFieldExploration/ComponentFieldExploration.rkassets`
@@ -31,6 +31,10 @@ Only these component IDs currently have authored parameter lines in the fixture 
 12. `RealityKit.SpatialAudio` (from `ComponentFieldExploration` diffs)
 13. `RealityKit.ChannelAudio` (from `ComponentFieldExploration` diffs)
 14. `RealityKit.AudioLibrary` (from `ComponentFieldExploration` diffs)
+15. `RealityKit.AnimationLibrary` (from `ComponentFieldExploration` diffs)
+16. `RealityKit.CharacterController` (from `ComponentFieldExploration` diffs)
+17. `RCP.BehaviorsContainer` (from `ComponentFieldExploration` diffs)
+18. `RealityKit.InputTarget` (from `ComponentFieldExploration` diffs)
 
 All other components in the fixture set are present as component prims but currently only author `info:id` (no parameter lines yet).
 
@@ -56,6 +60,9 @@ All other components in the fixture set are present as component prims but curre
 1. Descendant fields (`m_bounds` child prim):
    - `float3 max = (1.2, 0.5, 0)`
    - `float3 min = (-1.2, -0.5, -0)`
+2. Preview video fixture (`PreviewVideo.usda`) authors on component prim metadata:
+   - `customData.previewVideo` as `asset` path
+3. In observed RCP fixture, preview video is referenced externally (path escaping out of project); no auto-copy into `.rkassets` was authored.
 
 ### RealityKit.ImageBasedLight
 
@@ -147,6 +154,73 @@ All other components in the fixture set are present as component prims but curre
    - `def RealityKitAudioFile "<name>"`
    - `uniform asset file = @...@`
    - `uniform bool shouldLoop = 0|1`
+
+### RealityKit.AnimationLibrary
+
+1. Top-level component:
+   - `uniform token info:id = "RealityKit.AnimationLibrary"`
+2. Animation entries are authored as child prims under the component:
+   - `def RealityKitAnimationFile "<sanitized_prim_name>"`
+   - `uniform asset file = @../<clip>.usdc@` (or `usda`/`usdz`)
+   - `uniform string name = "<display name>"`
+3. Add/remove behavior is represented by creating/deleting `RealityKitAnimationFile` child prims.
+4. In current fixtures, the Frames/Seconds toggle does not author scene data (no USDA delta vs base).
+5. Deconstructed inspector status:
+   - Component-specific module is implemented (list + add/remove).
+   - Add imports `usda`/`usdc`/`usdz` clips into `.rkassets`.
+   - Remove deletes the selected `RealityKitAnimationFile` child prim.
+
+### RealityKit.CharacterController
+
+1. Top-level component:
+   - `uniform token info:id = "RealityKit.CharacterController"`
+2. Descendant struct path:
+   - `m_controllerDesc` / `collisionFilter`
+3. Observed authored fields in fixtures:
+   - `float3 extents` (height/radius packed into vector channels)
+   - `float skinWidth`
+   - `float slopeLimit` (authored in radians)
+   - `float stepLimit`
+   - `uint group` (collision filter)
+   - `uint mask` (collision filter)
+4. Up Vector fixture observation:
+   - Up Vector edits changed prim transform (`xformOp:orient` + `rotationEulerHint`) and did not author a dedicated CharacterController up-vector field in observed USDA.
+
+### RCP.BehaviorsContainer (Behaviors)
+
+1. Container component on entity:
+   - `def RealityKitComponent "RCP_BehaviorsContainer"`
+   - `uniform token info:id = "RCP.BehaviorsContainer"`
+   - `rel behaviors = ...`
+2. Each behavior is authored as a graph root:
+   - `def Preliminary_Behavior "<BehaviorName>"`
+   - `rel triggers = ...`
+   - `rel actions = ...`
+3. Trigger/action nodes are nested graph nodes:
+   - `def Preliminary_Trigger "Trigger"` with `token info:id = "TapGesture"|"Collide"|"Notification"|"SceneTransition"`
+   - `def Preliminary_Action "Action"` with `token info:id = "PlayTimeline"` and loop/count/type attributes
+4. Trigger-specific fields observed:
+   - `rel colliders = </Root/...>` for collision trigger selection
+   - `string identifier = "..."` for notification trigger
+5. Stacked behaviors serialize as an ordered `rel behaviors` list.
+6. `StackedReversed.usda` confirms behavior order is authored and changes when behavior order changes.
+7. Practical implication: Behaviors are graph-authored, relation-heavy, and timeline-dependent (not scalar ECS fields).
+
+### RealityKit.InputTarget
+
+1. Top-level component:
+   - `uniform token info:id = "RealityKit.InputTarget"`
+2. Observed authored fields:
+   - `bool enabled = 0|1`
+   - `bool allowsDirectInput = 0|1`
+   - `bool allowsIndirectInput = 0|1`
+3. `Allowed Input = All` fixture (`AllowedInput/All.usda`) authored no delta vs base.
+4. `Allowed Input = Direct` fixture authored:
+   - `allowsDirectInput = 1`
+   - `allowsIndirectInput = 0`
+5. `Allowed Input = Indirect` fixture authored:
+   - `allowsDirectInput = 0`
+   - `allowsIndirectInput = 1`
 
 ### Ambient/Spatial/Channel Audio + Audio Library coupling
 

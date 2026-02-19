@@ -3,6 +3,7 @@ import DeconstructedUSDInterop
 import Foundation
 import InspectorModels
 import SceneGraphModels
+import simd
 import USDInterfaces
 import USDInteropAdvancedCore
 
@@ -53,12 +54,9 @@ public struct InspectorFeature {
 			primMaterialBinding: String? = nil,
 			primMaterialBindingStrength: USDMaterialBindingStrength? = nil,
 			componentActiveByPath: [String: Bool] = [:],
-				componentAuthoredAttributesByPath: [String: [USDPrimAttributes
-					.AuthoredAttribute]] = [:],
-				componentDescendantAttributesByPath: [String:
-					[ComponentDescendantAttributes]] = [:],
-				componentAudioLibraryResourcesByPath: [String: [AudioLibraryResource]] = [:],
-				boundMaterial: USDMaterialInfo? = nil,
+			componentAuthoredAttributesByPath: [String: [USDPrimAttributes.AuthoredAttribute]] = [:],
+			componentDescendantAttributesByPath: [String: [ComponentDescendantAttributes]] = [:],
+			boundMaterial: USDMaterialInfo? = nil,
 			availableMaterials: [USDMaterialInfo] = [],
 			sceneNodes: [SceneNode] = [],
 			isLoading: Bool = false,
@@ -84,11 +82,9 @@ public struct InspectorFeature {
 			self.primMaterialBinding = primMaterialBinding
 			self.primMaterialBindingStrength = primMaterialBindingStrength
 			self.componentActiveByPath = componentActiveByPath
-				self.componentAuthoredAttributesByPath = componentAuthoredAttributesByPath
-				self.componentDescendantAttributesByPath =
-					componentDescendantAttributesByPath
-				_ = componentAudioLibraryResourcesByPath
-				self.boundMaterial = boundMaterial
+			self.componentAuthoredAttributesByPath = componentAuthoredAttributesByPath
+			self.componentDescendantAttributesByPath = componentDescendantAttributesByPath
+			self.boundMaterial = boundMaterial
 			self.availableMaterials = availableMaterials
 			self.sceneNodes = sceneNodes
 			self.isLoading = isLoading
@@ -187,6 +183,18 @@ public struct InspectorFeature {
 		)
 		case removeAudioLibraryResourceSucceeded(componentPath: String)
 		case removeAudioLibraryResourceFailed(String)
+		case addAnimationLibraryResourceRequested(
+			componentPath: String,
+			sourceURL: URL
+		)
+		case addAnimationLibraryResourceSucceeded(componentPath: String)
+		case addAnimationLibraryResourceFailed(String)
+		case removeAnimationLibraryResourceRequested(
+			componentPath: String,
+			resourcePrimPath: String
+		)
+		case removeAnimationLibraryResourceSucceeded(componentPath: String)
+		case removeAnimationLibraryResourceFailed(String)
 		case setRawComponentAttributeRequested(
 			componentPath: String,
 			attributeType: String,
@@ -943,6 +951,54 @@ public struct InspectorFeature {
 						}
 					}
 				}
+				if componentIdentifier == "RealityKit.CharacterController" {
+					return .run { send in
+						do {
+							let maybeUpdatedTransform = try applyCharacterControllerParameterChange(
+								url: url,
+								componentPath: componentPath,
+								parameterKey: parameterKey,
+								value: value
+							)
+							let refreshed =
+								DeconstructedUSDInterop.getPrimAttributes(
+									url: url,
+									primPath: componentPath
+								)?.authoredAttributes ?? []
+							await send(
+								.componentAuthoredAttributesLoaded([
+									componentPath: mergedComponentAuthoredAttributes(
+										componentPath: componentPath,
+										authoredAttributes: refreshed,
+										url: url
+									)
+								])
+							)
+							await send(
+								.componentDescendantAttributesLoaded([
+									componentPath: loadComponentDescendantAttributes(
+										componentPath: componentPath,
+										sceneNodes: sceneNodesSnapshot,
+										url: url
+									)
+								])
+							)
+							if let maybeUpdatedTransform {
+								await send(.primTransformLoaded(maybeUpdatedTransform))
+							}
+							await send(
+								.setComponentParameterSucceeded(
+									componentPath: componentPath,
+									attributeName: parameterKey
+								)
+							)
+						} catch {
+							await send(
+								.setComponentParameterFailed(error.localizedDescription)
+							)
+						}
+					}
+				}
 				guard
 					let spec = componentParameterAuthoringSpec(
 						componentIdentifier: componentIdentifier,
@@ -1200,6 +1256,159 @@ public struct InspectorFeature {
 
 			case .removeAudioLibraryResourceFailed(let message):
 				state.primErrorMessage = "Failed to remove audio resource: \(message)"
+				return .none
+
+			case .addAnimationLibraryResourceRequested(
+				let componentPath,
+				let sourceURL
+			):
+				guard let url = state.sceneURL else {
+					return .none
+				}
+				let sceneNodesSnapshot = state.sceneNodes
+				let existingResources = animationLibraryResources(
+					from: state.componentDescendantAttributesByPath[componentPath] ?? []
+				)
+				return .run { send in
+					do {
+						let copied = try importAnimationResource(
+							sourceURL: sourceURL,
+							sceneURL: url
+						)
+						let resourcePrimPath = uniqueAnimationLibraryResourcePrimPath(
+							baseName: copied.displayName,
+							componentPath: componentPath,
+							existingPrimPaths: existingResources.map(\.primPath)
+						)
+						guard let resourcePrimName = primName(of: resourcePrimPath) else {
+							throw NSError(
+								domain: "InspectorFeature",
+								code: 1,
+								userInfo: [
+									NSLocalizedDescriptionKey: "Failed to derive animation resource prim name."
+								]
+							)
+						}
+						_ = try DeconstructedUSDInterop.ensureTypedPrim(
+							url: url,
+							parentPrimPath: componentPath,
+							typeName: "RealityKitAnimationFile",
+							primName: resourcePrimName
+						)
+						try DeconstructedUSDInterop.setRealityKitComponentParameter(
+							url: url,
+							componentPrimPath: resourcePrimPath,
+							attributeType: "uniform asset",
+							attributeName: "file",
+							valueLiteral: "@\(copied.relativeAssetPath)@"
+						)
+						try DeconstructedUSDInterop.setRealityKitComponentParameter(
+							url: url,
+							componentPrimPath: resourcePrimPath,
+							attributeType: "uniform string",
+							attributeName: "name",
+							valueLiteral: quoteUSDString(copied.displayName)
+						)
+						let refreshed = DeconstructedUSDInterop.getPrimAttributes(
+							url: url,
+							primPath: componentPath
+						)?.authoredAttributes ?? []
+						await send(
+							.componentAuthoredAttributesLoaded([
+								componentPath: mergedComponentAuthoredAttributes(
+									componentPath: componentPath,
+									authoredAttributes: refreshed,
+									url: url
+								)
+							])
+						)
+						await send(
+							.componentDescendantAttributesLoaded([
+								componentPath: loadComponentDescendantAttributes(
+									componentPath: componentPath,
+									sceneNodes: sceneNodesSnapshot,
+									url: url
+								)
+							])
+						)
+						await send(
+							.addAnimationLibraryResourceSucceeded(
+								componentPath: componentPath
+							)
+						)
+					} catch {
+						await send(
+							.addAnimationLibraryResourceFailed(
+								error.localizedDescription
+							)
+						)
+					}
+				}
+
+			case .addAnimationLibraryResourceSucceeded:
+				state.primErrorMessage = nil
+				return .none
+
+			case .addAnimationLibraryResourceFailed(let message):
+				state.primErrorMessage = "Failed to add animation resource: \(message)"
+				return .none
+
+			case .removeAnimationLibraryResourceRequested(
+				let componentPath,
+				let resourcePrimPath
+			):
+				guard let url = state.sceneURL else {
+					return .none
+				}
+				let sceneNodesSnapshot = state.sceneNodes
+				return .run { send in
+					do {
+						try DeconstructedUSDInterop.deletePrimAtPath(
+							url: url,
+							primPath: resourcePrimPath
+						)
+						let refreshed = DeconstructedUSDInterop.getPrimAttributes(
+							url: url,
+							primPath: componentPath
+						)?.authoredAttributes ?? []
+						await send(
+							.componentAuthoredAttributesLoaded([
+								componentPath: mergedComponentAuthoredAttributes(
+									componentPath: componentPath,
+									authoredAttributes: refreshed,
+									url: url
+								)
+							])
+						)
+						await send(
+							.componentDescendantAttributesLoaded([
+								componentPath: loadComponentDescendantAttributes(
+									componentPath: componentPath,
+									sceneNodes: sceneNodesSnapshot,
+									url: url
+								)
+							])
+						)
+						await send(
+							.removeAnimationLibraryResourceSucceeded(
+								componentPath: componentPath
+							)
+						)
+					} catch {
+						await send(
+							.removeAnimationLibraryResourceFailed(
+								error.localizedDescription
+							)
+						)
+					}
+				}
+
+			case .removeAnimationLibraryResourceSucceeded:
+				state.primErrorMessage = nil
+				return .none
+
+			case .removeAnimationLibraryResourceFailed(let message):
+				state.primErrorMessage = "Failed to remove animation resource: \(message)"
 				return .none
 
 			case .setRawComponentAttributeRequested(
@@ -1709,6 +1918,18 @@ public struct AudioLibraryResource: Equatable, Sendable {
 	}
 }
 
+public struct AnimationLibraryResource: Equatable, Sendable {
+	public let primPath: String
+	public let displayName: String
+	public let relativeAssetPath: String
+
+	public init(primPath: String, displayName: String, relativeAssetPath: String) {
+		self.primPath = primPath
+		self.displayName = displayName
+		self.relativeAssetPath = relativeAssetPath
+	}
+}
+
 private func loadComponentDescendantAttributes(
 	componentPath: String,
 	sceneNodes: [SceneNode],
@@ -1866,6 +2087,11 @@ private struct ImportedAudioResource: Sendable, Equatable {
 	let relativeAssetPath: String
 }
 
+private struct ImportedAnimationResource: Sendable, Equatable {
+	let displayName: String
+	let relativeAssetPath: String
+}
+
 private func audioLibraryResources(
 	from descendantAttributes: [ComponentDescendantAttributes]
 ) -> [AudioLibraryResource] {
@@ -1898,9 +2124,39 @@ func testAudioLibraryResources(
 }
 #endif
 
+private func animationLibraryResources(
+	from descendantAttributes: [ComponentDescendantAttributes]
+) -> [AnimationLibraryResource] {
+	descendantAttributes.compactMap { descendant in
+		let fileLiteral = authoredLiteral(
+			in: descendant.authoredAttributes,
+			names: ["file"]
+		)
+		guard !fileLiteral.isEmpty else { return nil }
+		let displayName =
+			parseUSDStringToken(
+				authoredLiteral(
+					in: descendant.authoredAttributes,
+					names: ["name"],
+					allowLooseMatch: false
+				)
+			)
+		let relativeAssetPath = parseUSDAssetPath(fileLiteral)
+		return AnimationLibraryResource(
+			primPath: descendant.primPath,
+			displayName: displayName.isEmpty ? descendant.displayName : displayName,
+			relativeAssetPath: relativeAssetPath
+		)
+	}
+	.sorted {
+		$0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending
+	}
+}
+
 private func authoredLiteral(
 	in attributes: [USDPrimAttributes.AuthoredAttribute],
-	names: [String]
+	names: [String],
+	allowLooseMatch: Bool = true
 ) -> String {
 	let lowered = Set(names.map { $0.lowercased() })
 	if let exact = attributes.first(where: {
@@ -1914,7 +2170,7 @@ private func authoredLiteral(
 	}) {
 		return typed.value
 	}
-	if let loose = attributes.first(where: { attribute in
+	if allowLooseMatch, let loose = attributes.first(where: { attribute in
 		let key = attribute.name.lowercased()
 		return lowered.contains(where: { key.contains($0) })
 	}) {
@@ -1956,6 +2212,17 @@ private func parseUSDStringToken(_ token: String) -> String {
 	return String(token[start..<end])
 		.replacingOccurrences(of: "\\\"", with: "\"")
 		.replacingOccurrences(of: "\\\\", with: "\\")
+}
+
+private func parseUSDAssetPath(_ raw: String) -> String {
+	let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+	guard trimmed.count >= 2, trimmed.first == "@", trimmed.last == "@"
+	else {
+		return trimmed
+	}
+	let start = trimmed.index(after: trimmed.startIndex)
+	let end = trimmed.index(before: trimmed.endIndex)
+	return String(trimmed[start..<end])
 }
 
 private func parseUSDRelationshipTargets(_ raw: String) -> [String] {
@@ -2023,6 +2290,33 @@ private func importAudioResource(
 	sourceURL: URL,
 	sceneURL: URL
 ) throws -> ImportedAudioResource {
+	let copied = try importResourceFile(sourceURL: sourceURL, sceneURL: sceneURL)
+	return ImportedAudioResource(
+		resourceKey: copied.destinationURL.lastPathComponent,
+		relativeAssetPath: copied.relativeAssetPath
+	)
+}
+
+private func importAnimationResource(
+	sourceURL: URL,
+	sceneURL: URL
+) throws -> ImportedAnimationResource {
+	let copied = try importResourceFile(sourceURL: sourceURL, sceneURL: sceneURL)
+	return ImportedAnimationResource(
+		displayName: sourceURL.deletingPathExtension().lastPathComponent,
+		relativeAssetPath: copied.relativeAssetPath
+	)
+}
+
+private struct ImportedResourceFile: Sendable, Equatable {
+	let destinationURL: URL
+	let relativeAssetPath: String
+}
+
+private func importResourceFile(
+	sourceURL: URL,
+	sceneURL: URL
+) throws -> ImportedResourceFile {
 	let fileManager = FileManager.default
 	guard let rkassetsURL = resolveRKAssetsRoot(for: sceneURL) else {
 		throw NSError(
@@ -2052,8 +2346,8 @@ private func importAudioResource(
 		sceneURL: sceneURL,
 		targetURL: destinationURL
 	)
-	return ImportedAudioResource(
-		resourceKey: destinationURL.lastPathComponent,
+	return ImportedResourceFile(
+		destinationURL: destinationURL,
 		relativeAssetPath: relativePath
 	)
 }
@@ -2105,6 +2399,22 @@ private func uniqueAudioFilePrimPath(
 	return candidate
 }
 
+private func uniqueAnimationLibraryResourcePrimPath(
+	baseName: String,
+	componentPath: String,
+	existingPrimPaths: [String]
+) -> String {
+	let sanitized = sanitizeAnimationLibraryPrimName(baseName)
+	var candidate = "\(componentPath)/\(sanitized)"
+	var index = 2
+	let existing = Set(existingPrimPaths)
+	while existing.contains(candidate) {
+		candidate = "\(componentPath)/\(sanitized)_\(index)"
+		index += 1
+	}
+	return candidate
+}
+
 private func sanitizeAudioFilePrimName(_ key: String) -> String {
 	let base =
 		key
@@ -2126,6 +2436,22 @@ private func sanitizeAudioFilePrimName(_ key: String) -> String {
 		name = "_" + name
 	}
 	return name.isEmpty ? "_audio" : name
+}
+
+private func sanitizeAnimationLibraryPrimName(_ value: String) -> String {
+	let filtered = value.map { char -> Character in
+		let isValid = char.unicodeScalars.allSatisfy {
+			CharacterSet.alphanumerics.contains($0) || $0 == "_"
+		}
+		return isValid ? char : "_"
+	}
+	var name = String(filtered)
+	if let first = name.unicodeScalars.first,
+	   CharacterSet.decimalDigits.contains(first)
+	{
+		name = "_" + name
+	}
+	return name.isEmpty ? "_animation" : name
 }
 
 private func applyMeshSortingParameterChange(
@@ -2204,6 +2530,230 @@ private func applyMeshSortingParameterChange(
 	}
 }
 
+private func applyCharacterControllerParameterChange(
+	url: URL,
+	componentPath: String,
+	parameterKey: String,
+	value: InspectorComponentParameterValue
+) throws -> USDTransformData? {
+	let controllerPath = "\(componentPath)/m_controllerDesc"
+	let collisionFilterPath = "\(controllerPath)/collisionFilter"
+	_ = try DeconstructedUSDInterop.ensureTypedPrim(
+		url: url,
+		parentPrimPath: componentPath,
+		typeName: "RealityKitStruct",
+		primName: "m_controllerDesc"
+	)
+	_ = try DeconstructedUSDInterop.ensureTypedPrim(
+		url: url,
+		parentPrimPath: controllerPath,
+		typeName: "RealityKitStruct",
+		primName: "collisionFilter"
+	)
+
+	switch (parameterKey, value) {
+	case ("height", .double(let valueCM)):
+		var extents = currentCharacterControllerExtents(url: url, controllerPath: controllerPath)
+		extents.x = max(0, valueCM) / 100.0
+		try setCharacterControllerExtents(url: url, controllerPath: controllerPath, extents: extents)
+		return nil
+	case ("radius", .double(let valueCM)):
+		var extents = currentCharacterControllerExtents(url: url, controllerPath: controllerPath)
+		extents.y = max(0, valueCM) / 100.0
+		try setCharacterControllerExtents(url: url, controllerPath: controllerPath, extents: extents)
+		return nil
+	case ("skinWidth", .double(let valueCM)):
+		let valueMeters = max(0, valueCM) / 100.0
+		try DeconstructedUSDInterop.setRealityKitComponentParameter(
+			url: url,
+			componentPrimPath: controllerPath,
+			attributeType: "float",
+			attributeName: "skinWidth",
+			valueLiteral: formatUSDFloat(valueMeters)
+		)
+		return nil
+	case ("stepLimit", .double(let valueCM)):
+		let valueMeters = max(0, valueCM) / 100.0
+		try DeconstructedUSDInterop.setRealityKitComponentParameter(
+			url: url,
+			componentPrimPath: controllerPath,
+			attributeType: "float",
+			attributeName: "stepLimit",
+			valueLiteral: formatUSDFloat(valueMeters)
+		)
+		return nil
+	case ("slopeLimit", .double(let valueDegrees)):
+		let radians = max(0, valueDegrees) * .pi / 180.0
+		try DeconstructedUSDInterop.setRealityKitComponentParameter(
+			url: url,
+			componentPrimPath: controllerPath,
+			attributeType: "float",
+			attributeName: "slopeLimit",
+			valueLiteral: formatUSDFloat(radians)
+		)
+		return nil
+	case ("group", .string(let value)):
+		if value == "Default" {
+			try DeconstructedUSDInterop.deleteRealityKitComponentParameter(
+				url: url,
+				componentPrimPath: collisionFilterPath,
+				attributeName: "group"
+			)
+		} else if value == "All" {
+			try DeconstructedUSDInterop.setRealityKitComponentParameter(
+				url: url,
+				componentPrimPath: collisionFilterPath,
+				attributeType: "uint",
+				attributeName: "group",
+				valueLiteral: "4294967295"
+			)
+		}
+		return nil
+	case ("mask", .string(let value)):
+		if value == "Default" {
+			try DeconstructedUSDInterop.deleteRealityKitComponentParameter(
+				url: url,
+				componentPrimPath: collisionFilterPath,
+				attributeName: "mask"
+			)
+		} else if value == "All" {
+			try DeconstructedUSDInterop.setRealityKitComponentParameter(
+				url: url,
+				componentPrimPath: collisionFilterPath,
+				attributeType: "uint",
+				attributeName: "mask",
+				valueLiteral: "4294967295"
+			)
+		}
+		return nil
+	case ("upVector", .string(let rawVector)):
+		guard let parentPath = parentPrimPath(of: componentPath),
+			  var transform = DeconstructedUSDInterop.getPrimTransform(url: url, primPath: parentPath),
+			  let targetUp = parseDirectionVector3(rawVector)
+		else {
+			throw NSError(
+				domain: "InspectorFeature",
+				code: 1,
+				userInfo: [
+					NSLocalizedDescriptionKey: "Failed to parse Up Vector or resolve prim transform."
+				]
+			)
+		}
+		transform.rotationDegrees = rotationDegreesAligningYAxis(to: targetUp)
+		try DeconstructedUSDInterop.setPrimTransform(
+			url: url,
+			primPath: parentPath,
+			transform: transform
+		)
+		return transform
+	default:
+		throw NSError(
+			domain: "InspectorFeature",
+			code: 1,
+			userInfo: [
+				NSLocalizedDescriptionKey:
+					"Unsupported Character Controller parameter: \(parameterKey)"
+			]
+		)
+	}
+}
+
+private func currentCharacterControllerExtents(
+	url: URL,
+	controllerPath: String
+) -> SIMD3<Double> {
+	let attrs = DeconstructedUSDInterop.getPrimAttributes(
+		url: url,
+		primPath: controllerPath
+	)?.authoredAttributes ?? []
+	let literal = authoredLiteral(in: attrs, names: ["extents"])
+	return parseVector3Components(literal) ?? SIMD3<Double>(0, 0, 0)
+}
+
+private func setCharacterControllerExtents(
+	url: URL,
+	controllerPath: String,
+	extents: SIMD3<Double>
+) throws {
+	try DeconstructedUSDInterop.setRealityKitComponentParameter(
+		url: url,
+		componentPrimPath: controllerPath,
+		attributeType: "float3",
+		attributeName: "extents",
+		valueLiteral: formatUSDFloat3Literal(extents)
+	)
+}
+
+private func parseVector3Components(_ raw: String) -> SIMD3<Double>? {
+	let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+	let body: String
+	if trimmed.hasPrefix("("), trimmed.hasSuffix(")"), trimmed.count >= 2 {
+		body = String(trimmed.dropFirst().dropLast())
+	} else {
+		body = trimmed
+	}
+	let values = body
+		.split(separator: ",", omittingEmptySubsequences: true)
+		.compactMap { Double($0.trimmingCharacters(in: .whitespacesAndNewlines)) }
+	guard values.count >= 3 else { return nil }
+	return SIMD3<Double>(values[0], values[1], values[2])
+}
+
+private func parseDirectionVector3(_ raw: String) -> SIMD3<Double>? {
+	guard let vector = parseVector3Components(raw) else { return nil }
+	let length = simd_length(vector)
+	guard length > 0.000_001 else { return nil }
+	return vector / length
+}
+
+private func formatUSDFloat3Literal(_ value: SIMD3<Double>) -> String {
+	"(\(formatUSDFloat(value.x)), \(formatUSDFloat(value.y)), \(formatUSDFloat(value.z)))"
+}
+
+private func rotationDegreesAligningYAxis(to targetUp: SIMD3<Double>) -> SIMD3<Double> {
+	let from = SIMD3<Double>(0, 1, 0)
+	let to = simd_normalize(targetUp)
+	let dotValue = simd_dot(from, to)
+	let clamped = max(-1.0, min(1.0, dotValue))
+	let quaternion: simd_quatd
+	if clamped > 0.999_999 {
+		quaternion = simd_quatd(angle: 0, axis: SIMD3<Double>(1, 0, 0))
+	} else if clamped < -0.999_999 {
+		quaternion = simd_quatd(angle: .pi, axis: SIMD3<Double>(1, 0, 0))
+	} else {
+		let axis = simd_normalize(simd_cross(from, to))
+		let angle = acos(clamped)
+		quaternion = simd_quatd(angle: angle, axis: axis)
+	}
+	return eulerDegreesXYZ(from: quaternion)
+}
+
+private func eulerDegreesXYZ(from quaternion: simd_quatd) -> SIMD3<Double> {
+	let w = quaternion.real
+	let x = quaternion.imag.x
+	let y = quaternion.imag.y
+	let z = quaternion.imag.z
+
+	let sinrCosp = 2 * (w * x + y * z)
+	let cosrCosp = 1 - 2 * (x * x + y * y)
+	let roll = atan2(sinrCosp, cosrCosp)
+
+	let sinp = 2 * (w * y - z * x)
+	let pitch: Double
+	if Swift.abs(sinp) >= 1 {
+		pitch = copysign(Double.pi / 2, sinp)
+	} else {
+		pitch = asin(sinp)
+	}
+
+	let sinyCosp = 2 * (w * z + x * y)
+	let cosyCosp = 1 - 2 * (y * y + z * z)
+	let yaw = atan2(sinyCosp, cosyCosp)
+
+	let radians = SIMD3<Double>(roll, pitch, yaw)
+	return radians * (180.0 / .pi)
+}
+
 private func normalizedMeshSortingGroupPath(_ raw: String) -> String? {
 	let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
 	if trimmed.isEmpty || trimmed == "None" {
@@ -2219,6 +2769,12 @@ private func parentPrimPath(of path: String) -> String? {
 	let components = path.split(separator: "/")
 	guard components.count > 1 else { return nil }
 	return "/" + components.dropLast().joined(separator: "/")
+}
+
+private func primName(of path: String) -> String? {
+	let components = path.split(separator: "/")
+	guard let last = components.last, !last.isEmpty else { return nil }
+	return String(last)
 }
 
 private func resolvedMaterialBindingPrimPath(
@@ -2274,17 +2830,48 @@ private func componentParameterAuthoringSpec(
 	value: InspectorComponentParameterValue
 ) -> ComponentParameterAuthoringSpec? {
 	switch (componentIdentifier, parameterKey, value) {
-	case (
-		"RealityKit.Accessibility", "isAccessibilityElement", .bool(let boolValue)
-	):
+		case (
+			"RealityKit.Accessibility", "isAccessibilityElement", .bool(let boolValue)
+		):
 		return ComponentParameterAuthoringSpec(
 			attributeType: "bool",
-			attributeName: "isAccessibilityElement",
-			operation: .set(valueLiteral: boolValue ? "true" : "false"),
-			primPathSuffix: nil
-		)
-	case ("RealityKit.Accessibility", "label", .string(let stringValue)):
-		return ComponentParameterAuthoringSpec(
+			attributeName: "isEnabled",
+				operation: .set(valueLiteral: boolValue ? "true" : "false"),
+				primPathSuffix: nil
+			)
+		case ("RealityKit.InputTarget", "enabled", .bool(let boolValue)):
+			return ComponentParameterAuthoringSpec(
+				attributeType: "bool",
+				attributeName: "enabled",
+				operation: .set(valueLiteral: boolValue ? "1" : "0"),
+				primPathSuffix: nil
+			)
+		case ("RealityKit.InputTarget", "allowedInput", .string(let value)):
+			switch value {
+			case "Direct":
+				return ComponentParameterAuthoringSpec(
+					attributeType: "bool",
+					attributeName: "allowsDirectInput",
+					operation: .set(valueLiteral: "1"),
+					primPathSuffix: nil
+				)
+			case "Indirect":
+				return ComponentParameterAuthoringSpec(
+					attributeType: "bool",
+					attributeName: "allowsDirectInput",
+					operation: .set(valueLiteral: "0"),
+					primPathSuffix: nil
+				)
+			default:
+				return ComponentParameterAuthoringSpec(
+					attributeType: "bool",
+					attributeName: "allowsDirectInput",
+					operation: .clear,
+					primPathSuffix: nil
+				)
+			}
+		case ("RealityKit.Accessibility", "label", .string(let stringValue)):
+			return ComponentParameterAuthoringSpec(
 			attributeType: "string",
 			attributeName: "label",
 			operation: .set(valueLiteral: quoteUSDString(stringValue)),
@@ -2797,6 +3384,36 @@ private func supplementalComponentAuthoringSpecs(
 				primPathSuffix: "Shadow"
 			)
 		]
+	case ("RealityKit.InputTarget", "allowedInput", .string(let value)):
+		switch value {
+		case "Direct":
+			return [
+				ComponentParameterAuthoringSpec(
+					attributeType: "bool",
+					attributeName: "allowsIndirectInput",
+					operation: .set(valueLiteral: "0"),
+					primPathSuffix: nil
+				)
+			]
+		case "Indirect":
+			return [
+				ComponentParameterAuthoringSpec(
+					attributeType: "bool",
+					attributeName: "allowsIndirectInput",
+					operation: .set(valueLiteral: "1"),
+					primPathSuffix: nil
+				)
+			]
+		default:
+			return [
+				ComponentParameterAuthoringSpec(
+					attributeType: "bool",
+					attributeName: "allowsIndirectInput",
+					operation: .clear,
+					primPathSuffix: nil
+				)
+			]
+		}
 	default:
 		return []
 	}

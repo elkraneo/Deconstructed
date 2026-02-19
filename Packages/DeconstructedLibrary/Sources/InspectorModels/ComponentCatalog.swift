@@ -139,6 +139,62 @@ public struct InspectorComponentDefinition: Equatable, Sendable, Identifiable, H
 					kind: .scalar(defaultValue: 0, unit: nil)
 				)
 			]
+		case "RealityKit.CharacterController":
+			return [
+				InspectorComponentParameter(
+					key: "radius",
+					label: "Radius",
+					kind: .scalar(defaultValue: 0, unit: "cm")
+				),
+				InspectorComponentParameter(
+					key: "height",
+					label: "Height",
+					kind: .scalar(defaultValue: 0, unit: "cm")
+				),
+				InspectorComponentParameter(
+					key: "skinWidth",
+					label: "Skin Width",
+					kind: .scalar(defaultValue: 1, unit: "cm")
+				),
+				InspectorComponentParameter(
+					key: "slopeLimit",
+					label: "Slope Limit",
+					kind: .scalar(defaultValue: 45, unit: "°")
+				),
+				InspectorComponentParameter(
+					key: "stepLimit",
+					label: "Step Limit",
+					kind: .scalar(defaultValue: 20, unit: "cm")
+				),
+				InspectorComponentParameter(
+					key: "upVector",
+					label: "Up Vector",
+					kind: .text(defaultValue: "(0, 1, 0)", placeholder: "(x, y, z)")
+				),
+				InspectorComponentParameter(
+					key: "group",
+					label: "Collision Group",
+					kind: .choice(defaultValue: "Default", options: ["Default", "All"])
+				),
+				InspectorComponentParameter(
+					key: "mask",
+					label: "Collision Mask",
+					kind: .choice(defaultValue: "Default", options: ["Default", "All"])
+				),
+			]
+		case "RealityKit.InputTarget":
+			return [
+				InspectorComponentParameter(
+					key: "enabled",
+					label: "Enabled",
+					kind: .toggle(defaultValue: true)
+				),
+				InspectorComponentParameter(
+					key: "allowedInput",
+					label: "Allowed Input",
+					kind: .choice(defaultValue: "All", options: ["All", "Direct", "Indirect"])
+				),
+			]
 		case "RealityKit.Reverb":
 			return [
 				InspectorComponentParameter(
