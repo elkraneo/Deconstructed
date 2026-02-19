@@ -2041,21 +2041,26 @@ private func loadComponentDescendantAttributes(
 		return []
 	}
 	var collected: [ComponentDescendantAttributes] = []
-	for descendant in descendants {
-		let attrs =
-			DeconstructedUSDInterop.getPrimAttributes(
+		for descendant in descendants {
+			let attrs =
+				DeconstructedUSDInterop.getPrimAttributes(
+					url: url,
+					primPath: descendant.path
+				)?.authoredAttributes ?? []
+			let merged = mergeBehaviorRelationshipAttributes(
 				url: url,
-				primPath: descendant.path
-			)?.authoredAttributes ?? []
-		guard !attrs.isEmpty else { continue }
-		collected.append(
-			ComponentDescendantAttributes(
-				primPath: descendant.path,
-				displayName: descendant.name,
+				node: descendant,
 				authoredAttributes: attrs
 			)
-		)
-	}
+			guard !merged.isEmpty else { continue }
+			collected.append(
+				ComponentDescendantAttributes(
+					primPath: descendant.path,
+					displayName: descendant.name,
+					authoredAttributes: merged
+				)
+			)
+		}
 	if componentID == "RCP.BehaviorsContainer" {
 		var behaviorTargets = parseUSDRelationshipTargets(
 			authoredLiteral(in: componentAttributes, names: ["behaviors"])
@@ -2074,25 +2079,30 @@ private func loadComponentDescendantAttributes(
 				continue
 			}
 			let behaviorNodes = [behaviorNode] + flattenedDescendants(of: behaviorNode)
-			for node in behaviorNodes where !seenPaths.contains(node.path) {
-				let attrs =
-					DeconstructedUSDInterop.getPrimAttributes(
+				for node in behaviorNodes where !seenPaths.contains(node.path) {
+					let attrs =
+						DeconstructedUSDInterop.getPrimAttributes(
+							url: url,
+							primPath: node.path
+						)?.authoredAttributes ?? []
+					let merged = mergeBehaviorRelationshipAttributes(
 						url: url,
-						primPath: node.path
-					)?.authoredAttributes ?? []
-				let finalAttrs: [USDPrimAttributes.AuthoredAttribute]
-				if attrs.isEmpty {
-					finalAttrs = [
-						USDPrimAttributes.AuthoredAttribute(
-							name: "path",
-							value: quoteUSDString(node.path)
-						)
-					]
-				} else {
-					finalAttrs = attrs
-				}
-				seenPaths.insert(node.path)
-				collected.append(
+						node: node,
+						authoredAttributes: attrs
+					)
+					let finalAttrs: [USDPrimAttributes.AuthoredAttribute]
+					if merged.isEmpty {
+						finalAttrs = [
+							USDPrimAttributes.AuthoredAttribute(
+								name: "path",
+								value: quoteUSDString(node.path)
+							)
+						]
+					} else {
+						finalAttrs = merged
+					}
+					seenPaths.insert(node.path)
+					collected.append(
 					ComponentDescendantAttributes(
 						primPath: node.path,
 						displayName: node.name,
@@ -2120,6 +2130,41 @@ private func loadComponentDescendantAttributes(
 		}
 	}
 	return collected
+}
+
+private func mergeBehaviorRelationshipAttributes(
+	url: URL,
+	node: SceneNode,
+	authoredAttributes: [USDPrimAttributes.AuthoredAttribute]
+) -> [USDPrimAttributes.AuthoredAttribute] {
+	var merged = authoredAttributes
+	let relationshipNames: [String]
+	switch node.typeName {
+	case "Preliminary_Behavior":
+		relationshipNames = ["triggers", "actions"]
+	case "Preliminary_Trigger":
+		relationshipNames = ["colliders", "affectedObjects"]
+	case "Preliminary_Action":
+		relationshipNames = ["animationLibraryKeyOverrideKey", "affectedObjects"]
+	default:
+		relationshipNames = []
+	}
+	for relationshipName in relationshipNames {
+		let targets = DeconstructedUSDInterop.primRelationshipTargets(
+			url: url,
+			primPath: node.path,
+			relationshipName: relationshipName
+		)
+		guard !targets.isEmpty else { continue }
+		merged.removeAll { $0.name == relationshipName }
+		merged.append(
+			USDPrimAttributes.AuthoredAttribute(
+				name: relationshipName,
+				value: formatUSDRelationshipTargets(targets)
+			)
+		)
+	}
+	return merged
 }
 
 private func loadMeshSortingGroupMembers(
@@ -2398,6 +2443,18 @@ private func parseUSDRelationshipTargets(_ raw: String) -> [String] {
 	}
 	let single = parseUSDRelationshipTarget(trimmed)
 	return single.isEmpty ? [] : [single]
+}
+
+private func formatUSDRelationshipTargets(_ primPaths: [String]) -> String {
+	let targets = primPaths.map { "<\($0)>" }
+	switch targets.count {
+	case 0:
+		return "[]"
+	case 1:
+		return targets[0]
+	default:
+		return "[\(targets.joined(separator: ", "))]"
+	}
 }
 
 private func normalizedAudioLibraryDescendants(

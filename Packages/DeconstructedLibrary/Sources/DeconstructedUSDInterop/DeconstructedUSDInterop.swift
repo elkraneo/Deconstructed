@@ -743,6 +743,16 @@ public enum DeconstructedUSDInterop {
 		attributeName: String,
 		valueLiteral: String
 	) throws {
+		let normalizedAttributeType = attributeType.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+		if normalizedAttributeType == "customdataasset" {
+			try setRealityKitComponentCustomDataAsset(
+				url: url,
+				componentPrimPath: componentPrimPath,
+				key: attributeName,
+				assetPath: valueLiteral
+			)
+			return
+		}
 		try USDMutationCoordinator.withLock {
 			if try setComponentParameterWithUSDMutation(
 				url: url,
@@ -859,6 +869,24 @@ public enum DeconstructedUSDInterop {
 			source: source,
 			componentPrimPath: componentPrimPath,
 			key: key
+		)
+	}
+
+	public static func primRelationshipTargets(
+		url: URL,
+		primPath: String,
+		relationshipName: String
+	) -> [String] {
+		guard url.pathExtension.lowercased() == "usda" else {
+			return []
+		}
+		guard let source = try? String(contentsOf: url, encoding: .utf8) else {
+			return []
+		}
+		return parsePrimRelationshipTargetsFromUSDA(
+			source: source,
+			primPath: primPath,
+			relationshipName: relationshipName
 		)
 	}
 
@@ -1440,6 +1468,7 @@ private func parseUSDFloatTuple(_ raw: String, count: Int) -> [Double]? {
 
 private struct ParsedPrimDeclaration {
 	let indent: String
+	let keyword: String
 	let typeName: String?
 	let primName: String
 	let metadataText: String?
@@ -1451,11 +1480,13 @@ private func parsePrimDeclarationLine(_ line: String) -> ParsedPrimDeclaration? 
 		return nil
 	}
 	let indent = String(match.output.1)
+	let keyword = String(match.output.2)
 	let typeName = match.output.3.map(String.init)
 	let primName = String(match.output.4)
 	let metadataText = match.output.5.map(String.init)
 	return ParsedPrimDeclaration(
 		indent: indent,
+		keyword: keyword,
 		typeName: typeName,
 		primName: primName,
 		metadataText: metadataText
@@ -1574,6 +1605,340 @@ private func parseComponentCustomDataAssetFromUSDA(
 	}
 
 	return nil
+}
+
+private func parsePrimRelationshipTargetsFromUSDA(
+	source: String,
+	primPath: String,
+	relationshipName: String
+) -> [String] {
+	let lines = source.split(whereSeparator: \.isNewline).map(String.init)
+	var stack: [USDAPrimContext] = []
+	var pending: USDAPrimContext?
+	var inTargetPrim = false
+	var pendingRelationshipLiteral: String?
+
+	for line in lines {
+		if let declaration = parsePrimDeclarationLine(line) {
+			let path = if let parent = stack.last?.path {
+				"\(parent)/\(declaration.primName)"
+			} else {
+				"/\(declaration.primName)"
+			}
+			let context = USDAPrimContext(path: path, indent: declaration.indent)
+			if line.contains("{") {
+				stack.append(context)
+				inTargetPrim = context.path == primPath
+			} else {
+				pending = context
+			}
+		}
+
+		if line.contains("{"), let pendingContext = pending {
+			stack.append(pendingContext)
+			inTargetPrim = pendingContext.path == primPath
+			pending = nil
+		}
+
+		if inTargetPrim {
+			if var relationLiteral = pendingRelationshipLiteral {
+				relationLiteral.append(" ")
+				relationLiteral.append(line.trimmingCharacters(in: .whitespacesAndNewlines))
+				if relationLiteral.contains("]") {
+					return parseUSDRelationshipTargetsLiteral(relationLiteral)
+				}
+				pendingRelationshipLiteral = relationLiteral
+			}
+
+			let relationPattern = #"^\s*rel\s+([A-Za-z_][A-Za-z0-9_:]*)\s*=\s*(.+)\s*$"#
+			if let regex = try? NSRegularExpression(pattern: relationPattern) {
+				let nsLine = line as NSString
+				let range = NSRange(location: 0, length: nsLine.length)
+				if let match = regex.firstMatch(in: line, options: [], range: range),
+				   match.numberOfRanges > 2
+				{
+					let name = nsLine.substring(with: match.range(at: 1))
+					if name == relationshipName {
+						let literal = nsLine.substring(with: match.range(at: 2))
+							.trimmingCharacters(in: .whitespacesAndNewlines)
+						if literal.hasPrefix("[") && !literal.contains("]") {
+							pendingRelationshipLiteral = literal
+						} else {
+							return parseUSDRelationshipTargetsLiteral(literal)
+						}
+					}
+				}
+			}
+		}
+
+		let closingCount = line.filter { $0 == "}" }.count
+		if closingCount > 0 {
+			for _ in 0..<closingCount {
+				_ = stack.popLast()
+				inTargetPrim = stack.last?.path == primPath
+			}
+		}
+	}
+	return []
+}
+
+private func parseUSDRelationshipTargetsLiteral(_ literal: String) -> [String] {
+	let pattern = #"<([^>]+)>"#
+	guard let regex = try? NSRegularExpression(pattern: pattern) else {
+		return []
+	}
+	let nsRange = NSRange(literal.startIndex..<literal.endIndex, in: literal)
+	return regex.matches(in: literal, options: [], range: nsRange).compactMap { match in
+		guard let range = Range(match.range(at: 1), in: literal) else {
+			return nil
+		}
+		return String(literal[range])
+	}
+}
+
+private func setRealityKitComponentCustomDataAsset(
+	url: URL,
+	componentPrimPath: String,
+	key: String,
+	assetPath: String
+) throws {
+	try USDMutationCoordinator.withLock {
+		guard url.pathExtension.lowercased() == "usda" else {
+			throw DeconstructedUSDInteropError.componentAuthoringFailed(
+				reason: "Only .usda scenes are supported for customData asset editing."
+			)
+		}
+		let source: String
+		do {
+			source = try String(contentsOf: url, encoding: .utf8)
+		} catch {
+			throw DeconstructedUSDInteropError.componentAuthoringFailed(
+				reason: "Unable to read USDA scene."
+			)
+		}
+		let normalizedPath = normalizeCustomDataAssetLiteral(assetPath)
+		let updated = try updateRealityKitComponentCustomDataAssetInUSDA(
+			source,
+			componentPrimPath: componentPrimPath,
+			key: key,
+			assetPath: normalizedPath
+		)
+		do {
+			try updated.write(to: url, atomically: true, encoding: .utf8)
+		} catch {
+			throw DeconstructedUSDInteropError.componentAuthoringFailed(
+				reason: "Unable to write USDA scene."
+			)
+		}
+	}
+}
+
+private func normalizeCustomDataAssetLiteral(_ raw: String) -> String? {
+	let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+	guard !trimmed.isEmpty else { return nil }
+	if let parsedAsset = parseUSDAssetLiteral(trimmed), !parsedAsset.isEmpty {
+		return parsedAsset
+	}
+	let unquoted = parseUSDQuotedStringLiteral(trimmed)
+	return unquoted.trimmingCharacters(in: .whitespacesAndNewlines)
+}
+
+private func updateRealityKitComponentCustomDataAssetInUSDA(
+	_ source: String,
+	componentPrimPath: String,
+	key: String,
+	assetPath: String?
+) throws -> String {
+	var lines = source.split(whereSeparator: \.isNewline).map(String.init)
+	guard let context = locatePrimDeclarationContext(lines: lines, primPath: componentPrimPath) else {
+		throw DeconstructedUSDInteropError.componentAuthoringFailed(
+			reason: "Component prim not found: \(componentPrimPath)"
+		)
+	}
+
+	let existingMetadata = extractMetadataText(
+		lines: lines,
+		declarationLineIndex: context.declarationLineIndex,
+		openBraceLineIndex: context.openBraceLineIndex
+	)
+	let updatedMetadata = upsertCustomDataAsset(
+		metadata: existingMetadata,
+		key: key,
+		assetPath: assetPath
+	)
+
+	let typeToken = context.typeName.map { "\($0) " } ?? ""
+	let baseDeclaration = "\(context.indent)\(context.keyword) \(typeToken)\"\(context.primName)\""
+	var replacement: [String] = []
+	if let metadata = updatedMetadata, !metadata.isEmpty {
+		replacement.append("\(baseDeclaration) (")
+		replacement.append(contentsOf: metadata.split(separator: "\n").map(String.init))
+		replacement.append("\(context.indent))")
+	} else {
+		replacement.append(baseDeclaration)
+	}
+
+	lines.replaceSubrange(context.declarationLineIndex..<context.openBraceLineIndex, with: replacement)
+	return lines.joined(separator: "\n")
+}
+
+private struct PrimDeclarationContext {
+	let declarationLineIndex: Int
+	let openBraceLineIndex: Int
+	let indent: String
+	let keyword: String
+	let typeName: String?
+	let primName: String
+}
+
+private func locatePrimDeclarationContext(
+	lines: [String],
+	primPath: String
+) -> PrimDeclarationContext? {
+	var stack: [USDAPrimContext] = []
+	var pending: USDAPrimContext?
+	for (index, line) in lines.enumerated() {
+		guard let declaration = parsePrimDeclarationLine(line) else {
+			if line.contains("{"), let pendingContext = pending {
+				stack.append(pendingContext)
+				pending = nil
+			}
+			let closingCount = line.filter { $0 == "}" }.count
+			if closingCount > 0 {
+				for _ in 0..<closingCount {
+					_ = stack.popLast()
+				}
+			}
+			continue
+		}
+		let parentPath = stack.last?.path
+		let path = if let parentPath {
+			"\(parentPath)/\(declaration.primName)"
+		} else {
+			"/\(declaration.primName)"
+		}
+		let context = USDAPrimContext(path: path, indent: declaration.indent)
+		let braceIndex = if line.contains("{") {
+			index
+		} else {
+			findOpenBraceLineIndex(lines: lines, startIndex: index) ?? index
+		}
+		if path == primPath {
+			return PrimDeclarationContext(
+				declarationLineIndex: index,
+				openBraceLineIndex: max(braceIndex, index + 1),
+				indent: declaration.indent,
+				keyword: declaration.keyword,
+				typeName: declaration.typeName,
+				primName: declaration.primName
+			)
+		}
+		if line.contains("{") {
+			stack.append(context)
+		} else {
+			pending = context
+		}
+		if line.contains("{"), let pendingContext = pending {
+			stack.append(pendingContext)
+			pending = nil
+		}
+		let closingCount = line.filter { $0 == "}" }.count
+		if closingCount > 0 {
+			for _ in 0..<closingCount {
+				_ = stack.popLast()
+			}
+		}
+	}
+	return nil
+}
+
+private func findOpenBraceLineIndex(lines: [String], startIndex: Int) -> Int? {
+	guard startIndex < lines.count else { return nil }
+	var idx = startIndex
+	while idx < lines.count {
+		if lines[idx].contains("{") {
+			return idx
+		}
+		idx += 1
+	}
+	return nil
+}
+
+private func extractMetadataText(
+	lines: [String],
+	declarationLineIndex: Int,
+	openBraceLineIndex: Int
+) -> String? {
+	guard declarationLineIndex < lines.count else { return nil }
+	let declarationLine = lines[declarationLineIndex]
+	guard let openParen = declarationLine.firstIndex(of: "(") else {
+		return nil
+	}
+	var metadata = String(declarationLine[declarationLine.index(after: openParen)...])
+	var depth = 1
+	depth += metadata.filter { $0 == "(" }.count
+	depth -= metadata.filter { $0 == ")" }.count
+	if depth <= 0 {
+		if let closeIndex = metadata.lastIndex(of: ")") {
+			return String(metadata[..<closeIndex]).trimmingCharacters(in: .whitespacesAndNewlines)
+		}
+		return metadata.trimmingCharacters(in: .whitespacesAndNewlines)
+	}
+
+	var lineIndex = declarationLineIndex + 1
+	while lineIndex < openBraceLineIndex, lineIndex < lines.count {
+		let line = lines[lineIndex]
+		metadata.append("\n")
+		metadata.append(line)
+		depth += line.filter { $0 == "(" }.count
+		depth -= line.filter { $0 == ")" }.count
+		if depth <= 0 {
+			if let closeIndex = metadata.lastIndex(of: ")") {
+				return String(metadata[..<closeIndex]).trimmingCharacters(in: .whitespacesAndNewlines)
+			}
+			break
+		}
+		lineIndex += 1
+	}
+	return metadata.trimmingCharacters(in: .whitespacesAndNewlines)
+}
+
+private func upsertCustomDataAsset(
+	metadata: String?,
+	key: String,
+	assetPath: String?
+) -> String? {
+	let entryPattern = "asset\\s+\(NSRegularExpression.escapedPattern(for: key))\\s*=\\s*@[^@]*@"
+	let original = metadata?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+	var working = original
+
+	if let regex = try? NSRegularExpression(pattern: entryPattern) {
+		let range = NSRange(working.startIndex..<working.endIndex, in: working)
+		working = regex.stringByReplacingMatches(in: working, options: [], range: range, withTemplate: "")
+	}
+	working = working.replacingOccurrences(of: "\\n\\s*\\n", with: "\n", options: .regularExpression)
+	working = working.trimmingCharacters(in: .whitespacesAndNewlines)
+
+	guard let assetPath, !assetPath.isEmpty else {
+		if working == "customData = {\n}" || working == "customData = { }" || working == "customData = {}" {
+			return nil
+		}
+		return working.isEmpty ? nil : working
+	}
+
+	let entry = "asset \(key) = @\(assetPath)@"
+	if let customDataRange = working.range(of: "customData = {") {
+		let suffix = String(working[customDataRange.upperBound...])
+		if let closeOffset = suffix.firstIndex(of: "}") {
+			let insertIndex = working.index(customDataRange.upperBound, offsetBy: suffix.distance(from: suffix.startIndex, to: closeOffset))
+			let prefix = String(working[..<insertIndex]).trimmingCharacters(in: .whitespacesAndNewlines)
+			let tail = String(working[insertIndex...]).trimmingCharacters(in: .whitespacesAndNewlines)
+			let separator = prefix.hasSuffix("{") ? "\n" : "\n"
+			let rebuilt = "\(prefix)\(separator)\(entry)\n\(tail)"
+			return rebuilt.trimmingCharacters(in: .whitespacesAndNewlines)
+		}
+	}
+	return "customData = {\n\(entry)\n}"
 }
 
 private func parseComponentMetadataBlock(

@@ -1686,7 +1686,10 @@ private struct ComponentParametersSection: View {
 		let title: String
 		let triggerPath: String?
 		let triggerType: String?
+		let colliders: [String]
+		let actionPath: String?
 		let actionType: String?
+		let actionTargetPath: String?
 		let notificationIdentifier: String?
 	}
 
@@ -1706,10 +1709,69 @@ private struct ComponentParametersSection: View {
 									.font(.system(size: 11))
 									.foregroundStyle(.primary)
 							}
+							if behavior.triggerType == "Collide", let triggerPath = behavior.triggerPath {
+								VStack(alignment: .leading, spacing: 4) {
+									Text("Colliders")
+										.font(.system(size: 11))
+										.foregroundStyle(.secondary)
+									TextField(
+										"/Root/ColliderA, /Root/ColliderB",
+										text: Binding(
+											get: { behavior.colliders.joined(separator: ", ") },
+											set: { newValue in
+												onRawAttributeChanged(
+													triggerPath,
+													"rel",
+													"colliders",
+													formatUSDRelationshipTargetsLiteral(
+														from: parseRelationshipTargetCSV(newValue)
+													)
+												)
+											}
+										)
+									)
+									.textFieldStyle(.roundedBorder)
+									.font(.system(size: 11))
+								}
+							}
 							InspectorRow(label: "Action") {
 								Text(behavior.actionType ?? "None")
 									.font(.system(size: 11))
 									.foregroundStyle(.primary)
+							}
+							if let actionPath = behavior.actionPath {
+								InspectorRow(label: "Action Target") {
+									Picker(
+										"",
+										selection: Binding(
+											get: { behavior.actionTargetPath ?? "None" },
+											set: { newValue in
+												let literal = newValue == "None"
+													? "None"
+													: "<\(newValue)>"
+												onRawAttributeChanged(
+													actionPath,
+													"rel",
+													"animationLibraryKeyOverrideKey",
+													literal
+												)
+											}
+										)
+									) {
+										ForEach(
+											behaviorActionTargetOptions(from: behaviors),
+											id: \.self
+										) { option in
+											if option == "None" {
+												Text("None").tag(option)
+											} else {
+												Text(option).tag(option)
+											}
+										}
+									}
+									.labelsHidden()
+									.pickerStyle(.menu)
+								}
 							}
 							if let triggerPath = behavior.triggerPath,
 							   let notification = behavior.notificationIdentifier
@@ -1770,6 +1832,22 @@ private struct ComponentParametersSection: View {
 					.foregroundStyle(.primary)
 					.lineLimit(1)
 			}
+			HStack(spacing: 10) {
+				Button("Choose...") {
+					guard let selectedURL = selectPreviewVideoFileURL() else { return }
+					let path = selectedURL.path
+					rawValues["previewVideo"] = quoteUSDString(path)
+					onRawAttributeChanged(componentPath, "customDataAsset", "previewVideo", path)
+				}
+				.buttonStyle(.borderless)
+				Button("Clear") {
+					rawValues["previewVideo"] = ""
+					onRawAttributeChanged(componentPath, "customDataAsset", "previewVideo", "")
+				}
+				.buttonStyle(.borderless)
+				.disabled(previewVideoLabel == "None")
+				Spacer()
+			}
 		}
 	}
 
@@ -1797,7 +1875,10 @@ private struct ComponentParametersSection: View {
 			var title: String
 			var triggerPath: String?
 			var triggerType: String?
+			var colliders: [String] = []
+			var actionPath: String?
 			var actionType: String?
+			var actionTargetPath: String?
 			var notificationIdentifier: String?
 		}
 		var draftsByPath: [String: Draft] = [:]
@@ -1830,10 +1911,15 @@ private struct ComponentParametersSection: View {
 			case "trigger":
 				draft.triggerPath = path
 				draft.triggerType = Self.parseUSDString(authoredMap["info:id"] ?? "")
+				draft.colliders = parseUSDRelationshipTargets(authoredMap["colliders"] ?? "")
 				let identifier = Self.parseUSDString(authoredMap["identifier"] ?? "")
 				draft.notificationIdentifier = identifier.isEmpty ? nil : identifier
 			case "action":
+				draft.actionPath = path
 				draft.actionType = Self.parseUSDString(authoredMap["info:id"] ?? "")
+				draft.actionTargetPath = parseUSDRelationshipTargets(
+					authoredMap["animationLibraryKeyOverrideKey"] ?? ""
+				).first
 			default:
 				break
 			}
@@ -1844,13 +1930,45 @@ private struct ComponentParametersSection: View {
 			guard let draft = draftsByPath[key] else { return nil }
 			return BehaviorEditorModel(
 				id: draft.path,
-				path: draft.path,
-				title: draft.title,
-				triggerPath: draft.triggerPath,
-				triggerType: draft.triggerType,
-				actionType: draft.actionType,
-				notificationIdentifier: draft.notificationIdentifier
-			)
+					path: draft.path,
+					title: draft.title,
+					triggerPath: draft.triggerPath,
+					triggerType: draft.triggerType,
+					colliders: draft.colliders,
+					actionPath: draft.actionPath,
+					actionType: draft.actionType,
+					actionTargetPath: draft.actionTargetPath,
+					notificationIdentifier: draft.notificationIdentifier
+				)
+			}
+		}
+
+	private func behaviorActionTargetOptions(from models: [BehaviorEditorModel]) -> [String] {
+		var options: [String] = ["None"]
+		for model in models {
+			if let triggerPath = model.triggerPath, !options.contains(triggerPath) {
+				options.append(triggerPath)
+			}
+		}
+		return options
+	}
+
+	private func parseRelationshipTargetCSV(_ input: String) -> [String] {
+		input
+			.split(separator: ",", omittingEmptySubsequences: true)
+			.map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+			.filter { !$0.isEmpty }
+	}
+
+	private func formatUSDRelationshipTargetsLiteral(from primPaths: [String]) -> String {
+		let targets = primPaths.map { "<\($0)>" }
+		switch targets.count {
+		case 0:
+			return "None"
+		case 1:
+			return targets[0]
+		default:
+			return "[\(targets.joined(separator: ", "))]"
 		}
 	}
 
@@ -2344,6 +2462,20 @@ private struct ComponentParametersSection: View {
 			UTType(filenameExtension: "usdz"),
 		].compactMap { $0 }
 		panel.prompt = "Add"
+		return panel.runModal() == .OK ? panel.url : nil
+	}
+
+	private func selectPreviewVideoFileURL() -> URL? {
+		let panel = NSOpenPanel()
+		panel.canChooseDirectories = false
+		panel.canChooseFiles = true
+		panel.allowsMultipleSelection = false
+		panel.allowedContentTypes = [
+			.movie,
+			.mpeg4Movie,
+			.quickTimeMovie,
+		]
+		panel.prompt = "Choose"
 		return panel.runModal() == .OK ? panel.url : nil
 	}
 
