@@ -2443,7 +2443,7 @@ private struct ComponentParametersSection: View {
 		let cosY = cos(yRadians)
 		let xRadians: Double
 		let zRadians: Double
-		if abs(cosY) > 0.000_001 {
+		if Swift.abs(cosY) > 0.000_001 {
 			xRadians = atan2(m23, m33)
 			zRadians = atan2(m12, m11)
 		} else {
