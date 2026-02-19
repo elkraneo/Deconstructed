@@ -27,6 +27,7 @@ public struct InspectorFeature {
 			[String: [USDPrimAttributes.AuthoredAttribute]]
 		public var componentDescendantAttributesByPath:
 			[String: [ComponentDescendantAttributes]]
+		public var componentMutationRevisionByPath: [String: Int]
 		public var boundMaterial: USDMaterialInfo?
 		public var availableMaterials: [USDMaterialInfo]
 		public var sceneNodes: [SceneNode]
@@ -56,6 +57,7 @@ public struct InspectorFeature {
 			componentActiveByPath: [String: Bool] = [:],
 			componentAuthoredAttributesByPath: [String: [USDPrimAttributes.AuthoredAttribute]] = [:],
 			componentDescendantAttributesByPath: [String: [ComponentDescendantAttributes]] = [:],
+			componentMutationRevisionByPath: [String: Int] = [:],
 			boundMaterial: USDMaterialInfo? = nil,
 			availableMaterials: [USDMaterialInfo] = [],
 			sceneNodes: [SceneNode] = [],
@@ -84,6 +86,7 @@ public struct InspectorFeature {
 			self.componentActiveByPath = componentActiveByPath
 			self.componentAuthoredAttributesByPath = componentAuthoredAttributesByPath
 			self.componentDescendantAttributesByPath = componentDescendantAttributesByPath
+			self.componentMutationRevisionByPath = componentMutationRevisionByPath
 			self.boundMaterial = boundMaterial
 			self.availableMaterials = availableMaterials
 			self.sceneNodes = sceneNodes
@@ -155,6 +158,12 @@ public struct InspectorFeature {
 		)
 		case componentDescendantAttributesLoaded(
 			[String: [ComponentDescendantAttributes]]
+		)
+		case componentMutationRefreshed(
+			componentPath: String,
+			authoredAttributes: [USDPrimAttributes.AuthoredAttribute],
+			descendantAttributes: [ComponentDescendantAttributes],
+			revision: Int
 		)
 		case meshSortingGroupMembersLoaded([String])
 		case addComponentRequested(InspectorComponentDefinition)
@@ -259,6 +268,7 @@ public struct InspectorFeature {
 				state.componentActiveByPath = [:]
 				state.componentAuthoredAttributesByPath = [:]
 				state.componentDescendantAttributesByPath = [:]
+				state.componentMutationRevisionByPath = [:]
 				state.boundMaterial = nil
 				state.availableMaterials = []
 				state.primIsLoading = false
@@ -295,6 +305,7 @@ public struct InspectorFeature {
 				state.componentActiveByPath = [:]
 				state.componentAuthoredAttributesByPath = [:]
 				state.componentDescendantAttributesByPath = [:]
+				state.componentMutationRevisionByPath = [:]
 				state.boundMaterial = nil
 				state.primErrorMessage = nil
 				state.pendingPrimLoads = []
@@ -716,6 +727,36 @@ public struct InspectorFeature {
 				}
 				return .none
 
+			case let .componentMutationRefreshed(
+				componentPath,
+				authoredAttributes,
+				descendantAttributes,
+				revision
+			):
+				guard state.componentMutationRevisionByPath[componentPath] == revision else {
+					return .none
+				}
+				if let url = state.sceneURL {
+					state.componentAuthoredAttributesByPath[componentPath] =
+						mergedComponentAuthoredAttributes(
+							componentPath: componentPath,
+							authoredAttributes: authoredAttributes,
+							url: url
+						)
+				} else {
+					state.componentAuthoredAttributesByPath[componentPath] =
+						authoredAttributes
+				}
+				let normalizedDescendants = normalizedAudioLibraryDescendants(
+					componentPath: componentPath,
+					descendantAttributes: descendantAttributes,
+					componentAuthoredAttributes:
+						state.componentAuthoredAttributesByPath[componentPath] ?? []
+				)
+				state.componentDescendantAttributesByPath[componentPath] =
+					normalizedDescendants
+				return .none
+
 			case .meshSortingGroupMembersLoaded(let members):
 				state.meshSortingGroupMembers = members
 				return .none
@@ -905,6 +946,8 @@ public struct InspectorFeature {
 				guard let url = state.sceneURL else {
 					return .none
 				}
+				let mutationRevision = (state.componentMutationRevisionByPath[componentPath] ?? 0) + 1
+				state.componentMutationRevisionByPath[componentPath] = mutationRevision
 				let sceneNodesSnapshot = state.sceneNodes
 				if componentIdentifier == "RealityKit.MeshSorting" {
 					return .run { send in
@@ -920,23 +963,18 @@ public struct InspectorFeature {
 									url: url,
 									primPath: componentPath
 								)?.authoredAttributes ?? []
-							await send(
-								.componentAuthoredAttributesLoaded([
-									componentPath: mergedComponentAuthoredAttributes(
-										componentPath: componentPath,
-										authoredAttributes: refreshed,
-										url: url
-									)
-								])
+							let descendants = loadComponentDescendantAttributes(
+								componentPath: componentPath,
+								sceneNodes: sceneNodesSnapshot,
+								url: url
 							)
 							await send(
-								.componentDescendantAttributesLoaded([
-									componentPath: loadComponentDescendantAttributes(
-										componentPath: componentPath,
-										sceneNodes: sceneNodesSnapshot,
-										url: url
-									)
-								])
+								.componentMutationRefreshed(
+									componentPath: componentPath,
+									authoredAttributes: refreshed,
+									descendantAttributes: descendants,
+									revision: mutationRevision
+								)
 							)
 							await send(
 								.setComponentParameterSucceeded(
@@ -950,6 +988,12 @@ public struct InspectorFeature {
 							)
 						}
 					}
+					.cancellable(
+						id: ComponentParameterMutationCancellationID(
+							componentPath: componentPath
+						),
+						cancelInFlight: true
+					)
 				}
 				if componentIdentifier == "RealityKit.CharacterController" {
 					return .run { send in
@@ -965,23 +1009,18 @@ public struct InspectorFeature {
 									url: url,
 									primPath: componentPath
 								)?.authoredAttributes ?? []
-							await send(
-								.componentAuthoredAttributesLoaded([
-									componentPath: mergedComponentAuthoredAttributes(
-										componentPath: componentPath,
-										authoredAttributes: refreshed,
-										url: url
-									)
-								])
+							let descendants = loadComponentDescendantAttributes(
+								componentPath: componentPath,
+								sceneNodes: sceneNodesSnapshot,
+								url: url
 							)
 							await send(
-								.componentDescendantAttributesLoaded([
-									componentPath: loadComponentDescendantAttributes(
-										componentPath: componentPath,
-										sceneNodes: sceneNodesSnapshot,
-										url: url
-									)
-								])
+								.componentMutationRefreshed(
+									componentPath: componentPath,
+									authoredAttributes: refreshed,
+									descendantAttributes: descendants,
+									revision: mutationRevision
+								)
 							)
 							if let maybeUpdatedTransform {
 								await send(.primTransformLoaded(maybeUpdatedTransform))
@@ -998,6 +1037,12 @@ public struct InspectorFeature {
 							)
 						}
 					}
+					.cancellable(
+						id: ComponentParameterMutationCancellationID(
+							componentPath: componentPath
+						),
+						cancelInFlight: true
+					)
 				}
 				guard
 					let spec = componentParameterAuthoringSpec(
@@ -1068,23 +1113,18 @@ public struct InspectorFeature {
 								url: url,
 								primPath: componentPath
 							)?.authoredAttributes ?? []
-						await send(
-							.componentAuthoredAttributesLoaded([
-								componentPath: mergedComponentAuthoredAttributes(
-									componentPath: componentPath,
-									authoredAttributes: refreshed,
-									url: url
-								)
-							])
+						let descendants = loadComponentDescendantAttributes(
+							componentPath: componentPath,
+							sceneNodes: sceneNodesSnapshot,
+							url: url
 						)
 						await send(
-							.componentDescendantAttributesLoaded([
-								componentPath: loadComponentDescendantAttributes(
-									componentPath: componentPath,
-									sceneNodes: sceneNodesSnapshot,
-									url: url
-								)
-							])
+							.componentMutationRefreshed(
+								componentPath: componentPath,
+								authoredAttributes: refreshed,
+								descendantAttributes: descendants,
+								revision: mutationRevision
+							)
 						)
 						await send(
 							.setComponentParameterSucceeded(
@@ -1096,6 +1136,12 @@ public struct InspectorFeature {
 						await send(.setComponentParameterFailed(error.localizedDescription))
 					}
 				}
+				.cancellable(
+					id: ComponentParameterMutationCancellationID(
+						componentPath: componentPath
+					),
+					cancelInFlight: true
+				)
 
 			case .setComponentParameterSucceeded:
 				state.primErrorMessage = nil
@@ -3510,6 +3556,10 @@ private enum PrimTransformSaveCancellationID {
 
 private enum PrimVariantSelectionCancellationID {
 	case apply
+}
+
+private struct ComponentParameterMutationCancellationID: Hashable {
+	let componentPath: String
 }
 
 public enum PrimLoadSection: Hashable {
