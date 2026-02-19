@@ -2222,6 +2222,33 @@ private struct ComponentParametersSection: View {
 				break
 			}
 		}
+		if identifier == "RealityKit.Collider" {
+			switch parameter.key {
+			case "mode":
+				let rawMode = parseUSDString(authoredAttributes["type"] ?? "")
+				return .string(rawMode.isEmpty ? "Default" : rawMode)
+			case "shape":
+				let rawShape = parseUSDString(authoredAttributes["shapeType"] ?? "")
+				return .string(rawShape.isEmpty ? "Box" : rawShape)
+			case "extent":
+				let extents = parseVector3(authoredAttributes["extent"] ?? "(0.2, 0.2, 0.2)")
+				return .string(formatVector3(x: extents.x * 100.0, y: extents.y * 100.0, z: extents.z * 100.0))
+			case "radius":
+				let meters = parseUSDDouble(authoredAttributes["radius"] ?? "") ?? 0.1
+				return .double(meters * 100.0)
+			case "height":
+				let meters = parseUSDDouble(authoredAttributes["height"] ?? "") ?? 0.2
+				return .double(meters * 100.0)
+			case "group":
+				let group = parseUSDDouble(authoredAttributes["group"] ?? "") ?? 1
+				return .string(group >= 4_294_967_295 ? "All" : "Default")
+			case "mask":
+				let mask = parseUSDDouble(authoredAttributes["mask"] ?? "") ?? 4_294_967_295
+				return .string(mask >= 4_294_967_295 ? "All" : "Default")
+			default:
+				break
+			}
+		}
 		let authoredName = authoredNameForParameter(
 			key: parameter.key,
 			componentIdentifier: identifier
@@ -2292,6 +2319,10 @@ private struct ComponentParametersSection: View {
 				return "m_userSetLinearVelocity"
 			case ("RealityKit.MotionState", "angularVelocity"):
 				return "m_userSetAngularVelocity"
+			case ("RealityKit.Collider", "mode"):
+				return "type"
+			case ("RealityKit.Collider", "shape"):
+				return "shapeType"
 			default:
 				return key
 			}

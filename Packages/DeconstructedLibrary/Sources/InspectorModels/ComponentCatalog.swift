@@ -304,19 +304,39 @@ public struct InspectorComponentDefinition: Equatable, Sendable, Identifiable, H
 		case "RealityKit.Collider":
 			return [
 				InspectorComponentParameter(
+					key: "mode",
+					label: "Mode",
+					kind: .choice(defaultValue: "Default", options: ["Default", "Trigger"])
+				),
+				InspectorComponentParameter(
+					key: "shape",
+					label: "Shape",
+					kind: .choice(defaultValue: "Box", options: ["Box", "Sphere", "Capsule"])
+				),
+				InspectorComponentParameter(
+					key: "extent",
+					label: "Extent",
+					kind: .text(defaultValue: "(20, 20, 20)", placeholder: "(x, y, z)")
+				),
+				InspectorComponentParameter(
+					key: "radius",
+					label: "Radius",
+					kind: .scalar(defaultValue: 10, unit: "cm")
+				),
+				InspectorComponentParameter(
+					key: "height",
+					label: "Height",
+					kind: .scalar(defaultValue: 20, unit: "cm")
+				),
+				InspectorComponentParameter(
 					key: "group",
 					label: "Group",
-					kind: .scalar(defaultValue: 1, unit: nil)
+					kind: .choice(defaultValue: "Default", options: ["Default", "All"])
 				),
 				InspectorComponentParameter(
 					key: "mask",
 					label: "Mask",
-					kind: .scalar(defaultValue: 4294967295, unit: nil)
-				),
-				InspectorComponentParameter(
-					key: "type",
-					label: "Type",
-					kind: .text(defaultValue: "Default", placeholder: "Collision type token")
+					kind: .choice(defaultValue: "All", options: ["Default", "All"])
 				)
 			]
 		case "RealityKit.RigidBody":

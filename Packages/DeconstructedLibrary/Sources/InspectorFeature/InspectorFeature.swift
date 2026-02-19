@@ -3015,6 +3015,55 @@ private func componentParameterAuthoringSpec(
 			operation: .set(valueLiteral: quoteUSDString(value)),
 			primPathSuffix: nil
 		)
+	case ("RealityKit.Collider", "mode", .string(let value)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "token",
+			attributeName: "type",
+			operation: .set(valueLiteral: quoteUSDString(value)),
+			primPathSuffix: nil
+		)
+	case ("RealityKit.Collider", "shape", .string(let value)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "token",
+			attributeName: "shapeType",
+			operation: .set(valueLiteral: quoteUSDString(value)),
+			primPathSuffix: "Shape"
+		)
+	case ("RealityKit.Collider", "extent", .string(let value)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "float3",
+			attributeName: "extent",
+			operation: .set(valueLiteral: formatCollisionExtent(value)),
+			primPathSuffix: "Shape"
+		)
+	case ("RealityKit.Collider", "radius", .double(let valueCM)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "float",
+			attributeName: "radius",
+			operation: .set(valueLiteral: formatUSDFloat(max(0, valueCM) / 100.0)),
+			primPathSuffix: "Shape"
+		)
+	case ("RealityKit.Collider", "height", .double(let valueCM)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "float",
+			attributeName: "height",
+			operation: .set(valueLiteral: formatUSDFloat(max(0, valueCM) / 100.0)),
+			primPathSuffix: "Shape"
+		)
+	case ("RealityKit.Collider", "group", .string(let value)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "uint",
+			attributeName: "group",
+			operation: .set(valueLiteral: value == "All" ? "4294967295" : "1"),
+			primPathSuffix: nil
+		)
+	case ("RealityKit.Collider", "mask", .string(let value)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "uint",
+			attributeName: "mask",
+			operation: .set(valueLiteral: value == "All" ? "4294967295" : "1"),
+			primPathSuffix: nil
+		)
 	case ("RealityKit.Collider", "group", .double(let numberValue)):
 		return ComponentParameterAuthoringSpec(
 			attributeType: "uint",
@@ -3534,6 +3583,14 @@ private func formatUSDFloat2(_ raw: String) -> String {
 		return "(\(parts[0]), \(parts[1]))"
 	}
 	return "(0.02, 20)"
+}
+
+private func formatCollisionExtent(_ raw: String) -> String {
+	guard let cm = parseVector3Components(raw) else {
+		return "(0.2, 0.2, 0.2)"
+	}
+	let meters = cm / 100.0
+	return "(\(formatUSDFloat(meters.x)), \(formatUSDFloat(meters.y)), \(formatUSDFloat(meters.z)))"
 }
 
 private func mapReverbPresetToToken(_ displayName: String) -> String {
