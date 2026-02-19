@@ -1293,15 +1293,17 @@ private struct ComponentParametersSection: View {
 				.help(isActive ? "Deactivate component" : "Activate component")
 			}
 
-			Group {
-				let parameters = definition?.parameterLayout ?? []
-				if componentIdentifier == "RealityKit.AudioLibrary" {
-					audioLibraryEditor
-				} else if componentIdentifier == "RealityKit.AnimationLibrary" {
-					animationLibraryEditor
-				} else if componentIdentifier == "RealityKit.RigidBody" {
-					physicsBodyEditor
-				} else if parameters.isEmpty {
+				Group {
+					let parameters = definition?.parameterLayout ?? []
+					if componentIdentifier == "RealityKit.AudioLibrary" {
+						audioLibraryEditor
+					} else if componentIdentifier == "RealityKit.AnimationLibrary" {
+						animationLibraryEditor
+					} else if componentIdentifier == "RCP.BehaviorsContainer" {
+						behaviorsEditor
+					} else if componentIdentifier == "RealityKit.RigidBody" {
+						physicsBodyEditor
+					} else if parameters.isEmpty {
 					let visibleAttributes = authoredAttributes.filter { $0.name != "info:id" }
 					if visibleAttributes.isEmpty {
 						Text("No editable parameters mapped yet.")
@@ -1676,10 +1678,138 @@ private struct ComponentParametersSection: View {
 		parseAnimationLibraryResources(from: descendantAttributes)
 	}
 
+	private struct BehaviorEditorModel: Identifiable {
+		let id: String
+		let path: String
+		let title: String
+		let triggerPath: String?
+		let triggerType: String?
+		let actionType: String?
+		let notificationIdentifier: String?
+	}
+
+	private var behaviorsEditor: some View {
+		let behaviors = parseBehaviorModels(from: descendantAttributes)
+		return VStack(alignment: .leading, spacing: 8) {
+			if behaviors.isEmpty {
+				Text("No behaviors authored yet.")
+					.font(.system(size: 11))
+					.foregroundStyle(.secondary)
+			} else {
+				ForEach(behaviors) { behavior in
+					InspectorGroupBox(title: behavior.title, isExpanded: .constant(true)) {
+						VStack(alignment: .leading, spacing: 8) {
+							InspectorRow(label: "Trigger") {
+								Text(behavior.triggerType ?? "Unknown")
+									.font(.system(size: 11))
+									.foregroundStyle(.primary)
+							}
+							InspectorRow(label: "Action") {
+								Text(behavior.actionType ?? "None")
+									.font(.system(size: 11))
+									.foregroundStyle(.primary)
+							}
+							if let triggerPath = behavior.triggerPath,
+							   let notification = behavior.notificationIdentifier
+							{
+								VStack(alignment: .leading, spacing: 4) {
+									Text("Notification Identifier")
+										.font(.system(size: 11))
+										.foregroundStyle(.secondary)
+									TextField(
+										"Identifier",
+										text: Binding(
+											get: { notification },
+											set: { newValue in
+												onRawAttributeChanged(
+													triggerPath,
+													"string",
+													"identifier",
+													quoteUSDString(newValue)
+												)
+											}
+										)
+									)
+									.textFieldStyle(.roundedBorder)
+									.font(.system(size: 11))
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
 	private func previewResourceLabel(for resource: AudioLibraryResource) -> String {
 		let target = resource.valueTarget.trimmingCharacters(in: .whitespacesAndNewlines)
 		guard !target.isEmpty else { return resource.key }
 		return target.split(separator: "/").last.map(String.init) ?? resource.key
+	}
+
+	private func parseBehaviorModels(
+		from descendants: [ComponentDescendantAttributes]
+	) -> [BehaviorEditorModel] {
+		struct Draft {
+			var path: String
+			var title: String
+			var triggerPath: String?
+			var triggerType: String?
+			var actionType: String?
+			var notificationIdentifier: String?
+		}
+		var draftsByPath: [String: Draft] = [:]
+		var order: [String] = []
+
+		for descendant in descendants {
+			let path = descendant.primPath
+			let behaviorPath: String?
+			let kind: String
+			if path.hasSuffix("/Trigger") {
+				behaviorPath = String(path.dropLast("/Trigger".count))
+				kind = "trigger"
+			} else if path.hasSuffix("/Action") {
+				behaviorPath = String(path.dropLast("/Action".count))
+				kind = "action"
+			} else {
+				behaviorPath = path
+				kind = "behavior"
+			}
+			guard let behaviorPath else { continue }
+
+			if draftsByPath[behaviorPath] == nil {
+				let title = behaviorPath.split(separator: "/").last.map(String.init) ?? descendant.displayName
+				draftsByPath[behaviorPath] = Draft(path: behaviorPath, title: title)
+				order.append(behaviorPath)
+			}
+			guard var draft = draftsByPath[behaviorPath] else { continue }
+			let authoredMap = Self.authoredMap(from: descendant.authoredAttributes)
+			switch kind {
+			case "trigger":
+				draft.triggerPath = path
+				draft.triggerType = parseUSDString(authoredMap["info:id"] ?? "")
+				let identifier = parseUSDString(authoredMap["identifier"] ?? "")
+				draft.notificationIdentifier = identifier.isEmpty ? nil : identifier
+			case "action":
+				draft.actionType = parseUSDString(authoredMap["info:id"] ?? "")
+			default:
+				break
+			}
+			draftsByPath[behaviorPath] = draft
+		}
+
+		return order.compactMap { key in
+			guard let draft = draftsByPath[key] else { return nil }
+			return BehaviorEditorModel(
+				id: draft.path,
+				path: draft.path,
+				title: draft.title,
+				triggerPath: draft.triggerPath,
+				triggerType: draft.triggerType,
+				actionType: draft.actionType,
+				notificationIdentifier: draft.notificationIdentifier
+			)
+		}
 	}
 
 	private var physicsBodyEditor: some View {
@@ -2111,6 +2241,13 @@ private struct ComponentParametersSection: View {
 		default:
 			return trimmed
 		}
+	}
+
+	private func quoteUSDString(_ text: String) -> String {
+		let escaped = text
+			.replacingOccurrences(of: "\\", with: "\\\\")
+			.replacingOccurrences(of: "\"", with: "\\\"")
+		return "\"\(escaped)\""
 	}
 
 	private func parseUSDStringArray(_ raw: String) -> [String] {

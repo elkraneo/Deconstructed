@@ -2057,9 +2057,17 @@ private func loadComponentDescendantAttributes(
 		)
 	}
 	if componentID == "RCP.BehaviorsContainer" {
-		let behaviorTargets = parseUSDRelationshipTargets(
+		var behaviorTargets = parseUSDRelationshipTargets(
 			authoredLiteral(in: componentAttributes, names: ["behaviors"])
 		)
+		if behaviorTargets.isEmpty,
+		   let parentPath = parentPrimPath(of: componentPath),
+		   let parentNode = findNode(id: parentPath, in: sceneNodes)
+		{
+			behaviorTargets = parentNode.children
+				.filter { $0.typeName == "Preliminary_Behavior" }
+				.map(\.path)
+		}
 		var seenPaths = Set(collected.map(\.primPath))
 		for target in behaviorTargets where !target.isEmpty {
 			guard let behaviorNode = findNode(id: target, in: sceneNodes) else {
