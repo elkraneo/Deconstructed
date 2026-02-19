@@ -1389,18 +1389,37 @@ private struct ComponentParametersSection: View {
 								.font(.system(size: 11))
 								.toggleStyle(.checkbox)
 
-							case let .text(defaultValue, placeholder):
-								VStack(alignment: .leading, spacing: 4) {
-									Text(parameter.label)
-										.font(.system(size: 11))
-										.foregroundStyle(.secondary)
-									TextField(
-										placeholder,
-										text: stringBinding(for: parameter.key, fallback: defaultValue)
-									)
-									.textFieldStyle(.roundedBorder)
-									.font(.system(size: 11))
-								}
+								case let .text(defaultValue, placeholder):
+									if isColorParameter(parameter.key) {
+										InspectorRow(label: parameter.label) {
+											HStack(spacing: 8) {
+												ColorPicker(
+													"",
+													selection: colorBinding(for: parameter.key, fallback: defaultValue),
+													supportsOpacity: false
+												)
+												.labelsHidden()
+												TextField(
+													placeholder,
+													text: stringBinding(for: parameter.key, fallback: defaultValue)
+												)
+												.textFieldStyle(.roundedBorder)
+												.font(.system(size: 11))
+											}
+										}
+									} else {
+										VStack(alignment: .leading, spacing: 4) {
+											Text(parameter.label)
+												.font(.system(size: 11))
+												.foregroundStyle(.secondary)
+											TextField(
+												placeholder,
+												text: stringBinding(for: parameter.key, fallback: defaultValue)
+											)
+											.textFieldStyle(.roundedBorder)
+											.font(.system(size: 11))
+										}
+									}
 
 							case let .scalar(defaultValue, unit):
 								InspectorRow(label: parameter.label) {
@@ -1942,10 +1961,47 @@ private struct ComponentParametersSection: View {
 		)
 	}
 
-		private func notifyParameterChange(key: String, value: InspectorComponentParameterValue) {
-			guard let componentIdentifier else { return }
-			onParameterChanged(componentIdentifier, key, value)
-		}
+	private func notifyParameterChange(key: String, value: InspectorComponentParameterValue) {
+		guard let componentIdentifier else { return }
+		onParameterChanged(componentIdentifier, key, value)
+	}
+
+	private func isColorParameter(_ key: String) -> Bool {
+		guard key == "color" else { return false }
+		guard let componentIdentifier else { return false }
+		return componentIdentifier == "RealityKit.PointLight"
+			|| componentIdentifier == "RealityKit.SpotLight"
+			|| componentIdentifier == "RealityKit.DirectionalLight"
+	}
+
+	private func colorBinding(for key: String, fallback: String) -> Binding<Color> {
+		Binding(
+			get: {
+				let raw: String
+				if case let .string(value)? = values[key] {
+					raw = value
+				} else {
+					raw = fallback
+				}
+				let rgb = Self.parseColorLiteral(raw)
+				return Color(red: rgb.x, green: rgb.y, blue: rgb.z)
+			},
+			set: { color in
+				#if os(macOS)
+				let ns = NSColor(color).usingColorSpace(.sRGB) ?? .white
+				let literal = Self.formatVector3(
+					x: ns.redComponent,
+					y: ns.greenComponent,
+					z: ns.blueComponent
+				)
+				#else
+				let literal = fallback
+				#endif
+				values[key] = .string(literal)
+				notifyParameterChange(key: key, value: .string(literal))
+			}
+		)
+	}
 
 		private func shouldDisplay(parameter: InspectorComponentParameter) -> Bool {
 			guard componentIdentifier == "RealityKit.Collider" else { return true }
@@ -2496,6 +2552,16 @@ private struct ComponentParametersSection: View {
 
 	private static func parseUSDDouble(_ raw: String) -> Double? {
 		Double(raw.trimmingCharacters(in: .whitespacesAndNewlines))
+	}
+
+	private static func parseColorLiteral(_ raw: String) -> SIMD3<Double> {
+		let tuple = parseTuple(raw)
+		guard tuple.count >= 3 else { return SIMD3<Double>(1, 1, 1) }
+		return SIMD3<Double>(
+			max(0, min(1, tuple[0])),
+			max(0, min(1, tuple[1])),
+			max(0, min(1, tuple[2]))
+		)
 	}
 
 	private static func parseUSDString(_ raw: String) -> String {

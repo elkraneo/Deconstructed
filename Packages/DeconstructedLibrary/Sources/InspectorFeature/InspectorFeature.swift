@@ -2030,8 +2030,14 @@ private func loadComponentDescendantAttributes(
 	guard let componentNode = findNode(id: componentPath, in: sceneNodes) else {
 		return []
 	}
+	let componentAttributes =
+		DeconstructedUSDInterop.getPrimAttributes(
+			url: url,
+			primPath: componentPath
+		)?.authoredAttributes ?? []
+	let componentID = componentIdentifier(from: componentAttributes)
 	let descendants = flattenedDescendants(of: componentNode)
-	guard !descendants.isEmpty else {
+	guard !descendants.isEmpty || componentID == "RCP.BehaviorsContainer" else {
 		return []
 	}
 	var collected: [ComponentDescendantAttributes] = []
@@ -2049,6 +2055,34 @@ private func loadComponentDescendantAttributes(
 				authoredAttributes: attrs
 			)
 		)
+	}
+	if componentID == "RCP.BehaviorsContainer" {
+		let behaviorTargets = parseUSDRelationshipTargets(
+			authoredLiteral(in: componentAttributes, names: ["behaviors"])
+		)
+		var seenPaths = Set(collected.map(\.primPath))
+		for target in behaviorTargets where !target.isEmpty {
+			guard let behaviorNode = findNode(id: target, in: sceneNodes) else {
+				continue
+			}
+			let behaviorNodes = [behaviorNode] + flattenedDescendants(of: behaviorNode)
+			for node in behaviorNodes where !seenPaths.contains(node.path) {
+				let attrs =
+					DeconstructedUSDInterop.getPrimAttributes(
+						url: url,
+						primPath: node.path
+					)?.authoredAttributes ?? []
+				guard !attrs.isEmpty else { continue }
+				seenPaths.insert(node.path)
+				collected.append(
+					ComponentDescendantAttributes(
+						primPath: node.path,
+						displayName: node.name,
+						authoredAttributes: attrs
+					)
+				)
+			}
+		}
 	}
 	let resourcesPath = "\(componentPath)/resources"
 	if !collected.contains(where: { $0.primPath == resourcesPath }) {
@@ -3172,14 +3206,14 @@ private func componentParameterAuthoringSpec(
 		return ComponentParameterAuthoringSpec(
 			attributeType: "bool",
 			attributeName: "isEnabled",
-				operation: .set(valueLiteral: boolValue ? "true" : "false"),
+				operation: .set(valueLiteral: usdBoolLiteral(boolValue)),
 				primPathSuffix: nil
 			)
 		case ("RealityKit.InputTarget", "enabled", .bool(let boolValue)):
 			return ComponentParameterAuthoringSpec(
 				attributeType: "bool",
 				attributeName: "enabled",
-				operation: .set(valueLiteral: boolValue ? "1" : "0"),
+				operation: .set(valueLiteral: usdBoolLiteral(boolValue)),
 				primPathSuffix: nil
 			)
 		case ("RealityKit.InputTarget", "allowedInput", .string(let value)):
@@ -3295,7 +3329,7 @@ private func componentParameterAuthoringSpec(
 		return ComponentParameterAuthoringSpec(
 			attributeType: "bool",
 			attributeName: "isGlobalIBL",
-			operation: .set(valueLiteral: boolValue ? "true" : "false"),
+			operation: .set(valueLiteral: usdBoolLiteral(boolValue)),
 			primPathSuffix: nil
 		)
 	case ("RealityKit.VirtualEnvironmentProbe", "blendMode", .string(let value)):
@@ -3393,14 +3427,14 @@ private func componentParameterAuthoringSpec(
 		return ComponentParameterAuthoringSpec(
 			attributeType: "bool",
 			attributeName: "isCCDEnabled",
-			operation: .set(valueLiteral: boolValue ? "true" : "false"),
+			operation: .set(valueLiteral: usdBoolLiteral(boolValue)),
 			primPathSuffix: nil
 		)
 	case ("RealityKit.RigidBody", "gravityEnabled", .bool(let boolValue)):
 		return ComponentParameterAuthoringSpec(
 			attributeType: "bool",
 			attributeName: "gravityEnabled",
-			operation: .set(valueLiteral: boolValue ? "true" : "false"),
+			operation: .set(valueLiteral: usdBoolLiteral(boolValue)),
 			primPathSuffix: nil
 		)
 	case ("RealityKit.RigidBody", "angularDamping", .double(let value)):
@@ -3470,42 +3504,42 @@ private func componentParameterAuthoringSpec(
 		return ComponentParameterAuthoringSpec(
 			attributeType: "bool",
 			attributeName: "lockTranslationX",
-			operation: .set(valueLiteral: boolValue ? "true" : "false"),
+			operation: .set(valueLiteral: usdBoolLiteral(boolValue)),
 			primPathSuffix: nil
 		)
 	case ("RealityKit.RigidBody", "lockTranslationY", .bool(let boolValue)):
 		return ComponentParameterAuthoringSpec(
 			attributeType: "bool",
 			attributeName: "lockTranslationY",
-			operation: .set(valueLiteral: boolValue ? "true" : "false"),
+			operation: .set(valueLiteral: usdBoolLiteral(boolValue)),
 			primPathSuffix: nil
 		)
 	case ("RealityKit.RigidBody", "lockTranslationZ", .bool(let boolValue)):
 		return ComponentParameterAuthoringSpec(
 			attributeType: "bool",
 			attributeName: "lockTranslationZ",
-			operation: .set(valueLiteral: boolValue ? "true" : "false"),
+			operation: .set(valueLiteral: usdBoolLiteral(boolValue)),
 			primPathSuffix: nil
 		)
 	case ("RealityKit.RigidBody", "lockRotationX", .bool(let boolValue)):
 		return ComponentParameterAuthoringSpec(
 			attributeType: "bool",
 			attributeName: "lockRotationX",
-			operation: .set(valueLiteral: boolValue ? "true" : "false"),
+			operation: .set(valueLiteral: usdBoolLiteral(boolValue)),
 			primPathSuffix: nil
 		)
 	case ("RealityKit.RigidBody", "lockRotationY", .bool(let boolValue)):
 		return ComponentParameterAuthoringSpec(
 			attributeType: "bool",
 			attributeName: "lockRotationY",
-			operation: .set(valueLiteral: boolValue ? "true" : "false"),
+			operation: .set(valueLiteral: usdBoolLiteral(boolValue)),
 			primPathSuffix: nil
 		)
 	case ("RealityKit.RigidBody", "lockRotationZ", .bool(let boolValue)):
 		return ComponentParameterAuthoringSpec(
 			attributeType: "bool",
 			attributeName: "lockRotationZ",
-			operation: .set(valueLiteral: boolValue ? "true" : "false"),
+			operation: .set(valueLiteral: usdBoolLiteral(boolValue)),
 			primPathSuffix: nil
 		)
 		case ("RealityKit.MotionState", "linearVelocity", .string(let value)):
@@ -3596,7 +3630,7 @@ private func componentParameterAuthoringSpec(
 		return ComponentParameterAuthoringSpec(
 			attributeType: "bool",
 			attributeName: "isEnabled",
-			operation: .set(valueLiteral: value ? "1" : "0"),
+			operation: .set(valueLiteral: usdBoolLiteral(value)),
 			primPathSuffix: "Shadow"
 		)
 	case ("RealityKit.SpotLight", "shadowBias", .double(let value)):
@@ -3669,7 +3703,7 @@ private func componentParameterAuthoringSpec(
 		return ComponentParameterAuthoringSpec(
 			attributeType: "bool",
 			attributeName: "isEnabled",
-			operation: .set(valueLiteral: value ? "1" : "0"),
+			operation: .set(valueLiteral: usdBoolLiteral(value)),
 			primPathSuffix: "Shadow"
 		)
 	case ("RealityKit.DirectionalLight", "shadowBias", .double(let value)):
@@ -3826,6 +3860,10 @@ private func quoteUSDString(_ text: String) -> String {
 		.replacingOccurrences(of: "\\", with: "\\\\")
 		.replacingOccurrences(of: "\"", with: "\\\"")
 	return "\"\(escaped)\""
+}
+
+private func usdBoolLiteral(_ value: Bool) -> String {
+	value ? "1" : "0"
 }
 
 private func formatUSDFloat(_ value: Double) -> String {
