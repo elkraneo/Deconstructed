@@ -12,6 +12,15 @@ import USDInteropAdvancedInspection
 // Keep these fileprivate so OpenUSD internals never leak into the module API.
 fileprivate typealias UsdStage = pxrInternal_v0_25_8__pxrReserved__.UsdStage
 fileprivate typealias SdfPath = pxrInternal_v0_25_8__pxrReserved__.SdfPath
+fileprivate typealias TfToken = pxrInternal_v0_25_8__pxrReserved__.TfToken
+fileprivate typealias SdfValueTypeName = pxrInternal_v0_25_8__pxrReserved__.SdfValueTypeName
+fileprivate typealias SdfVariability = pxrInternal_v0_25_8__pxrReserved__.SdfVariability
+fileprivate typealias UsdTimeCode = pxrInternal_v0_25_8__pxrReserved__.UsdTimeCode
+fileprivate typealias VtValue = pxrInternal_v0_25_8__pxrReserved__.VtValue
+fileprivate typealias GfVec2f = pxrInternal_v0_25_8__pxrReserved__.GfVec2f
+fileprivate typealias GfVec3f = pxrInternal_v0_25_8__pxrReserved__.GfVec3f
+fileprivate typealias GfQuatf = pxrInternal_v0_25_8__pxrReserved__.GfQuatf
+fileprivate typealias SdfAssetPath = pxrInternal_v0_25_8__pxrReserved__.SdfAssetPath
 
 public enum DeconstructedUSDInteropError: Error, LocalizedError, Sendable {
 	case stageOpenFailed(URL)
@@ -724,6 +733,16 @@ public enum DeconstructedUSDInterop {
 		attributeName: String,
 		valueLiteral: String
 	) throws {
+		if try setComponentParameterWithUSDMutation(
+			url: url,
+			componentPrimPath: componentPrimPath,
+			attributeType: attributeType,
+			attributeName: attributeName,
+			valueLiteral: valueLiteral
+		) {
+			return
+		}
+
 		guard url.pathExtension.lowercased() == "usda" else {
 			throw DeconstructedUSDInteropError.componentAuthoringFailed(
 				reason: "Only .usda scenes are supported for initial component parameter editing."
@@ -759,6 +778,14 @@ public enum DeconstructedUSDInterop {
 		componentPrimPath: String,
 		attributeName: String
 	) throws {
+		if try deleteComponentParameterWithUSDMutation(
+			url: url,
+			componentPrimPath: componentPrimPath,
+			attributeName: attributeName
+		) {
+			return
+		}
+
 		guard url.pathExtension.lowercased() == "usda" else {
 			throw DeconstructedUSDInteropError.componentAuthoringFailed(
 				reason: "Only .usda scenes are supported for initial component parameter editing."
@@ -1163,6 +1190,220 @@ private func deletePrim(
 	guard rootLayer.Save(false) else {
 		throw DeconstructedUSDInteropError.saveFailed(url)
 	}
+}
+
+private func setComponentParameterWithUSDMutation(
+	url: URL,
+	componentPrimPath: String,
+	attributeType: String,
+	attributeName: String,
+	valueLiteral: String
+) throws -> Bool {
+	let stagePtr = UsdStage.Open(std.string(url.path), UsdStage.InitialLoadSet.LoadAll)
+	guard stagePtr._isNonnull() else {
+		throw DeconstructedUSDInteropError.stageOpenFailed(url)
+	}
+	let stage = OpenUSD.Overlay.Dereference(stagePtr)
+	let prim = stage.GetPrimAtPath(SdfPath(std.string(componentPrimPath)))
+	guard prim.IsValid() else {
+		throw DeconstructedUSDInteropError.primNotFound(componentPrimPath)
+	}
+
+	let normalizedType = normalizeAttributeType(attributeType)
+	let token = TfToken(std.string(attributeName))
+	let variability = isUniformAttributeType(attributeType)
+		? SdfVariability.SdfVariabilityUniform
+		: SdfVariability.SdfVariabilityVarying
+
+	let didAuthor: Bool
+	switch normalizedType {
+	case "bool":
+		guard let value = parseUSDBoolLiteral(valueLiteral) else { return false }
+		let attr = prim.CreateAttribute(token, SdfValueTypeName.Bool, false, variability)
+		didAuthor = attr.Set(VtValue(value), UsdTimeCode.Default())
+	case "int":
+		guard
+			let parsed = parseUSDIntLiteral(valueLiteral),
+			let value = Int32(exactly: parsed)
+		else { return false }
+		let attr = prim.CreateAttribute(token, SdfValueTypeName.Int, false, variability)
+		didAuthor = attr.Set(VtValue(value), UsdTimeCode.Default())
+	case "uint":
+		guard
+			let parsed = parseUSDUIntLiteral(valueLiteral),
+			let value = UInt32(exactly: parsed)
+		else { return false }
+		let attr = prim.CreateAttribute(token, SdfValueTypeName.UInt, false, variability)
+		didAuthor = attr.Set(VtValue(value), UsdTimeCode.Default())
+	case "float":
+		guard let value = parseUSDFloatLiteral(valueLiteral) else { return false }
+		let attr = prim.CreateAttribute(token, SdfValueTypeName.Float, false, variability)
+		didAuthor = attr.Set(VtValue(value), UsdTimeCode.Default())
+	case "double":
+		guard let value = parseUSDDoubleLiteral(valueLiteral) else { return false }
+		let attr = prim.CreateAttribute(token, SdfValueTypeName.Double, false, variability)
+		didAuthor = attr.Set(VtValue(value), UsdTimeCode.Default())
+	case "string":
+		let value = parseUSDQuotedStringLiteral(valueLiteral)
+		let attr = prim.CreateAttribute(token, SdfValueTypeName.String, false, variability)
+		didAuthor = attr.Set(VtValue(std.string(value)), UsdTimeCode.Default())
+	case "token":
+		let value = parseUSDQuotedStringLiteral(valueLiteral)
+		let attr = prim.CreateAttribute(token, SdfValueTypeName.Token, false, variability)
+		didAuthor = attr.Set(VtValue(TfToken(std.string(value))), UsdTimeCode.Default())
+	case "asset":
+		guard let value = parseUSDAssetLiteral(valueLiteral) else { return false }
+		let attr = prim.CreateAttribute(token, SdfValueTypeName.Asset, false, variability)
+		didAuthor = attr.Set(VtValue(SdfAssetPath(std.string(value))), UsdTimeCode.Default())
+	case "float2":
+		guard let value = parseUSDFloatTuple(valueLiteral, count: 2) else { return false }
+		let attr = prim.CreateAttribute(token, SdfValueTypeName.Float2, false, variability)
+		didAuthor = attr.Set(VtValue(GfVec2f(Float(value[0]), Float(value[1]))), UsdTimeCode.Default())
+	case "float3":
+		guard let value = parseUSDFloatTuple(valueLiteral, count: 3) else { return false }
+		let attr = prim.CreateAttribute(token, SdfValueTypeName.Float3, false, variability)
+		didAuthor = attr.Set(
+			VtValue(GfVec3f(Float(value[0]), Float(value[1]), Float(value[2]))),
+			UsdTimeCode.Default()
+		)
+	case "quatf":
+		guard let value = parseUSDFloatTuple(valueLiteral, count: 4) else { return false }
+		let attr = prim.CreateAttribute(token, SdfValueTypeName.Quatf, false, variability)
+		didAuthor = attr.Set(
+			VtValue(
+				GfQuatf(
+					Float(value[0]),
+					GfVec3f(Float(value[1]), Float(value[2]), Float(value[3]))
+				)
+			),
+			UsdTimeCode.Default()
+		)
+	default:
+		return false
+	}
+
+	guard didAuthor else {
+		throw DeconstructedUSDInteropError.componentAuthoringFailed(
+			reason: "Failed to set \(attributeName) on \(componentPrimPath)."
+		)
+	}
+	let rootLayerHandle = stage.GetRootLayer()
+	guard Bool(rootLayerHandle) else {
+		throw DeconstructedUSDInteropError.rootLayerMissing(url)
+	}
+	let rootLayer = OpenUSD.Overlay.Dereference(rootLayerHandle)
+	guard rootLayer.Save(false) else {
+		throw DeconstructedUSDInteropError.saveFailed(url)
+	}
+	return true
+}
+
+private func deleteComponentParameterWithUSDMutation(
+	url: URL,
+	componentPrimPath: String,
+	attributeName: String
+) throws -> Bool {
+	let stagePtr = UsdStage.Open(std.string(url.path), UsdStage.InitialLoadSet.LoadAll)
+	guard stagePtr._isNonnull() else {
+		throw DeconstructedUSDInteropError.stageOpenFailed(url)
+	}
+	let stage = OpenUSD.Overlay.Dereference(stagePtr)
+	let prim = stage.GetPrimAtPath(SdfPath(std.string(componentPrimPath)))
+	guard prim.IsValid() else {
+		throw DeconstructedUSDInteropError.primNotFound(componentPrimPath)
+	}
+	let token = TfToken(std.string(attributeName))
+	let attribute = prim.GetAttribute(token)
+	guard attribute.IsValid() else {
+		return false
+	}
+	_ = attribute.Clear()
+
+	let rootLayerHandle = stage.GetRootLayer()
+	guard Bool(rootLayerHandle) else {
+		throw DeconstructedUSDInteropError.rootLayerMissing(url)
+	}
+	let rootLayer = OpenUSD.Overlay.Dereference(rootLayerHandle)
+	guard rootLayer.Save(false) else {
+		throw DeconstructedUSDInteropError.saveFailed(url)
+	}
+	return true
+}
+
+private func normalizeAttributeType(_ raw: String) -> String {
+	let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+	if trimmed.hasPrefix("uniform ") {
+		return String(trimmed.dropFirst("uniform ".count))
+	}
+	return trimmed
+}
+
+private func isUniformAttributeType(_ raw: String) -> Bool {
+	raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased().hasPrefix("uniform ")
+}
+
+private func parseUSDBoolLiteral(_ raw: String) -> Bool? {
+	switch raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+	case "true", "1":
+		return true
+	case "false", "0":
+		return false
+	default:
+		return nil
+	}
+}
+
+private func parseUSDIntLiteral(_ raw: String) -> Int? {
+	Int(raw.trimmingCharacters(in: .whitespacesAndNewlines))
+}
+
+private func parseUSDUIntLiteral(_ raw: String) -> UInt? {
+	UInt(raw.trimmingCharacters(in: .whitespacesAndNewlines))
+}
+
+private func parseUSDFloatLiteral(_ raw: String) -> Float? {
+	Float(raw.trimmingCharacters(in: .whitespacesAndNewlines))
+}
+
+private func parseUSDDoubleLiteral(_ raw: String) -> Double? {
+	Double(raw.trimmingCharacters(in: .whitespacesAndNewlines))
+}
+
+private func parseUSDQuotedStringLiteral(_ raw: String) -> String {
+	let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+	guard trimmed.count >= 2, trimmed.first == "\"", trimmed.last == "\"" else {
+		return trimmed
+	}
+	let start = trimmed.index(after: trimmed.startIndex)
+	let end = trimmed.index(before: trimmed.endIndex)
+	let inner = String(trimmed[start..<end])
+	return inner
+		.replacingOccurrences(of: "\\\"", with: "\"")
+		.replacingOccurrences(of: "\\\\", with: "\\")
+}
+
+private func parseUSDAssetLiteral(_ raw: String) -> String? {
+	let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+	guard trimmed.count >= 2, trimmed.first == "@", trimmed.last == "@" else {
+		return nil
+	}
+	let start = trimmed.index(after: trimmed.startIndex)
+	let end = trimmed.index(before: trimmed.endIndex)
+	return String(trimmed[start..<end])
+}
+
+private func parseUSDFloatTuple(_ raw: String, count: Int) -> [Double]? {
+	let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+	guard trimmed.hasPrefix("("), trimmed.hasSuffix(")"), trimmed.count >= 2 else {
+		return nil
+	}
+	let body = String(trimmed.dropFirst().dropLast())
+	let values = body
+		.split(separator: ",", omittingEmptySubsequences: true)
+		.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+		.compactMap(Double.init)
+	guard values.count >= count else { return nil }
+	return Array(values.prefix(count))
 }
 
 private struct ParsedPrimDeclaration {
