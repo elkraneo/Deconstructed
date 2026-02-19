@@ -22,6 +22,16 @@ fileprivate typealias GfVec3f = pxrInternal_v0_25_8__pxrReserved__.GfVec3f
 fileprivate typealias GfQuatf = pxrInternal_v0_25_8__pxrReserved__.GfQuatf
 fileprivate typealias SdfAssetPath = pxrInternal_v0_25_8__pxrReserved__.SdfAssetPath
 
+private enum USDMutationCoordinator {
+	static let lock = NSLock()
+
+	static func withLock<T>(_ operation: () throws -> T) rethrows -> T {
+		lock.lock()
+		defer { lock.unlock() }
+		return try operation()
+	}
+}
+
 public enum DeconstructedUSDInteropError: Error, LocalizedError, Sendable {
 	case stageOpenFailed(URL)
 	case rootLayerMissing(URL)
@@ -733,43 +743,45 @@ public enum DeconstructedUSDInterop {
 		attributeName: String,
 		valueLiteral: String
 	) throws {
-		if try setComponentParameterWithUSDMutation(
-			url: url,
-			componentPrimPath: componentPrimPath,
-			attributeType: attributeType,
-			attributeName: attributeName,
-			valueLiteral: valueLiteral
-		) {
-			return
-		}
+		try USDMutationCoordinator.withLock {
+			if try setComponentParameterWithUSDMutation(
+				url: url,
+				componentPrimPath: componentPrimPath,
+				attributeType: attributeType,
+				attributeName: attributeName,
+				valueLiteral: valueLiteral
+			) {
+				return
+			}
 
-		guard url.pathExtension.lowercased() == "usda" else {
-			throw DeconstructedUSDInteropError.componentAuthoringFailed(
-				reason: "Only .usda scenes are supported for initial component parameter editing."
-			)
-		}
-		let source: String
-		do {
-			source = try String(contentsOf: url, encoding: .utf8)
-		} catch {
-			throw DeconstructedUSDInteropError.componentAuthoringFailed(
-				reason: "Unable to read USDA scene."
-			)
-		}
+			guard url.pathExtension.lowercased() == "usda" else {
+				throw DeconstructedUSDInteropError.componentAuthoringFailed(
+					reason: "Only .usda scenes are supported for initial component parameter editing."
+				)
+			}
+			let source: String
+			do {
+				source = try String(contentsOf: url, encoding: .utf8)
+			} catch {
+				throw DeconstructedUSDInteropError.componentAuthoringFailed(
+					reason: "Unable to read USDA scene."
+				)
+			}
 
-		let updated = try updateRealityKitComponentParameterInUSDA(
-			source,
-			componentPrimPath: componentPrimPath,
-			attributeType: attributeType,
-			attributeName: attributeName,
-			valueLiteral: valueLiteral
-		)
-		do {
-			try updated.write(to: url, atomically: true, encoding: .utf8)
-		} catch {
-			throw DeconstructedUSDInteropError.componentAuthoringFailed(
-				reason: "Unable to write USDA scene."
+			let updated = try updateRealityKitComponentParameterInUSDA(
+				source,
+				componentPrimPath: componentPrimPath,
+				attributeType: attributeType,
+				attributeName: attributeName,
+				valueLiteral: valueLiteral
 			)
+			do {
+				try updated.write(to: url, atomically: true, encoding: .utf8)
+			} catch {
+				throw DeconstructedUSDInteropError.componentAuthoringFailed(
+					reason: "Unable to write USDA scene."
+				)
+			}
 		}
 	}
 
@@ -778,39 +790,41 @@ public enum DeconstructedUSDInterop {
 		componentPrimPath: String,
 		attributeName: String
 	) throws {
-		if try deleteComponentParameterWithUSDMutation(
-			url: url,
-			componentPrimPath: componentPrimPath,
-			attributeName: attributeName
-		) {
-			return
-		}
+		try USDMutationCoordinator.withLock {
+			if try deleteComponentParameterWithUSDMutation(
+				url: url,
+				componentPrimPath: componentPrimPath,
+				attributeName: attributeName
+			) {
+				return
+			}
 
-		guard url.pathExtension.lowercased() == "usda" else {
-			throw DeconstructedUSDInteropError.componentAuthoringFailed(
-				reason: "Only .usda scenes are supported for initial component parameter editing."
-			)
-		}
-		let source: String
-		do {
-			source = try String(contentsOf: url, encoding: .utf8)
-		} catch {
-			throw DeconstructedUSDInteropError.componentAuthoringFailed(
-				reason: "Unable to read USDA scene."
-			)
-		}
+			guard url.pathExtension.lowercased() == "usda" else {
+				throw DeconstructedUSDInteropError.componentAuthoringFailed(
+					reason: "Only .usda scenes are supported for initial component parameter editing."
+				)
+			}
+			let source: String
+			do {
+				source = try String(contentsOf: url, encoding: .utf8)
+			} catch {
+				throw DeconstructedUSDInteropError.componentAuthoringFailed(
+					reason: "Unable to read USDA scene."
+				)
+			}
 
-		let updated = try removeRealityKitComponentParameterInUSDA(
-			source,
-			componentPrimPath: componentPrimPath,
-			attributeName: attributeName
-		)
-		do {
-			try updated.write(to: url, atomically: true, encoding: .utf8)
-		} catch {
-			throw DeconstructedUSDInteropError.componentAuthoringFailed(
-				reason: "Unable to write USDA scene."
+			let updated = try removeRealityKitComponentParameterInUSDA(
+				source,
+				componentPrimPath: componentPrimPath,
+				attributeName: attributeName
 			)
+			do {
+				try updated.write(to: url, atomically: true, encoding: .utf8)
+			} catch {
+				throw DeconstructedUSDInteropError.componentAuthoringFailed(
+					reason: "Unable to write USDA scene."
+				)
+			}
 		}
 	}
 
