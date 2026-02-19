@@ -1378,8 +1378,8 @@ private struct ComponentParametersSection: View {
 						}
 					}
 				} else {
-					VStack(alignment: .leading, spacing: 10) {
-						ForEach(parameters, id: \.key) { parameter in
+						VStack(alignment: .leading, spacing: 10) {
+							ForEach(parameters.filter { shouldDisplay(parameter: $0) }, id: \.key) { parameter in
 							switch parameter.kind {
 							case let .toggle(defaultValue):
 								Toggle(
@@ -1942,10 +1942,32 @@ private struct ComponentParametersSection: View {
 		)
 	}
 
-	private func notifyParameterChange(key: String, value: InspectorComponentParameterValue) {
-		guard let componentIdentifier else { return }
-		onParameterChanged(componentIdentifier, key, value)
-	}
+		private func notifyParameterChange(key: String, value: InspectorComponentParameterValue) {
+			guard let componentIdentifier else { return }
+			onParameterChanged(componentIdentifier, key, value)
+		}
+
+		private func shouldDisplay(parameter: InspectorComponentParameter) -> Bool {
+			guard componentIdentifier == "RealityKit.Collider" else { return true }
+			let shape = currentStringValue(for: "shape", fallback: "Box")
+			switch parameter.key {
+			case "extent":
+				return shape == "Box"
+			case "radius":
+				return shape == "Sphere" || shape == "Capsule"
+			case "height":
+				return shape == "Capsule"
+			default:
+				return true
+			}
+		}
+
+		private func currentStringValue(for key: String, fallback: String) -> String {
+			if case let .string(value)? = values[key] {
+				return value
+			}
+			return fallback
+		}
 
 	private func rawBinding(for key: String, fallback: String) -> Binding<String> {
 		Binding(
