@@ -995,8 +995,8 @@ public struct InspectorFeature {
 						cancelInFlight: true
 					)
 				}
-				if componentIdentifier == "RealityKit.CharacterController" {
-					return .run { send in
+					if componentIdentifier == "RealityKit.CharacterController" {
+						return .run { send in
 						do {
 							let maybeUpdatedTransform = try applyCharacterControllerParameterChange(
 								url: url,
@@ -1042,10 +1042,56 @@ public struct InspectorFeature {
 							componentPath: componentPath
 						),
 						cancelInFlight: true
-					)
-				}
-				guard
-					let spec = componentParameterAuthoringSpec(
+						)
+					}
+					if componentIdentifier == "RealityKit.Anchoring" {
+						return .run { send in
+							do {
+								try applyAnchoringParameterChange(
+									url: url,
+									componentPath: componentPath,
+									parameterKey: parameterKey,
+									value: value
+								)
+								let refreshed =
+									DeconstructedUSDInterop.getPrimAttributes(
+										url: url,
+										primPath: componentPath
+									)?.authoredAttributes ?? []
+								let descendants = loadComponentDescendantAttributes(
+									componentPath: componentPath,
+									sceneNodes: sceneNodesSnapshot,
+									url: url
+								)
+								await send(
+									.componentMutationRefreshed(
+										componentPath: componentPath,
+										authoredAttributes: refreshed,
+										descendantAttributes: descendants,
+										revision: mutationRevision
+									)
+								)
+								await send(
+									.setComponentParameterSucceeded(
+										componentPath: componentPath,
+										attributeName: parameterKey
+									)
+								)
+							} catch {
+								await send(
+									.setComponentParameterFailed(error.localizedDescription)
+								)
+							}
+						}
+						.cancellable(
+							id: ComponentParameterMutationCancellationID(
+								componentPath: componentPath
+							),
+							cancelInFlight: true
+						)
+					}
+					guard
+						let spec = componentParameterAuthoringSpec(
 						componentIdentifier: componentIdentifier,
 						parameterKey: parameterKey,
 						value: value
@@ -2728,6 +2774,250 @@ private func setCharacterControllerExtents(
 		attributeName: "extents",
 		valueLiteral: formatUSDFloat3Literal(extents)
 	)
+}
+
+private struct AnchoringDescriptorState {
+	var target: String
+	var positionMeters: SIMD3<Double>
+	var orientationDegrees: SIMD3<Double>
+	var scale: SIMD3<Double>
+	var hasTransform: Bool
+}
+
+private func applyAnchoringParameterChange(
+	url: URL,
+	componentPath: String,
+	parameterKey: String,
+	value: InspectorComponentParameterValue
+) throws {
+	let descriptorPath = "\(componentPath)/descriptor"
+	_ = try DeconstructedUSDInterop.ensureTypedPrim(
+		url: url,
+		parentPrimPath: componentPath,
+		typeName: "RealityKitStruct",
+		primName: "descriptor"
+	)
+
+	var state = loadAnchoringDescriptorState(url: url, descriptorPath: descriptorPath)
+	var shouldWriteTransform = state.hasTransform
+	switch (parameterKey, value) {
+	case ("target", .string(let target)):
+		let canonical = canonicalAnchoringTarget(target)
+		state.target = canonical
+		if canonical == "World" {
+			try DeconstructedUSDInterop.deleteRealityKitComponentParameter(
+				url: url,
+				componentPrimPath: descriptorPath,
+				attributeName: "type"
+			)
+		} else {
+			try DeconstructedUSDInterop.setRealityKitComponentParameter(
+				url: url,
+				componentPrimPath: descriptorPath,
+				attributeType: "token",
+				attributeName: "type",
+				valueLiteral: quoteUSDString(canonical)
+			)
+		}
+	case ("position", .string(let rawVector)):
+		guard let positionCM = parseVector3Components(rawVector) else {
+			throw NSError(
+				domain: "InspectorFeature",
+				code: 1,
+				userInfo: [NSLocalizedDescriptionKey: "Invalid anchoring position format."]
+			)
+		}
+		state.positionMeters = positionCM / 100.0
+		shouldWriteTransform = true
+	case ("orientation", .string(let rawVector)):
+		guard let orientation = parseVector3Components(rawVector) else {
+			throw NSError(
+				domain: "InspectorFeature",
+				code: 1,
+				userInfo: [NSLocalizedDescriptionKey: "Invalid anchoring orientation format."]
+			)
+		}
+		state.orientationDegrees = orientation
+		shouldWriteTransform = true
+	case ("scale", .string(let rawVector)):
+		guard let scale = parseVector3Components(rawVector) else {
+			throw NSError(
+				domain: "InspectorFeature",
+				code: 1,
+				userInfo: [NSLocalizedDescriptionKey: "Invalid anchoring scale format."]
+			)
+		}
+		state.scale = SIMD3<Double>(
+			max(0.000_001, scale.x),
+			max(0.000_001, scale.y),
+			max(0.000_001, scale.z)
+		)
+		shouldWriteTransform = true
+	default:
+		throw NSError(
+			domain: "InspectorFeature",
+			code: 1,
+			userInfo: [
+				NSLocalizedDescriptionKey:
+					"Unsupported Anchoring parameter: \(parameterKey)"
+			]
+		)
+	}
+
+	if shouldWriteTransform {
+		try DeconstructedUSDInterop.setRealityKitComponentParameter(
+			url: url,
+			componentPrimPath: descriptorPath,
+			attributeType: "matrix4d",
+			attributeName: "transform",
+			valueLiteral: anchoringMatrixLiteral(
+				positionMeters: state.positionMeters,
+				orientationDegrees: state.orientationDegrees,
+				scale: state.scale
+			)
+		)
+	}
+}
+
+private func loadAnchoringDescriptorState(
+	url: URL,
+	descriptorPath: String
+) -> AnchoringDescriptorState {
+	let attrs = DeconstructedUSDInterop.getPrimAttributes(
+		url: url,
+		primPath: descriptorPath
+	)?.authoredAttributes ?? []
+	let typeLiteral = authoredLiteral(
+		in: attrs,
+		names: ["type"],
+		allowLooseMatch: false
+	)
+	let target = canonicalAnchoringTarget(parseUSDStringToken(typeLiteral))
+	let transformLiteral = authoredLiteral(
+		in: attrs,
+		names: ["transform"],
+		allowLooseMatch: false
+	)
+	if let parsed = parseAnchoringTransformLiteral(transformLiteral) {
+		return AnchoringDescriptorState(
+			target: target,
+			positionMeters: parsed.positionMeters,
+			orientationDegrees: parsed.orientationDegrees,
+			scale: parsed.scale,
+			hasTransform: true
+		)
+	}
+	return AnchoringDescriptorState(
+		target: target,
+		positionMeters: SIMD3<Double>(0, 0, 0),
+		orientationDegrees: SIMD3<Double>(0, 0, 0),
+		scale: SIMD3<Double>(1, 1, 1),
+		hasTransform: false
+	)
+}
+
+private func canonicalAnchoringTarget(_ raw: String) -> String {
+	switch raw {
+	case "Plane": return "Plane"
+	case "Hand": return "Hand"
+	case "Head": return "Head"
+	case "Object": return "Object"
+	default: return "World"
+	}
+}
+
+private func parseAnchoringTransformLiteral(_ raw: String) -> (
+	positionMeters: SIMD3<Double>,
+	orientationDegrees: SIMD3<Double>,
+	scale: SIMD3<Double>
+)? {
+	let values = parseNumericValues(raw)
+	guard values.count >= 16 else { return nil }
+
+	let row0 = SIMD3<Double>(values[0], values[1], values[2])
+	let row1 = SIMD3<Double>(values[4], values[5], values[6])
+	let row2 = SIMD3<Double>(values[8], values[9], values[10])
+	let sx = max(0.000_001, sqrt(row0.x * row0.x + row0.y * row0.y + row0.z * row0.z))
+	let sy = max(0.000_001, sqrt(row1.x * row1.x + row1.y * row1.y + row1.z * row1.z))
+	let sz = max(0.000_001, sqrt(row2.x * row2.x + row2.y * row2.y + row2.z * row2.z))
+	let scale = SIMD3<Double>(sx, sy, sz)
+
+	let m11 = row0.x / sx
+	let m12 = row0.y / sx
+	let m13 = row0.z / sx
+	let m23 = row1.z / sy
+	let m33 = row2.z / sz
+
+	let yRadians = asin(max(-1.0, min(1.0, -m13)))
+	let cosY = cos(yRadians)
+	let xRadians: Double
+	let zRadians: Double
+	if Swift.abs(cosY) > 0.000_001 {
+		xRadians = atan2(m23, m33)
+		zRadians = atan2(m12, m11)
+	} else {
+		xRadians = atan2(-row2.y / sz, row1.y / sy)
+		zRadians = 0
+	}
+
+	let orientationDegrees = SIMD3<Double>(
+		xRadians * 180.0 / .pi,
+		yRadians * 180.0 / .pi,
+		zRadians * 180.0 / .pi
+	)
+	let positionMeters = SIMD3<Double>(values[12], values[13], values[14])
+	return (positionMeters, orientationDegrees, scale)
+}
+
+private func anchoringMatrixLiteral(
+	positionMeters: SIMD3<Double>,
+	orientationDegrees: SIMD3<Double>,
+	scale: SIMD3<Double>
+) -> String {
+	let x = orientationDegrees.x * .pi / 180.0
+	let y = orientationDegrees.y * .pi / 180.0
+	let z = orientationDegrees.z * .pi / 180.0
+	let cx = cos(x)
+	let sx = sin(x)
+	let cy = cos(y)
+	let sy = sin(y)
+	let cz = cos(z)
+	let sz = sin(z)
+
+	let r00 = cy * cz
+	let r01 = cy * sz
+	let r02 = -sy
+	let r10 = sx * sy * cz - cx * sz
+	let r11 = sx * sy * sz + cx * cz
+	let r12 = sx * cy
+	let r20 = cx * sy * cz + sx * sz
+	let r21 = cx * sy * sz - sx * cz
+	let r22 = cx * cy
+
+	let m00 = r00 * scale.x
+	let m01 = r01 * scale.x
+	let m02 = r02 * scale.x
+	let m10 = r10 * scale.y
+	let m11 = r11 * scale.y
+	let m12 = r12 * scale.y
+	let m20 = r20 * scale.z
+	let m21 = r21 * scale.z
+	let m22 = r22 * scale.z
+
+	return "( (\(formatUSDFloat(m00)), \(formatUSDFloat(m01)), \(formatUSDFloat(m02)), 0), " +
+		"(\(formatUSDFloat(m10)), \(formatUSDFloat(m11)), \(formatUSDFloat(m12)), 0), " +
+		"(\(formatUSDFloat(m20)), \(formatUSDFloat(m21)), \(formatUSDFloat(m22)), 0), " +
+		"(\(formatUSDFloat(positionMeters.x)), \(formatUSDFloat(positionMeters.y)), \(formatUSDFloat(positionMeters.z)), 1) )"
+}
+
+private func parseNumericValues(_ raw: String) -> [Double] {
+	let pattern = #"[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?"#
+	guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
+	let range = NSRange(raw.startIndex..<raw.endIndex, in: raw)
+	return regex.matches(in: raw, options: [], range: range).compactMap { match in
+		guard let swiftRange = Range(match.range, in: raw) else { return nil }
+		return Double(raw[swiftRange])
+	}
 }
 
 private func parseVector3Components(_ raw: String) -> SIMD3<Double>? {

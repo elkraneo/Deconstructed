@@ -2193,6 +2193,32 @@ private struct ComponentParametersSection: View {
 				break
 			}
 		}
+		if identifier == "RealityKit.Anchoring" {
+			let targetRaw = parseUSDString(authoredAttributes["type"] ?? "")
+			let targetValue = targetRaw.isEmpty ? "World" : targetRaw
+			let transform = parseAnchoringTransform(authoredAttributes["transform"] ?? "")
+			switch parameter.key {
+			case "target":
+				return .string(targetValue)
+			case "position":
+				let position = transform?.positionMeters ?? SIMD3<Double>(0, 0, 0)
+				return .string(
+					formatVector3(
+						x: position.x * 100.0,
+						y: position.y * 100.0,
+						z: position.z * 100.0
+					)
+				)
+			case "orientation":
+				let rotation = transform?.orientationDegrees ?? SIMD3<Double>(0, 0, 0)
+				return .string(formatVector3(x: rotation.x, y: rotation.y, z: rotation.z))
+			case "scale":
+				let scale = transform?.scale ?? SIMD3<Double>(1, 1, 1)
+				return .string(formatVector3(x: scale.x, y: scale.y, z: scale.z))
+			default:
+				break
+			}
+		}
 		if identifier == "RealityKit.CharacterController" {
 			switch parameter.key {
 			case "height":
@@ -2355,6 +2381,60 @@ private struct ComponentParametersSection: View {
 		return body
 			.split(separator: ",", omittingEmptySubsequences: true)
 			.compactMap { Double($0.trimmingCharacters(in: .whitespacesAndNewlines)) }
+	}
+
+	private static func parseAnchoringTransform(_ raw: String) -> (
+		positionMeters: SIMD3<Double>,
+		orientationDegrees: SIMD3<Double>,
+		scale: SIMD3<Double>
+	)? {
+		let values = parseNumericSequence(raw)
+		guard values.count >= 16 else { return nil }
+
+		let r0 = SIMD3<Double>(values[0], values[1], values[2])
+		let r1 = SIMD3<Double>(values[4], values[5], values[6])
+		let r2 = SIMD3<Double>(values[8], values[9], values[10])
+
+		let sx = max(0.000_001, sqrt(r0.x * r0.x + r0.y * r0.y + r0.z * r0.z))
+		let sy = max(0.000_001, sqrt(r1.x * r1.x + r1.y * r1.y + r1.z * r1.z))
+		let sz = max(0.000_001, sqrt(r2.x * r2.x + r2.y * r2.y + r2.z * r2.z))
+		let scale = SIMD3<Double>(sx, sy, sz)
+
+		let m11 = r0.x / sx
+		let m12 = r0.y / sx
+		let m13 = r0.z / sx
+		let m23 = r1.z / sy
+		let m33 = r2.z / sz
+
+		let yRadians = asin(max(-1.0, min(1.0, -m13)))
+		let cosY = cos(yRadians)
+		let xRadians: Double
+		let zRadians: Double
+		if abs(cosY) > 0.000_001 {
+			xRadians = atan2(m23, m33)
+			zRadians = atan2(m12, m11)
+		} else {
+			xRadians = atan2(-r2.y / sz, r1.y / sy)
+			zRadians = 0
+		}
+
+		let orientationDegrees = SIMD3<Double>(
+			xRadians * 180.0 / .pi,
+			yRadians * 180.0 / .pi,
+			zRadians * 180.0 / .pi
+		)
+		let positionMeters = SIMD3<Double>(values[12], values[13], values[14])
+		return (positionMeters, orientationDegrees, scale)
+	}
+
+	private static func parseNumericSequence(_ raw: String) -> [Double] {
+		let pattern = #"[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?"#
+		guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
+		let range = NSRange(raw.startIndex..<raw.endIndex, in: raw)
+		return regex.matches(in: raw, options: [], range: range).compactMap { match in
+			guard let swiftRange = Range(match.range, in: raw) else { return nil }
+			return Double(raw[swiftRange])
+		}
 	}
 
 	private static func formatComponent(_ value: Double) -> String {

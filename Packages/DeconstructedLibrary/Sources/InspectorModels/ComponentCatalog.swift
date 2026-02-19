@@ -139,6 +139,29 @@ public struct InspectorComponentDefinition: Equatable, Sendable, Identifiable, H
 					kind: .scalar(defaultValue: 0, unit: nil)
 				)
 			]
+		case "RealityKit.Anchoring":
+			return [
+				InspectorComponentParameter(
+					key: "target",
+					label: "Target",
+					kind: .choice(defaultValue: "World", options: ["World", "Plane", "Hand", "Head", "Object"])
+				),
+				InspectorComponentParameter(
+					key: "position",
+					label: "Position",
+					kind: .text(defaultValue: "(0, 0, 0)", placeholder: "(x, y, z)")
+				),
+				InspectorComponentParameter(
+					key: "orientation",
+					label: "Orientation",
+					kind: .text(defaultValue: "(0, 0, 0)", placeholder: "(x, y, z)")
+				),
+				InspectorComponentParameter(
+					key: "scale",
+					label: "Scale",
+					kind: .text(defaultValue: "(1, 1, 1)", placeholder: "(x, y, z)")
+				)
+			]
 		case "RealityKit.CharacterController":
 			return [
 				InspectorComponentParameter(
