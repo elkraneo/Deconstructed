@@ -139,6 +139,62 @@ public struct InspectorComponentDefinition: Equatable, Sendable, Identifiable, H
 					kind: .scalar(defaultValue: 0, unit: nil)
 				)
 			]
+		case "RealityKit.CharacterController":
+			return [
+				InspectorComponentParameter(
+					key: "radius",
+					label: "Radius",
+					kind: .scalar(defaultValue: 0, unit: "cm")
+				),
+				InspectorComponentParameter(
+					key: "height",
+					label: "Height",
+					kind: .scalar(defaultValue: 0, unit: "cm")
+				),
+				InspectorComponentParameter(
+					key: "skinWidth",
+					label: "Skin Width",
+					kind: .scalar(defaultValue: 1, unit: "cm")
+				),
+				InspectorComponentParameter(
+					key: "slopeLimit",
+					label: "Slope Limit",
+					kind: .scalar(defaultValue: 45, unit: "°")
+				),
+				InspectorComponentParameter(
+					key: "stepLimit",
+					label: "Step Limit",
+					kind: .scalar(defaultValue: 20, unit: "cm")
+				),
+				InspectorComponentParameter(
+					key: "upVector",
+					label: "Up Vector",
+					kind: .text(defaultValue: "(0, 1, 0)", placeholder: "(x, y, z)")
+				),
+				InspectorComponentParameter(
+					key: "group",
+					label: "Collision Group",
+					kind: .choice(defaultValue: "Default", options: ["Default", "All"])
+				),
+				InspectorComponentParameter(
+					key: "mask",
+					label: "Collision Mask",
+					kind: .choice(defaultValue: "Default", options: ["Default", "All"])
+				),
+			]
+		case "RealityKit.InputTarget":
+			return [
+				InspectorComponentParameter(
+					key: "enabled",
+					label: "Enabled",
+					kind: .toggle(defaultValue: true)
+				),
+				InspectorComponentParameter(
+					key: "allowedInput",
+					label: "Allowed Input",
+					kind: .choice(defaultValue: "All", options: ["All", "Direct", "Indirect"])
+				),
+			]
 		case "RealityKit.Reverb":
 			return [
 				InspectorComponentParameter(
@@ -261,6 +317,112 @@ public struct InspectorComponentDefinition: Equatable, Sendable, Identifiable, H
 					key: "type",
 					label: "Type",
 					kind: .text(defaultValue: "Default", placeholder: "Collision type token")
+				)
+			]
+		case "RealityKit.RigidBody":
+			return [
+				InspectorComponentParameter(
+					key: "motionType",
+					label: "Mode",
+					kind: .choice(defaultValue: "Dynamic", options: ["Dynamic", "Kinematic", "Static"])
+				),
+				InspectorComponentParameter(
+					key: "isCCDEnabled",
+					label: "Detect Continuous Collision",
+					kind: .toggle(defaultValue: false)
+				),
+				InspectorComponentParameter(
+					key: "gravityEnabled",
+					label: "Affected by Gravity",
+					kind: .toggle(defaultValue: true)
+				),
+				InspectorComponentParameter(
+					key: "angularDamping",
+					label: "Angular Damping",
+					kind: .scalar(defaultValue: 0, unit: nil)
+				),
+				InspectorComponentParameter(
+					key: "linearDamping",
+					label: "Linear Damping",
+					kind: .scalar(defaultValue: 0, unit: nil)
+				),
+				InspectorComponentParameter(
+					key: "staticFriction",
+					label: "Material Static Friction",
+					kind: .scalar(defaultValue: 0, unit: nil)
+				),
+				InspectorComponentParameter(
+					key: "dynamicFriction",
+					label: "Material Dynamic Friction",
+					kind: .scalar(defaultValue: 0, unit: nil)
+				),
+				InspectorComponentParameter(
+					key: "restitution",
+					label: "Material Restitution",
+					kind: .scalar(defaultValue: 0, unit: nil)
+				),
+				InspectorComponentParameter(
+					key: "m_mass",
+					label: "Mass",
+					kind: .scalar(defaultValue: 1, unit: nil)
+				),
+				InspectorComponentParameter(
+					key: "m_inertia",
+					label: "Inertia",
+					kind: .text(defaultValue: "(0.1, 0.1, 0.1)", placeholder: "(x, y, z)")
+				),
+				InspectorComponentParameter(
+					key: "position",
+					label: "Center of Mass Position",
+					kind: .text(defaultValue: "(0, 0, 0)", placeholder: "(x, y, z)")
+				),
+				InspectorComponentParameter(
+					key: "orientation",
+					label: "Center of Mass Orientation",
+					kind: .text(defaultValue: "(1, 0, 0, 0)", placeholder: "(w, x, y, z)")
+				),
+				InspectorComponentParameter(
+					key: "lockTranslationX",
+					label: "Translation Locked X",
+					kind: .toggle(defaultValue: false)
+				),
+				InspectorComponentParameter(
+					key: "lockTranslationY",
+					label: "Translation Locked Y",
+					kind: .toggle(defaultValue: false)
+				),
+				InspectorComponentParameter(
+					key: "lockTranslationZ",
+					label: "Translation Locked Z",
+					kind: .toggle(defaultValue: false)
+				),
+				InspectorComponentParameter(
+					key: "lockRotationX",
+					label: "Rotation Locked X",
+					kind: .toggle(defaultValue: false)
+				),
+				InspectorComponentParameter(
+					key: "lockRotationY",
+					label: "Rotation Locked Y",
+					kind: .toggle(defaultValue: false)
+				),
+				InspectorComponentParameter(
+					key: "lockRotationZ",
+					label: "Rotation Locked Z",
+					kind: .toggle(defaultValue: false)
+				)
+			]
+		case "RealityKit.MotionState":
+			return [
+				InspectorComponentParameter(
+					key: "linearVelocity",
+					label: "Linear Velocity",
+					kind: .text(defaultValue: "(0, 0, 0)", placeholder: "(x, y, z)")
+				),
+				InspectorComponentParameter(
+					key: "angularVelocity",
+					label: "Angular Velocity",
+					kind: .text(defaultValue: "(0, 0, 0)", placeholder: "(x, y, z)")
 				)
 			]
 		case "RealityKit.PointLight":
