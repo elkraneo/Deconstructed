@@ -1781,11 +1781,11 @@ private struct ComponentParametersSection: View {
 
 	private var previewVideoLabel: String {
 		if let raw = rawValues["previewVideo"], !raw.isEmpty {
-			let parsed = parseUSDString(raw)
+			let parsed = Self.parseUSDString(raw)
 			return parsed.isEmpty ? "None" : parsed
 		}
 		let fallback = authoredAttributes.first(where: { $0.name == "previewVideo" })?.value ?? ""
-		let parsed = parseUSDString(fallback)
+		let parsed = Self.parseUSDString(fallback)
 		return parsed.isEmpty ? "None" : parsed
 	}
 
@@ -1829,11 +1829,11 @@ private struct ComponentParametersSection: View {
 			switch kind {
 			case "trigger":
 				draft.triggerPath = path
-				draft.triggerType = parseUSDString(authoredMap["info:id"] ?? "")
-				let identifier = parseUSDString(authoredMap["identifier"] ?? "")
+				draft.triggerType = Self.parseUSDString(authoredMap["info:id"] ?? "")
+				let identifier = Self.parseUSDString(authoredMap["identifier"] ?? "")
 				draft.notificationIdentifier = identifier.isEmpty ? nil : identifier
 			case "action":
-				draft.actionType = parseUSDString(authoredMap["info:id"] ?? "")
+				draft.actionType = Self.parseUSDString(authoredMap["info:id"] ?? "")
 			default:
 				break
 			}
