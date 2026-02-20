@@ -679,6 +679,137 @@ public enum DeconstructedUSDInterop {
 		)
 	}
 
+	@discardableResult
+	public static func addBehaviorToContainer(
+		url: URL,
+		behaviorsContainerPrimPath: String,
+		triggerType: String,
+		actionType: String = "PlayTimeline"
+	) throws -> String {
+		guard let ownerPrimPath = parentPath(of: behaviorsContainerPrimPath) else {
+			throw DeconstructedUSDInteropError.componentAuthoringFailed(
+				reason: "Invalid behaviors container path: \(behaviorsContainerPrimPath)"
+			)
+		}
+
+		let baseBehaviorName = defaultBehaviorName(for: triggerType)
+		let behaviorName = try generateUniqueName(
+			url: url,
+			parentPath: ownerPrimPath,
+			baseName: baseBehaviorName
+		)
+		let behaviorPrimPath = "\(ownerPrimPath)/\(behaviorName)"
+		let triggerPrimPath = "\(behaviorPrimPath)/Trigger"
+		let actionPrimPath = "\(behaviorPrimPath)/Action"
+
+		_ = try ensureTypedPrim(
+			url: url,
+			parentPrimPath: ownerPrimPath,
+			typeName: "Preliminary_Behavior",
+			primName: behaviorName
+		)
+		_ = try ensureTypedPrim(
+			url: url,
+			parentPrimPath: behaviorPrimPath,
+			typeName: "Preliminary_Trigger",
+			primName: "Trigger"
+		)
+		_ = try ensureTypedPrim(
+			url: url,
+			parentPrimPath: behaviorPrimPath,
+			typeName: "Preliminary_Action",
+			primName: "Action"
+		)
+
+		try setRealityKitComponentParameter(
+			url: url,
+			componentPrimPath: behaviorPrimPath,
+			attributeType: "rel",
+			attributeName: "triggers",
+			valueLiteral: "<\(triggerPrimPath)>"
+		)
+		try setRealityKitComponentParameter(
+			url: url,
+			componentPrimPath: behaviorPrimPath,
+			attributeType: "rel",
+			attributeName: "actions",
+			valueLiteral: "<\(actionPrimPath)>"
+		)
+		try setRealityKitComponentParameter(
+			url: url,
+			componentPrimPath: triggerPrimPath,
+			attributeType: "token",
+			attributeName: "info:id",
+			valueLiteral: "\"\(triggerType)\""
+		)
+		try setRealityKitComponentParameter(
+			url: url,
+			componentPrimPath: triggerPrimPath,
+			attributeType: "rel",
+			attributeName: "affectedObjects",
+			valueLiteral: "<\(ownerPrimPath)>"
+		)
+		try setRealityKitComponentParameter(
+			url: url,
+			componentPrimPath: actionPrimPath,
+			attributeType: "token",
+			attributeName: "info:id",
+			valueLiteral: "\"\(actionType)\""
+		)
+		try setRealityKitComponentParameter(
+			url: url,
+			componentPrimPath: actionPrimPath,
+			attributeType: "rel",
+			attributeName: "affectedObjects",
+			valueLiteral: "None"
+		)
+		try setRealityKitComponentParameter(
+			url: url,
+			componentPrimPath: actionPrimPath,
+			attributeType: "rel",
+			attributeName: "animationLibraryKeyOverrideKey",
+			valueLiteral: "<\(triggerPrimPath)>"
+		)
+		try setRealityKitComponentParameter(
+			url: url,
+			componentPrimPath: actionPrimPath,
+			attributeType: "int",
+			attributeName: "loops",
+			valueLiteral: "0"
+		)
+		try setRealityKitComponentParameter(
+			url: url,
+			componentPrimPath: actionPrimPath,
+			attributeType: "int",
+			attributeName: "performCount",
+			valueLiteral: "1"
+		)
+		try setRealityKitComponentParameter(
+			url: url,
+			componentPrimPath: actionPrimPath,
+			attributeType: "token",
+			attributeName: "type",
+			valueLiteral: "\"serial\""
+		)
+
+		var behaviorTargets = primRelationshipTargets(
+			url: url,
+			primPath: behaviorsContainerPrimPath,
+			relationshipName: "behaviors"
+		)
+		if !behaviorTargets.contains(behaviorPrimPath) {
+			behaviorTargets.append(behaviorPrimPath)
+		}
+		try setRealityKitComponentParameter(
+			url: url,
+			componentPrimPath: behaviorsContainerPrimPath,
+			attributeType: "rel",
+			attributeName: "behaviors",
+			valueLiteral: formatUSDRelationshipTargets(behaviorTargets)
+		)
+		return behaviorPrimPath
+	}
+
 	public static func upsertRealityKitAudioFile(
 		url: URL,
 		primPath: String,
@@ -1951,7 +2082,7 @@ private func parseComponentMetadataBlock(
 		return nil
 	}
 	var metadata = String(declarationLine[declarationLine.index(after: openIndex)...])
-	var depth = metadata.filter { $0 == "(" }.count - metadata.filter { $0 == ")" }.count
+	var depth = 1 + metadata.filter { $0 == "(" }.count - metadata.filter { $0 == ")" }.count
 	if depth <= 0 {
 		return metadata
 	}
@@ -1968,6 +2099,21 @@ private func parseComponentMetadataBlock(
 		cursor += 1
 	}
 	return metadata
+}
+
+private func defaultBehaviorName(for triggerType: String) -> String {
+	switch triggerType {
+	case "TapGesture":
+		return "OnTap"
+	case "Collide":
+		return "OnCollision"
+	case "AddedToScene":
+		return "OnAddedToScene"
+	case "Notification":
+		return "OnNotification"
+	default:
+		return "Behavior"
+	}
 }
 
 private func parseCustomDataAsset(in metadata: String, key: String) -> String? {

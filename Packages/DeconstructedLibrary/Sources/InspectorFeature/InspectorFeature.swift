@@ -198,6 +198,12 @@ public struct InspectorFeature {
 		)
 		case addAnimationLibraryResourceSucceeded(componentPath: String)
 		case addAnimationLibraryResourceFailed(String)
+		case addBehaviorRequested(
+			componentPath: String,
+			triggerType: String
+		)
+		case addBehaviorSucceeded(componentPath: String)
+		case addBehaviorFailed(String)
 		case removeAnimationLibraryResourceRequested(
 			componentPath: String,
 			resourcePrimPath: String
@@ -1443,6 +1449,54 @@ public struct InspectorFeature {
 
 			case .addAnimationLibraryResourceFailed(let message):
 				state.primErrorMessage = "Failed to add animation resource: \(message)"
+				return .none
+
+			case .addBehaviorRequested(let componentPath, let triggerType):
+				guard let url = state.sceneURL else {
+					return .none
+				}
+				let sceneNodesSnapshot = state.sceneNodes
+				return .run { send in
+					do {
+						_ = try DeconstructedUSDInterop.addBehaviorToContainer(
+							url: url,
+							behaviorsContainerPrimPath: componentPath,
+							triggerType: triggerType
+						)
+						let refreshed = DeconstructedUSDInterop.getPrimAttributes(
+							url: url,
+							primPath: componentPath
+						)?.authoredAttributes ?? []
+						await send(
+							.componentAuthoredAttributesLoaded([
+								componentPath: mergedComponentAuthoredAttributes(
+									componentPath: componentPath,
+									authoredAttributes: refreshed,
+									url: url
+								)
+							])
+						)
+						await send(
+							.componentDescendantAttributesLoaded([
+								componentPath: loadComponentDescendantAttributes(
+									componentPath: componentPath,
+									sceneNodes: sceneNodesSnapshot,
+									url: url
+								)
+							])
+						)
+						await send(.addBehaviorSucceeded(componentPath: componentPath))
+					} catch {
+						await send(.addBehaviorFailed(error.localizedDescription))
+					}
+				}
+
+			case .addBehaviorSucceeded:
+				state.primErrorMessage = nil
+				return .none
+
+			case .addBehaviorFailed(let message):
+				state.primErrorMessage = "Failed to add behavior: \(message)"
 				return .none
 
 			case .removeAnimationLibraryResourceRequested(

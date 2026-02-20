@@ -227,6 +227,14 @@ public struct InspectorView: View {
 													)
 												)
 											},
+											onAddBehavior: { targetPath, triggerType in
+												store.send(
+													.addBehaviorRequested(
+														componentPath: targetPath,
+														triggerType: triggerType
+													)
+												)
+											},
 											onRemoveAnimationResource: { targetPath, resourcePrimPath in
 												store.send(
 													.removeAnimationLibraryResourceRequested(
@@ -1165,6 +1173,7 @@ private struct ComponentParametersSection: View {
 	let onAddAudioResource: (String, URL) -> Void
 	let onRemoveAudioResource: (String, String) -> Void
 	let onAddAnimationResource: (String, URL) -> Void
+	let onAddBehavior: (String, String) -> Void
 	let onRemoveAnimationResource: (String, String) -> Void
 	let onPasteComponent: (String) -> Void
 	let onDelete: () -> Void
@@ -1194,6 +1203,7 @@ private struct ComponentParametersSection: View {
 		onAddAudioResource: @escaping (String, URL) -> Void,
 		onRemoveAudioResource: @escaping (String, String) -> Void,
 		onAddAnimationResource: @escaping (String, URL) -> Void,
+		onAddBehavior: @escaping (String, String) -> Void,
 		onRemoveAnimationResource: @escaping (String, String) -> Void,
 		onPasteComponent: @escaping (String) -> Void,
 		onDelete: @escaping () -> Void
@@ -1211,6 +1221,7 @@ private struct ComponentParametersSection: View {
 		self.onAddAudioResource = onAddAudioResource
 		self.onRemoveAudioResource = onRemoveAudioResource
 		self.onAddAnimationResource = onAddAnimationResource
+		self.onAddBehavior = onAddBehavior
 		self.onRemoveAnimationResource = onRemoveAnimationResource
 		self.onPasteComponent = onPasteComponent
 		self.onDelete = onDelete
@@ -1705,9 +1716,32 @@ private struct ComponentParametersSection: View {
 					InspectorGroupBox(title: behavior.title, isExpanded: .constant(true)) {
 						VStack(alignment: .leading, spacing: 8) {
 							InspectorRow(label: "Trigger") {
-								Text(behavior.triggerType ?? "Unknown")
-									.font(.system(size: 11))
-									.foregroundStyle(.primary)
+								if let triggerPath = behavior.triggerPath {
+									Picker(
+										"",
+										selection: Binding(
+											get: { behavior.triggerType ?? "TapGesture" },
+											set: { newValue in
+												onRawAttributeChanged(
+													triggerPath,
+													"token",
+													"info:id",
+													quoteUSDString(newValue)
+												)
+											}
+										)
+									) {
+										ForEach(behaviorTriggerTypes, id: \.self) { option in
+											Text(behaviorTriggerLabel(for: option)).tag(option)
+										}
+									}
+									.labelsHidden()
+									.pickerStyle(.menu)
+								} else {
+									Text(behavior.triggerType ?? "Unknown")
+										.font(.system(size: 11))
+										.foregroundStyle(.primary)
+								}
 							}
 							if behavior.triggerType == "Collide", let triggerPath = behavior.triggerPath {
 								VStack(alignment: .leading, spacing: 4) {
@@ -1735,9 +1769,32 @@ private struct ComponentParametersSection: View {
 								}
 							}
 							InspectorRow(label: "Action") {
-								Text(behavior.actionType ?? "None")
-									.font(.system(size: 11))
-									.foregroundStyle(.primary)
+								if let actionPath = behavior.actionPath {
+									Picker(
+										"",
+										selection: Binding(
+											get: { behavior.actionType ?? "PlayTimeline" },
+											set: { newValue in
+												onRawAttributeChanged(
+													actionPath,
+													"token",
+													"info:id",
+													quoteUSDString(newValue)
+												)
+											}
+										)
+									) {
+										ForEach(behaviorActionTypes, id: \.self) { option in
+											Text(option).tag(option)
+										}
+									}
+									.labelsHidden()
+									.pickerStyle(.menu)
+								} else {
+									Text(behavior.actionType ?? "None")
+										.font(.system(size: 11))
+										.foregroundStyle(.primary)
+								}
 							}
 							if let actionPath = behavior.actionPath {
 								InspectorRow(label: "Action Target") {
@@ -1802,6 +1859,21 @@ private struct ComponentParametersSection: View {
 					}
 				}
 			}
+			HStack(spacing: 10) {
+				Menu {
+					ForEach(behaviorTriggerTypes, id: \.self) { triggerType in
+						Button("Add \(behaviorTriggerLabel(for: triggerType))") {
+							onAddBehavior(componentPath, triggerType)
+						}
+					}
+				} label: {
+					Image(systemName: "plus")
+						.font(.system(size: 12, weight: .medium))
+				}
+				.menuStyle(.borderlessButton)
+				Spacer()
+			}
+			.padding(.horizontal, 4)
 		}
 	}
 
@@ -1951,6 +2023,29 @@ private struct ComponentParametersSection: View {
 			}
 		}
 		return options
+	}
+
+	private var behaviorTriggerTypes: [String] {
+		["TapGesture", "Collide", "AddedToScene", "Notification"]
+	}
+
+	private var behaviorActionTypes: [String] {
+		["PlayTimeline"]
+	}
+
+	private func behaviorTriggerLabel(for type: String) -> String {
+		switch type {
+		case "TapGesture":
+			return "OnTap"
+		case "Collide":
+			return "OnCollision"
+		case "AddedToScene":
+			return "OnAddedToScene"
+		case "Notification":
+			return "OnNotification"
+		default:
+			return type
+		}
 	}
 
 	private func parseRelationshipTargetCSV(_ input: String) -> [String] {
