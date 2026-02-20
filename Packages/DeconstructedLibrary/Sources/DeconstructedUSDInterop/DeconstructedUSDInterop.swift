@@ -12,6 +12,7 @@ import USDInteropAdvancedInspection
 // Keep these fileprivate so OpenUSD internals never leak into the module API.
 fileprivate typealias UsdStage = pxrInternal_v0_25_8__pxrReserved__.UsdStage
 fileprivate typealias SdfPath = pxrInternal_v0_25_8__pxrReserved__.SdfPath
+fileprivate typealias SdfPathVector = pxrInternal_v0_25_8__pxrReserved__.SdfPathVector
 fileprivate typealias TfToken = pxrInternal_v0_25_8__pxrReserved__.TfToken
 fileprivate typealias SdfValueTypeName = pxrInternal_v0_25_8__pxrReserved__.SdfValueTypeName
 fileprivate typealias SdfVariability = pxrInternal_v0_25_8__pxrReserved__.SdfVariability
@@ -1469,6 +1470,14 @@ private func setComponentParameterWithUSDMutation(
 			),
 			UsdTimeCode.Default()
 		)
+	case "rel":
+		let relationship = prim.CreateRelationship(token, false)
+		var targets = SdfPathVector()
+		let parsedTargets = parseUSDRelationshipTargetsLiteral(valueLiteral)
+		for target in parsedTargets {
+			targets.push_back(SdfPath(std.string(target)))
+		}
+		didAuthor = relationship.SetTargets(targets)
 	default:
 		return false
 	}
@@ -1505,10 +1514,16 @@ private func deleteComponentParameterWithUSDMutation(
 	}
 	let token = TfToken(std.string(attributeName))
 	let attribute = prim.GetAttribute(token)
-	guard attribute.IsValid() else {
-		return false
+	if attribute.IsValid() {
+		_ = attribute.Clear()
+	} else {
+		let relationship = prim.GetRelationship(token)
+		guard relationship.IsValid() else {
+			return false
+		}
+		let emptyTargets = SdfPathVector()
+		_ = relationship.SetTargets(emptyTargets)
 	}
-	_ = attribute.Clear()
 
 	let rootLayerHandle = stage.GetRootLayer()
 	guard Bool(rootLayerHandle) else {
