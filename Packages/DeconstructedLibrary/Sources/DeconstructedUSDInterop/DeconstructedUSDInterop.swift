@@ -18,6 +18,8 @@ fileprivate typealias SdfValueTypeName = pxrInternal_v0_25_8__pxrReserved__.SdfV
 fileprivate typealias SdfVariability = pxrInternal_v0_25_8__pxrReserved__.SdfVariability
 fileprivate typealias UsdTimeCode = pxrInternal_v0_25_8__pxrReserved__.UsdTimeCode
 fileprivate typealias VtValue = pxrInternal_v0_25_8__pxrReserved__.VtValue
+fileprivate typealias VtStringArray = pxrInternal_v0_25_8__pxrReserved__.VtStringArray
+fileprivate typealias VtTokenArray = pxrInternal_v0_25_8__pxrReserved__.VtTokenArray
 fileprivate typealias GfVec2f = pxrInternal_v0_25_8__pxrReserved__.GfVec2f
 fileprivate typealias GfVec3f = pxrInternal_v0_25_8__pxrReserved__.GfVec3f
 fileprivate typealias GfQuatf = pxrInternal_v0_25_8__pxrReserved__.GfQuatf
@@ -1447,6 +1449,22 @@ private func setComponentParameterWithUSDMutation(
 		guard let value = parseUSDAssetLiteral(valueLiteral) else { return false }
 		let attr = prim.CreateAttribute(token, SdfValueTypeName.Asset, false, variability)
 		didAuthor = attr.Set(VtValue(SdfAssetPath(std.string(value))), UsdTimeCode.Default())
+	case "string[]":
+		guard let values = parseUSDStringArrayLiteral(valueLiteral) else { return false }
+		let attr = prim.CreateAttribute(token, SdfValueTypeName.StringArray, false, variability)
+		var array = VtStringArray()
+		for value in values {
+			array.push_back(std.string(value))
+		}
+		didAuthor = attr.Set(array, UsdTimeCode.Default())
+	case "token[]":
+		guard let values = parseUSDStringArrayLiteral(valueLiteral) else { return false }
+		let attr = prim.CreateAttribute(token, SdfValueTypeName.TokenArray, false, variability)
+		var array = VtTokenArray()
+		for value in values {
+			array.push_back(TfToken(std.string(value)))
+		}
+		didAuthor = attr.Set(array, UsdTimeCode.Default())
 	case "float2":
 		guard let value = parseUSDFloatTuple(valueLiteral, count: 2) else { return false }
 		let attr = prim.CreateAttribute(token, SdfValueTypeName.Float2, false, variability)
@@ -1603,6 +1621,26 @@ private func parseUSDAssetLiteral(_ raw: String) -> String? {
 	let start = trimmed.index(after: trimmed.startIndex)
 	let end = trimmed.index(before: trimmed.endIndex)
 	return String(trimmed[start..<end])
+}
+
+private func parseUSDStringArrayLiteral(_ raw: String) -> [String]? {
+	let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+	guard trimmed.hasPrefix("["), trimmed.hasSuffix("]"), trimmed.count >= 2 else {
+		return nil
+	}
+	let body = String(trimmed.dropFirst().dropLast())
+	if body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+		return []
+	}
+	let tokenRegex = /"((?:\\.|[^"\\])*)"/
+	var values: [String] = []
+	var searchStart = body.startIndex
+	while searchStart < body.endIndex,
+	      let match = body[searchStart...].firstMatch(of: tokenRegex) {
+		values.append(parseUSDQuotedStringLiteral("\"\(match.output.1)\""))
+		searchStart = match.range.upperBound
+	}
+	return values
 }
 
 private func parseUSDFloatTuple(_ raw: String, count: Int) -> [Double]? {
