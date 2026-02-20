@@ -2942,7 +2942,14 @@ private struct ComponentParametersSection: View {
 	}
 
 	private static func parseUSDBool(_ raw: String) -> Bool? {
-		switch raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+		var normalized = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+		if normalized.hasSuffix(",") {
+			normalized.removeLast()
+		}
+		if normalized.count >= 2, normalized.first == "\"", normalized.last == "\"" {
+			normalized = String(normalized.dropFirst().dropLast())
+		}
+		switch normalized.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
 		case "true":
 			return true
 		case "false":

@@ -1534,7 +1534,14 @@ private func isUniformAttributeType(_ raw: String) -> Bool {
 }
 
 private func parseUSDBoolLiteral(_ raw: String) -> Bool? {
-	switch raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+	var normalized = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+	if normalized.hasSuffix(",") {
+		normalized.removeLast()
+	}
+	if normalized.count >= 2, normalized.first == "\"", normalized.last == "\"" {
+		normalized = String(normalized.dropFirst().dropLast())
+	}
+	switch normalized.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
 	case "true", "1":
 		return true
 	case "false", "0":
