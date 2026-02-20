@@ -1831,8 +1831,9 @@ private struct ComponentParametersSection: View {
 								}
 							}
 							if let triggerPath = behavior.triggerPath,
-							   let notification = behavior.notificationIdentifier
+							   behavior.triggerType == "Notification"
 							{
+								let notification = behavior.notificationIdentifier ?? ""
 								VStack(alignment: .leading, spacing: 4) {
 									Text("Notification Identifier")
 										.font(.system(size: 11))
