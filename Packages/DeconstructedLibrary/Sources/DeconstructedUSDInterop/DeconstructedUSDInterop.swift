@@ -2168,7 +2168,7 @@ private func updateRealityKitComponentParameterInUSDA(
 	var componentIndent: String?
 	var inTarget = false
 	var insertIndex: Int?
-	var replaceIndex: Int?
+	var replaceRange: Range<Int>?
 
 	for (index, line) in lines.enumerated() {
 		if let declaration = parsePrimDeclarationLine(line) {
@@ -2204,7 +2204,21 @@ private func updateRealityKitComponentParameterInUSDA(
 				if nameRange.location != NSNotFound {
 					let name = nsLine.substring(with: nameRange)
 					if name == attributeName {
-						replaceIndex = index
+						let start = index
+						var end = index + 1
+						if let equalsRange = line.range(of: "=") {
+							let literal = String(line[equalsRange.upperBound...])
+							var bracketDepth = literal.filter { $0 == "[" }.count - literal.filter { $0 == "]" }.count
+							var cursor = index + 1
+							while bracketDepth > 0, cursor < lines.count {
+								let continuation = lines[cursor]
+								bracketDepth += continuation.filter { $0 == "[" }.count
+								bracketDepth -= continuation.filter { $0 == "]" }.count
+								cursor += 1
+							}
+							end = max(end, cursor)
+						}
+						replaceRange = start..<end
 					}
 				}
 			}
@@ -2232,8 +2246,8 @@ private func updateRealityKitComponentParameterInUSDA(
 	let fieldIndent = componentIndent + indentUnit
 	let authoredLine = "\(fieldIndent)\(attributeType) \(attributeName) = \(valueLiteral)"
 	var updatedLines = lines
-	if let replaceIndex {
-		updatedLines[replaceIndex] = authoredLine
+	if let replaceRange {
+		updatedLines.replaceSubrange(replaceRange, with: [authoredLine])
 	} else {
 		updatedLines.insert(authoredLine, at: insertIndex)
 	}
