@@ -235,6 +235,14 @@ public struct InspectorView: View {
 													)
 												)
 											},
+											onRemoveBehavior: { targetPath, behaviorPrimPath in
+												store.send(
+													.removeBehaviorRequested(
+														componentPath: targetPath,
+														behaviorPrimPath: behaviorPrimPath
+													)
+												)
+											},
 											onRemoveAnimationResource: { targetPath, resourcePrimPath in
 												store.send(
 													.removeAnimationLibraryResourceRequested(
@@ -1174,6 +1182,7 @@ private struct ComponentParametersSection: View {
 	let onRemoveAudioResource: (String, String) -> Void
 	let onAddAnimationResource: (String, URL) -> Void
 	let onAddBehavior: (String, String) -> Void
+	let onRemoveBehavior: (String, String) -> Void
 	let onRemoveAnimationResource: (String, String) -> Void
 	let onPasteComponent: (String) -> Void
 	let onDelete: () -> Void
@@ -1204,6 +1213,7 @@ private struct ComponentParametersSection: View {
 		onRemoveAudioResource: @escaping (String, String) -> Void,
 		onAddAnimationResource: @escaping (String, URL) -> Void,
 		onAddBehavior: @escaping (String, String) -> Void,
+		onRemoveBehavior: @escaping (String, String) -> Void,
 		onRemoveAnimationResource: @escaping (String, String) -> Void,
 		onPasteComponent: @escaping (String) -> Void,
 		onDelete: @escaping () -> Void
@@ -1222,6 +1232,7 @@ private struct ComponentParametersSection: View {
 		self.onRemoveAudioResource = onRemoveAudioResource
 		self.onAddAnimationResource = onAddAnimationResource
 		self.onAddBehavior = onAddBehavior
+		self.onRemoveBehavior = onRemoveBehavior
 		self.onRemoveAnimationResource = onRemoveAnimationResource
 		self.onPasteComponent = onPasteComponent
 		self.onDelete = onDelete
@@ -1715,6 +1726,17 @@ private struct ComponentParametersSection: View {
 				ForEach(behaviors) { behavior in
 					InspectorGroupBox(title: behavior.title, isExpanded: .constant(true)) {
 						VStack(alignment: .leading, spacing: 8) {
+							HStack {
+								Spacer()
+								Button(role: .destructive) {
+									onRemoveBehavior(componentPath, behavior.path)
+								} label: {
+									Image(systemName: "minus.circle")
+										.font(.system(size: 12, weight: .medium))
+								}
+								.buttonStyle(.plain)
+								.help("Delete \(behavior.title)")
+							}
 							InspectorRow(label: "Trigger") {
 								if let triggerPath = behavior.triggerPath {
 									Picker(

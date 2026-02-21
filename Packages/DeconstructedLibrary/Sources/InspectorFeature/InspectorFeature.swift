@@ -204,6 +204,12 @@ public struct InspectorFeature {
 		)
 		case addBehaviorSucceeded(componentPath: String)
 		case addBehaviorFailed(String)
+		case removeBehaviorRequested(
+			componentPath: String,
+			behaviorPrimPath: String
+		)
+		case removeBehaviorSucceeded(componentPath: String)
+		case removeBehaviorFailed(String)
 		case removeAnimationLibraryResourceRequested(
 			componentPath: String,
 			resourcePrimPath: String
@@ -1497,6 +1503,54 @@ public struct InspectorFeature {
 
 			case .addBehaviorFailed(let message):
 				state.primErrorMessage = "Failed to add behavior: \(message)"
+				return .none
+
+			case let .removeBehaviorRequested(componentPath, behaviorPrimPath):
+				guard let url = state.sceneURL else {
+					return .none
+				}
+				let sceneNodesSnapshot = state.sceneNodes
+				return .run { send in
+					do {
+						try DeconstructedUSDInterop.removeBehaviorFromContainer(
+							url: url,
+							behaviorsContainerPrimPath: componentPath,
+							behaviorPrimPath: behaviorPrimPath
+						)
+						let refreshed = DeconstructedUSDInterop.getPrimAttributes(
+							url: url,
+							primPath: componentPath
+						)?.authoredAttributes ?? []
+						await send(
+							.componentAuthoredAttributesLoaded([
+								componentPath: mergedComponentAuthoredAttributes(
+									componentPath: componentPath,
+									authoredAttributes: refreshed,
+									url: url
+								)
+							])
+						)
+						await send(
+							.componentDescendantAttributesLoaded([
+								componentPath: loadComponentDescendantAttributes(
+									componentPath: componentPath,
+									sceneNodes: sceneNodesSnapshot,
+									url: url
+								)
+							])
+						)
+						await send(.removeBehaviorSucceeded(componentPath: componentPath))
+					} catch {
+						await send(.removeBehaviorFailed(error.localizedDescription))
+					}
+				}
+
+			case .removeBehaviorSucceeded:
+				state.primErrorMessage = nil
+				return .none
+
+			case .removeBehaviorFailed(let message):
+				state.primErrorMessage = "Failed to remove behavior: \(message)"
 				return .none
 
 			case .removeAnimationLibraryResourceRequested(

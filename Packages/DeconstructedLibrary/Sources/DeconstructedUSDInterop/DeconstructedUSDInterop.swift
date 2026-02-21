@@ -813,6 +813,27 @@ public enum DeconstructedUSDInterop {
 		return behaviorPrimPath
 	}
 
+	public static func removeBehaviorFromContainer(
+		url: URL,
+		behaviorsContainerPrimPath: String,
+		behaviorPrimPath: String
+	) throws {
+		var behaviorTargets = primRelationshipTargets(
+			url: url,
+			primPath: behaviorsContainerPrimPath,
+			relationshipName: "behaviors"
+		)
+		behaviorTargets.removeAll { $0 == behaviorPrimPath }
+		try setRealityKitComponentParameter(
+			url: url,
+			componentPrimPath: behaviorsContainerPrimPath,
+			attributeType: "rel",
+			attributeName: "behaviors",
+			valueLiteral: formatUSDRelationshipTargets(behaviorTargets)
+		)
+		try deletePrimAtPath(url: url, primPath: behaviorPrimPath)
+	}
+
 	public static func upsertRealityKitAudioFile(
 		url: URL,
 		primPath: String,
