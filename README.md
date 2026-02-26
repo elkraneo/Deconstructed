@@ -51,18 +51,19 @@ Deconstructed/
 │   └── DeconstructedLibrary/       # Swift Package with feature modules
 │       ├── Sources/
 │       │   ├── RCPDocument/        # FileDocument conformance
-│       │   ├── DeconstructedModels/ # JSON schema models
-│       │   ├── ProjectBrowserFeature/  # File browser TCA feature
-│       │   ├── ProjectBrowserClients/  # File watching, asset discovery
-│       │   ├── ProjectBrowserUI/   # SwiftUI views
-│       │   ├── SceneGraphFeature/  # Scene hierarchy navigation
-│       │   ├── SceneGraphClients/  # USD scene loading
-│       │   ├── SceneGraphUI/       # Scene tree view
+│       │   ├── RCPPackage/         # Package model + IO helpers
+│       │   ├── DeconstructedModels/ # Shared app/document models
+│       │   ├── DeconstructedClients/ # Cross-feature clients
+│       │   ├── DeconstructedFeatures/ # Root reducers and orchestration
+│       │   ├── DeconstructedUI/    # Shared/editor shell UI
+│       │   ├── ProjectBrowser*     # Browser models, clients, feature, UI
+│       │   ├── SceneGraph*         # Scene graph models, clients, feature, UI
+│       │   ├── Inspector*          # Inspector models, feature, UI
 │       │   ├── ViewportModels/     # Viewport state models
 │       │   ├── ViewportUI/         # 3D viewport (RealityKitStageView-based)
-│       │   ├── InspectorFeature/   # Inspector TCA feature
-│       │   ├── InspectorModels/    # Inspector data models
-│       │   └── InspectorUI/        # Inspector panel views
+│       │   ├── DeconstructedUSDInterop/   # USD bridge surfaces
+│       │   ├── DeconstructedUSDPipeline/  # USD data/operation pipeline
+│       │   └── ProjectScaffolding/ # New project template/scaffolding
 │       └── Tests/
 ├── Deconstructed.xcodeproj/
 └── Deconstructed.xcworkspace/      # Primary local entry point
@@ -132,6 +133,11 @@ This project is documented in a series of articles exploring the reverse-enginee
    - Implementing variant set discovery and selection workflows
    - Bridging inspector edits to live viewport and scene graph updates
 
+8. **[Deconstructing Reality Composer Pro: Inspector Components](https://elkraneo.com/deconstructing-reality-composer-pro-inspector-components/)**
+   - Adding component-level inspection and editing workflows
+   - Modeling component data/state in TCA-friendly feature boundaries
+   - Keeping inspector interactions synchronized with stage updates
+
 ## Notes
 
 - `/Volumes/Plutonian/_Developer/Deconstructed/source/Deconstructed/Docs/MaterialX-Interchange.md` (MaterialX vs UsdPreviewSurface portability through RealityKit/RCP)
@@ -144,11 +150,10 @@ This project is documented in a series of articles exploring the reverse-enginee
 - ✅ **Project Browser**: File tree with folder creation, file operations, and live watching
 - ✅ **Scene Navigator**: Hierarchy view with prim selection and insertion
 - ✅ **Viewport**: 3D preview with grid, axes, and environment controls
-- ✅ **Inspector**: Layer Data, scene playback, transform editing, material bindings, references, and variants
+- ✅ **Inspector**: Layer Data, scene playback, transform editing, material bindings, references, variants, and component workflows
 
 ### In Progress
 
-- 🚧 **Component Management**: ECS component visualization and editing
 - 🚧 **Material Editor**: Shader graph integration
 
 ## License
