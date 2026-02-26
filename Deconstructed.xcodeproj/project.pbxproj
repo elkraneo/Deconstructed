@@ -79,6 +79,7 @@
 				AE746AF32F278AE90087A28B /* Sources */,
 				AE746AF42F278AE90087A28B /* Frameworks */,
 				AE746AF52F278AE90087A28B /* Resources */,
+				F0A1B2C3D4E5F60718293A4B /* Re-sign Embedded Runtime Dependencies */,
 			);
 			buildRules = (
 			);
@@ -144,6 +145,28 @@
 		};
 /* End PBXResourcesBuildPhase section */
 
+/* Begin PBXShellScriptBuildPhase section */
+		F0A1B2C3D4E5F60718293A4B /* Re-sign Embedded Runtime Dependencies */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Re-sign Embedded Runtime Dependencies";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -euo pipefail\n\nAPP_BUNDLE=\"${TARGET_BUILD_DIR}/${WRAPPER_NAME}\"\nif [ ! -d \"$APP_BUNDLE\" ]; then\n  exit 0\nfi\n\nSIGN_IDENTITY=\"${EXPANDED_CODE_SIGN_IDENTITY:-}\"\nif [ -z \"$SIGN_IDENTITY\" ]; then\n  SIGN_IDENTITY=\"-\"\nfi\n\n# Clear Finder/FileProvider xattrs that can break strict signature validation.\n/usr/bin/xattr -cr \"$APP_BUNDLE\" || true\n\nfor RELATIVE_DIR in \"Contents/Frameworks\" \"Contents/PlugIns\" \"Contents/XPCServices\"; do\n  SEARCH_ROOT=\"$APP_BUNDLE/$RELATIVE_DIR\"\n  if [ ! -d \"$SEARCH_ROOT\" ]; then\n    continue\n  fi\n\n  /usr/bin/find \"$SEARCH_ROOT\" -depth \\( -name \"*.dylib\" -o -name \"*.framework\" -o -name \"*.bundle\" -o -name \"*.appex\" -o -name \"*.plugin\" -o -name \"*.xpc\" \\) -print |\n    while IFS= read -r ITEM; do\n      /usr/bin/codesign --force --sign \"$SIGN_IDENTITY\" --timestamp=none \"$ITEM\"\n    done\ndone\n\nRESOURCE_USD_DIR=\"$APP_BUNDLE/Contents/Resources/usd\"\nif [ -d \"$RESOURCE_USD_DIR\" ]; then\n  /usr/bin/find \"$RESOURCE_USD_DIR\" -name \"*.dylib\" -print |\n    while IFS= read -r ITEM; do\n      /usr/bin/codesign --force --sign \"$SIGN_IDENTITY\" --timestamp=none \"$ITEM\"\n    done\nfi\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
 		AE746AF32F278AE90087A28B /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
@@ -164,10 +187,9 @@
 				AUTOMATION_APPLE_EVENTS = NO;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++17";
 				CLANG_ENABLE_EXPLICIT_MODULES = NO;
-				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 6;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = 32JHA4FFUH;
 				ENABLE_APP_SANDBOX = NO;
@@ -221,10 +243,9 @@
 				AUTOMATION_APPLE_EVENTS = NO;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++17";
 				CLANG_ENABLE_EXPLICIT_MODULES = NO;
-				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 6;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = 32JHA4FFUH;
 				ENABLE_APP_SANDBOX = NO;
