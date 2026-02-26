@@ -227,6 +227,22 @@ public struct InspectorView: View {
 													)
 												)
 											},
+											onAddBehavior: { targetPath, triggerType in
+												store.send(
+													.addBehaviorRequested(
+														componentPath: targetPath,
+														triggerType: triggerType
+													)
+												)
+											},
+											onRemoveBehavior: { targetPath, behaviorPrimPath in
+												store.send(
+													.removeBehaviorRequested(
+														componentPath: targetPath,
+														behaviorPrimPath: behaviorPrimPath
+													)
+												)
+											},
 											onRemoveAnimationResource: { targetPath, resourcePrimPath in
 												store.send(
 													.removeAnimationLibraryResourceRequested(
@@ -1165,6 +1181,8 @@ private struct ComponentParametersSection: View {
 	let onAddAudioResource: (String, URL) -> Void
 	let onRemoveAudioResource: (String, String) -> Void
 	let onAddAnimationResource: (String, URL) -> Void
+	let onAddBehavior: (String, String) -> Void
+	let onRemoveBehavior: (String, String) -> Void
 	let onRemoveAnimationResource: (String, String) -> Void
 	let onPasteComponent: (String) -> Void
 	let onDelete: () -> Void
@@ -1194,6 +1212,8 @@ private struct ComponentParametersSection: View {
 		onAddAudioResource: @escaping (String, URL) -> Void,
 		onRemoveAudioResource: @escaping (String, String) -> Void,
 		onAddAnimationResource: @escaping (String, URL) -> Void,
+		onAddBehavior: @escaping (String, String) -> Void,
+		onRemoveBehavior: @escaping (String, String) -> Void,
 		onRemoveAnimationResource: @escaping (String, String) -> Void,
 		onPasteComponent: @escaping (String) -> Void,
 		onDelete: @escaping () -> Void
@@ -1211,6 +1231,8 @@ private struct ComponentParametersSection: View {
 		self.onAddAudioResource = onAddAudioResource
 		self.onRemoveAudioResource = onRemoveAudioResource
 		self.onAddAnimationResource = onAddAnimationResource
+		self.onAddBehavior = onAddBehavior
+		self.onRemoveBehavior = onRemoveBehavior
 		self.onRemoveAnimationResource = onRemoveAnimationResource
 		self.onPasteComponent = onPasteComponent
 		self.onDelete = onDelete
@@ -1287,21 +1309,25 @@ private struct ComponentParametersSection: View {
 				} label: {
 					Image(systemName: isActive ? "checkmark.circle" : "circle")
 						.font(.system(size: 16, weight: .semibold))
-						.foregroundStyle(isActive ? .orange : .secondary)
+						.foregroundStyle(isActive ? .blue : .secondary)
 				}
 				.buttonStyle(.plain)
 				.help(isActive ? "Deactivate component" : "Activate component")
 			}
 
-			Group {
-				let parameters = definition?.parameterLayout ?? []
-				if componentIdentifier == "RealityKit.AudioLibrary" {
-					audioLibraryEditor
-				} else if componentIdentifier == "RealityKit.AnimationLibrary" {
-					animationLibraryEditor
-				} else if componentIdentifier == "RealityKit.RigidBody" {
-					physicsBodyEditor
-				} else if parameters.isEmpty {
+				Group {
+					let parameters = definition?.parameterLayout ?? []
+					if componentIdentifier == "RealityKit.AudioLibrary" {
+						audioLibraryEditor
+					} else if componentIdentifier == "RealityKit.AnimationLibrary" {
+						animationLibraryEditor
+					} else if componentIdentifier == "RealityKit.CustomDockingRegion" {
+						customDockingRegionEditor
+					} else if componentIdentifier == "RCP.BehaviorsContainer" {
+						behaviorsEditor
+					} else if componentIdentifier == "RealityKit.RigidBody" {
+						physicsBodyEditor
+					} else if parameters.isEmpty {
 					let visibleAttributes = authoredAttributes.filter { $0.name != "info:id" }
 					if visibleAttributes.isEmpty {
 						Text("No editable parameters mapped yet.")
@@ -1378,8 +1404,8 @@ private struct ComponentParametersSection: View {
 						}
 					}
 				} else {
-					VStack(alignment: .leading, spacing: 10) {
-						ForEach(parameters, id: \.key) { parameter in
+						VStack(alignment: .leading, spacing: 10) {
+							ForEach(parameters.filter { shouldDisplay(parameter: $0) }, id: \.key) { parameter in
 							switch parameter.kind {
 							case let .toggle(defaultValue):
 								Toggle(
@@ -1389,18 +1415,37 @@ private struct ComponentParametersSection: View {
 								.font(.system(size: 11))
 								.toggleStyle(.checkbox)
 
-							case let .text(defaultValue, placeholder):
-								VStack(alignment: .leading, spacing: 4) {
-									Text(parameter.label)
-										.font(.system(size: 11))
-										.foregroundStyle(.secondary)
-									TextField(
-										placeholder,
-										text: stringBinding(for: parameter.key, fallback: defaultValue)
-									)
-									.textFieldStyle(.roundedBorder)
-									.font(.system(size: 11))
-								}
+								case let .text(defaultValue, placeholder):
+									if isColorParameter(parameter.key) {
+										InspectorRow(label: parameter.label) {
+											HStack(spacing: 8) {
+												ColorPicker(
+													"",
+													selection: colorBinding(for: parameter.key, fallback: defaultValue),
+													supportsOpacity: false
+												)
+												.labelsHidden()
+												TextField(
+													placeholder,
+													text: stringBinding(for: parameter.key, fallback: defaultValue)
+												)
+												.textFieldStyle(.roundedBorder)
+												.font(.system(size: 11))
+											}
+										}
+									} else {
+										VStack(alignment: .leading, spacing: 4) {
+											Text(parameter.label)
+												.font(.system(size: 11))
+												.foregroundStyle(.secondary)
+											TextField(
+												placeholder,
+												text: stringBinding(for: parameter.key, fallback: defaultValue)
+											)
+											.textFieldStyle(.roundedBorder)
+											.font(.system(size: 11))
+										}
+									}
 
 							case let .scalar(defaultValue, unit):
 								InspectorRow(label: parameter.label) {
@@ -1657,10 +1702,392 @@ private struct ComponentParametersSection: View {
 		parseAnimationLibraryResources(from: descendantAttributes)
 	}
 
+	private struct BehaviorEditorModel: Identifiable {
+		let id: String
+		let path: String
+		let title: String
+		let triggerPath: String?
+		let triggerType: String?
+		let colliders: [String]
+		let actionPath: String?
+		let actionType: String?
+		let actionTargetPath: String?
+		let notificationIdentifier: String?
+	}
+
+	private var behaviorsEditor: some View {
+		let behaviors = parseBehaviorModels(from: descendantAttributes)
+		return VStack(alignment: .leading, spacing: 8) {
+			if behaviors.isEmpty {
+				Text("No behaviors authored yet.")
+					.font(.system(size: 11))
+					.foregroundStyle(.secondary)
+			} else {
+				ForEach(behaviors) { behavior in
+					InspectorGroupBox(title: behavior.title, isExpanded: .constant(true)) {
+						VStack(alignment: .leading, spacing: 8) {
+							HStack {
+								Spacer()
+								Button(role: .destructive) {
+									onRemoveBehavior(componentPath, behavior.path)
+								} label: {
+									Image(systemName: "minus.circle")
+										.font(.system(size: 12, weight: .medium))
+								}
+								.buttonStyle(.plain)
+								.help("Delete \(behavior.title)")
+							}
+							InspectorRow(label: "Trigger") {
+								if let triggerPath = behavior.triggerPath {
+									Picker(
+										"",
+										selection: Binding(
+											get: { behavior.triggerType ?? "TapGesture" },
+											set: { newValue in
+												onRawAttributeChanged(
+													triggerPath,
+													"token",
+													"info:id",
+													quoteUSDString(newValue)
+												)
+											}
+										)
+									) {
+										ForEach(behaviorTriggerTypes, id: \.self) { option in
+											Text(behaviorTriggerLabel(for: option)).tag(option)
+										}
+									}
+									.labelsHidden()
+									.pickerStyle(.menu)
+								} else {
+									Text(behavior.triggerType ?? "Unknown")
+										.font(.system(size: 11))
+										.foregroundStyle(.primary)
+								}
+							}
+							if behavior.triggerType == "Collide", let triggerPath = behavior.triggerPath {
+								VStack(alignment: .leading, spacing: 4) {
+									Text("Colliders")
+										.font(.system(size: 11))
+										.foregroundStyle(.secondary)
+									TextField(
+										"/Root/ColliderA, /Root/ColliderB",
+										text: Binding(
+											get: { behavior.colliders.joined(separator: ", ") },
+											set: { newValue in
+												onRawAttributeChanged(
+													triggerPath,
+													"rel",
+													"colliders",
+													formatUSDRelationshipTargetsLiteral(
+														from: parseRelationshipTargetCSV(newValue)
+													)
+												)
+											}
+										)
+									)
+									.textFieldStyle(.roundedBorder)
+									.font(.system(size: 11))
+								}
+							}
+							InspectorRow(label: "Action") {
+								if let actionPath = behavior.actionPath {
+									Picker(
+										"",
+										selection: Binding(
+											get: { behavior.actionType ?? "PlayTimeline" },
+											set: { newValue in
+												onRawAttributeChanged(
+													actionPath,
+													"token",
+													"info:id",
+													quoteUSDString(newValue)
+												)
+											}
+										)
+									) {
+										ForEach(behaviorActionTypes, id: \.self) { option in
+											Text(option).tag(option)
+										}
+									}
+									.labelsHidden()
+									.pickerStyle(.menu)
+								} else {
+									Text(behavior.actionType ?? "None")
+										.font(.system(size: 11))
+										.foregroundStyle(.primary)
+								}
+							}
+							if let actionPath = behavior.actionPath {
+								InspectorRow(label: "Action Target") {
+									Picker(
+										"",
+										selection: Binding(
+											get: { behavior.actionTargetPath ?? "None" },
+											set: { newValue in
+												let literal = newValue == "None"
+													? "None"
+													: "<\(newValue)>"
+												onRawAttributeChanged(
+													actionPath,
+													"rel",
+													"animationLibraryKeyOverrideKey",
+													literal
+												)
+											}
+										)
+									) {
+										ForEach(
+											behaviorActionTargetOptions(from: behaviors),
+											id: \.self
+										) { option in
+											if option == "None" {
+												Text("None").tag(option)
+											} else {
+												Text(option).tag(option)
+											}
+										}
+									}
+									.labelsHidden()
+									.pickerStyle(.menu)
+								}
+							}
+							if let triggerPath = behavior.triggerPath,
+							   behavior.triggerType == "Notification"
+							{
+								let notification = behavior.notificationIdentifier ?? ""
+								VStack(alignment: .leading, spacing: 4) {
+									Text("Notification Identifier")
+										.font(.system(size: 11))
+										.foregroundStyle(.secondary)
+									TextField(
+										"Identifier",
+										text: Binding(
+											get: { notification },
+											set: { newValue in
+												onRawAttributeChanged(
+													triggerPath,
+													"string",
+													"identifier",
+													quoteUSDString(newValue)
+												)
+											}
+										)
+									)
+									.textFieldStyle(.roundedBorder)
+									.font(.system(size: 11))
+								}
+							}
+						}
+					}
+				}
+			}
+			HStack(spacing: 10) {
+				Menu {
+					ForEach(behaviorTriggerTypes, id: \.self) { triggerType in
+						Button("Add \(behaviorTriggerLabel(for: triggerType))") {
+							onAddBehavior(componentPath, triggerType)
+						}
+					}
+				} label: {
+					Image(systemName: "plus")
+						.font(.system(size: 12, weight: .medium))
+				}
+				.menuStyle(.borderlessButton)
+				Spacer()
+			}
+			.padding(.horizontal, 4)
+		}
+	}
+
+	private var customDockingRegionEditor: some View {
+		VStack(alignment: .leading, spacing: 8) {
+			InspectorRow(label: "Width") {
+				HStack(spacing: 8) {
+					TextField(
+						"",
+						value: doubleBinding(for: "width", fallback: 240),
+						format: .number.precision(.fractionLength(0...3))
+					)
+					.textFieldStyle(.roundedBorder)
+					.frame(width: 90)
+					.font(.system(size: 11))
+					Text("cm")
+						.font(.system(size: 10))
+						.foregroundStyle(.secondary)
+				}
+			}
+
+			VStack(alignment: .leading, spacing: 4) {
+				Text("Preview Video")
+					.font(.system(size: 11))
+					.foregroundStyle(.secondary)
+				Text(previewVideoLabel)
+					.font(.system(size: 11))
+					.foregroundStyle(.primary)
+					.lineLimit(1)
+			}
+			HStack(spacing: 10) {
+				Button("Choose...") {
+					guard let selectedURL = selectPreviewVideoFileURL() else { return }
+					let path = selectedURL.path
+					rawValues["previewVideo"] = quoteUSDString(path)
+					onRawAttributeChanged(componentPath, "customDataAsset", "previewVideo", path)
+				}
+				.buttonStyle(.borderless)
+				Button("Clear") {
+					rawValues["previewVideo"] = ""
+					onRawAttributeChanged(componentPath, "customDataAsset", "previewVideo", "")
+				}
+				.buttonStyle(.borderless)
+				.disabled(previewVideoLabel == "None")
+				Spacer()
+			}
+		}
+	}
+
 	private func previewResourceLabel(for resource: AudioLibraryResource) -> String {
 		let target = resource.valueTarget.trimmingCharacters(in: .whitespacesAndNewlines)
 		guard !target.isEmpty else { return resource.key }
 		return target.split(separator: "/").last.map(String.init) ?? resource.key
+	}
+
+	private var previewVideoLabel: String {
+		if let raw = rawValues["previewVideo"], !raw.isEmpty {
+			let parsed = Self.parseUSDString(raw)
+			return parsed.isEmpty ? "None" : parsed
+		}
+		let fallback = authoredAttributes.first(where: { $0.name == "previewVideo" })?.value ?? ""
+		let parsed = Self.parseUSDString(fallback)
+		return parsed.isEmpty ? "None" : parsed
+	}
+
+	private func parseBehaviorModels(
+		from descendants: [ComponentDescendantAttributes]
+	) -> [BehaviorEditorModel] {
+		struct Draft {
+			var path: String
+			var title: String
+			var triggerPath: String?
+			var triggerType: String?
+			var colliders: [String] = []
+			var actionPath: String?
+			var actionType: String?
+			var actionTargetPath: String?
+			var notificationIdentifier: String?
+		}
+		var draftsByPath: [String: Draft] = [:]
+		var order: [String] = []
+
+		for descendant in descendants {
+			let path = descendant.primPath
+			let behaviorPath: String?
+			let kind: String
+			if path.hasSuffix("/Trigger") {
+				behaviorPath = String(path.dropLast("/Trigger".count))
+				kind = "trigger"
+			} else if path.hasSuffix("/Action") {
+				behaviorPath = String(path.dropLast("/Action".count))
+				kind = "action"
+			} else {
+				behaviorPath = path
+				kind = "behavior"
+			}
+			guard let behaviorPath else { continue }
+
+			if draftsByPath[behaviorPath] == nil {
+				let title = behaviorPath.split(separator: "/").last.map(String.init) ?? descendant.displayName
+				draftsByPath[behaviorPath] = Draft(path: behaviorPath, title: title)
+				order.append(behaviorPath)
+			}
+			guard var draft = draftsByPath[behaviorPath] else { continue }
+			let authoredMap = Self.authoredMap(from: descendant.authoredAttributes)
+			switch kind {
+			case "trigger":
+				draft.triggerPath = path
+				draft.triggerType = Self.parseUSDString(authoredMap["info:id"] ?? "")
+				draft.colliders = parseUSDRelationshipTargets(authoredMap["colliders"] ?? "")
+				let identifier = Self.parseUSDString(authoredMap["identifier"] ?? "")
+				draft.notificationIdentifier = identifier.isEmpty ? nil : identifier
+			case "action":
+				draft.actionPath = path
+				draft.actionType = Self.parseUSDString(authoredMap["info:id"] ?? "")
+				draft.actionTargetPath = parseUSDRelationshipTargets(
+					authoredMap["animationLibraryKeyOverrideKey"] ?? ""
+				).first
+			default:
+				break
+			}
+			draftsByPath[behaviorPath] = draft
+		}
+
+		return order.compactMap { key in
+			guard let draft = draftsByPath[key] else { return nil }
+			return BehaviorEditorModel(
+				id: draft.path,
+					path: draft.path,
+					title: draft.title,
+					triggerPath: draft.triggerPath,
+					triggerType: draft.triggerType,
+					colliders: draft.colliders,
+					actionPath: draft.actionPath,
+					actionType: draft.actionType,
+					actionTargetPath: draft.actionTargetPath,
+					notificationIdentifier: draft.notificationIdentifier
+				)
+			}
+		}
+
+	private func behaviorActionTargetOptions(from models: [BehaviorEditorModel]) -> [String] {
+		var options: [String] = ["None"]
+		for model in models {
+			if let triggerPath = model.triggerPath, !options.contains(triggerPath) {
+				options.append(triggerPath)
+			}
+		}
+		return options
+	}
+
+	private var behaviorTriggerTypes: [String] {
+		["TapGesture", "Collide", "AddedToScene", "Notification"]
+	}
+
+	private var behaviorActionTypes: [String] {
+		["PlayTimeline"]
+	}
+
+	private func behaviorTriggerLabel(for type: String) -> String {
+		switch type {
+		case "TapGesture":
+			return "OnTap"
+		case "Collide":
+			return "OnCollision"
+		case "AddedToScene":
+			return "OnAddedToScene"
+		case "Notification":
+			return "OnNotification"
+		default:
+			return type
+		}
+	}
+
+	private func parseRelationshipTargetCSV(_ input: String) -> [String] {
+		input
+			.split(separator: ",", omittingEmptySubsequences: true)
+			.map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+			.filter { !$0.isEmpty }
+	}
+
+	private func formatUSDRelationshipTargetsLiteral(from primPaths: [String]) -> String {
+		let targets = primPaths.map { "<\($0)>" }
+		switch targets.count {
+		case 0:
+			return "None"
+		case 1:
+			return targets[0]
+		default:
+			return "[\(targets.joined(separator: ", "))]"
+		}
 	}
 
 	private var physicsBodyEditor: some View {
@@ -1947,6 +2374,65 @@ private struct ComponentParametersSection: View {
 		onParameterChanged(componentIdentifier, key, value)
 	}
 
+	private func isColorParameter(_ key: String) -> Bool {
+		guard key == "color" else { return false }
+		guard let componentIdentifier else { return false }
+		return componentIdentifier == "RealityKit.PointLight"
+			|| componentIdentifier == "RealityKit.SpotLight"
+			|| componentIdentifier == "RealityKit.DirectionalLight"
+	}
+
+	private func colorBinding(for key: String, fallback: String) -> Binding<Color> {
+		Binding(
+			get: {
+				let raw: String
+				if case let .string(value)? = values[key] {
+					raw = value
+				} else {
+					raw = fallback
+				}
+				let rgb = Self.parseColorLiteral(raw)
+				return Color(red: rgb.x, green: rgb.y, blue: rgb.z)
+			},
+			set: { color in
+				#if os(macOS)
+				let ns = NSColor(color).usingColorSpace(.sRGB) ?? .white
+				let literal = Self.formatVector3(
+					x: ns.redComponent,
+					y: ns.greenComponent,
+					z: ns.blueComponent
+				)
+				#else
+				let literal = fallback
+				#endif
+				values[key] = .string(literal)
+				notifyParameterChange(key: key, value: .string(literal))
+			}
+		)
+	}
+
+		private func shouldDisplay(parameter: InspectorComponentParameter) -> Bool {
+			guard componentIdentifier == "RealityKit.Collider" else { return true }
+			let shape = currentStringValue(for: "shape", fallback: "Box")
+			switch parameter.key {
+			case "extent":
+				return shape == "Box"
+			case "radius":
+				return shape == "Sphere" || shape == "Capsule"
+			case "height":
+				return shape == "Capsule"
+			default:
+				return true
+			}
+		}
+
+		private func currentStringValue(for key: String, fallback: String) -> String {
+			if case let .string(value)? = values[key] {
+				return value
+			}
+			return fallback
+		}
+
 	private func rawBinding(for key: String, fallback: String) -> Binding<String> {
 		Binding(
 			get: { rawValues[key] ?? fallback },
@@ -2035,6 +2521,13 @@ private struct ComponentParametersSection: View {
 		}
 	}
 
+	private func quoteUSDString(_ text: String) -> String {
+		let escaped = text
+			.replacingOccurrences(of: "\\", with: "\\\\")
+			.replacingOccurrences(of: "\"", with: "\\\"")
+		return "\"\(escaped)\""
+	}
+
 	private func parseUSDStringArray(_ raw: String) -> [String] {
 		let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
 		guard !trimmed.isEmpty else { return [] }
@@ -2087,6 +2580,20 @@ private struct ComponentParametersSection: View {
 			UTType(filenameExtension: "usdz"),
 		].compactMap { $0 }
 		panel.prompt = "Add"
+		return panel.runModal() == .OK ? panel.url : nil
+	}
+
+	private func selectPreviewVideoFileURL() -> URL? {
+		let panel = NSOpenPanel()
+		panel.canChooseDirectories = false
+		panel.canChooseFiles = true
+		panel.allowsMultipleSelection = false
+		panel.allowedContentTypes = [
+			.movie,
+			.mpeg4Movie,
+			.quickTimeMovie,
+		]
+		panel.prompt = "Choose"
 		return panel.runModal() == .OK ? panel.url : nil
 	}
 
@@ -2193,6 +2700,43 @@ private struct ComponentParametersSection: View {
 				break
 			}
 		}
+		if identifier == "RealityKit.Anchoring" {
+			let targetRaw = parseUSDString(authoredAttributes["type"] ?? "")
+			let targetValue = targetRaw.isEmpty ? "World" : targetRaw
+			let transform = parseAnchoringTransform(authoredAttributes["transform"] ?? "")
+			switch parameter.key {
+			case "target":
+				return .string(targetValue)
+			case "position":
+				let position = transform?.positionMeters ?? SIMD3<Double>(0, 0, 0)
+				return .string(
+					formatVector3(
+						x: position.x * 100.0,
+						y: position.y * 100.0,
+						z: position.z * 100.0
+					)
+				)
+			case "orientation":
+				let rotation = transform?.orientationDegrees ?? SIMD3<Double>(0, 0, 0)
+				return .string(formatVector3(x: rotation.x, y: rotation.y, z: rotation.z))
+			case "scale":
+				let scale = transform?.scale ?? SIMD3<Double>(1, 1, 1)
+				return .string(formatVector3(x: scale.x, y: scale.y, z: scale.z))
+			default:
+				break
+			}
+		}
+		if identifier == "RealityKit.CustomDockingRegion" {
+			switch parameter.key {
+			case "width":
+				let maxBounds = parseVector3(authoredAttributes["max"] ?? "(1.2, 0.5, 0)")
+				let minBounds = parseVector3(authoredAttributes["min"] ?? "(-1.2, -0.5, 0)")
+				let widthCM = max(0.0, (maxBounds.x - minBounds.x) * 100.0)
+				return .double(widthCM)
+			default:
+				break
+			}
+		}
 		if identifier == "RealityKit.CharacterController" {
 			switch parameter.key {
 			case "height":
@@ -2218,6 +2762,33 @@ private struct ComponentParametersSection: View {
 				return .string(mask >= 4_294_967_295 ? "All" : "Default")
 			case "upVector":
 				return .string("(0, 1, 0)")
+			default:
+				break
+			}
+		}
+		if identifier == "RealityKit.Collider" {
+			switch parameter.key {
+			case "mode":
+				let rawMode = parseUSDString(authoredAttributes["type"] ?? "")
+				return .string(rawMode.isEmpty ? "Default" : rawMode)
+			case "shape":
+				let rawShape = parseUSDString(authoredAttributes["shapeType"] ?? "")
+				return .string(rawShape.isEmpty ? "Box" : rawShape)
+			case "extent":
+				let extents = parseVector3(authoredAttributes["extent"] ?? "(0.2, 0.2, 0.2)")
+				return .string(formatVector3(x: extents.x * 100.0, y: extents.y * 100.0, z: extents.z * 100.0))
+			case "radius":
+				let meters = parseUSDDouble(authoredAttributes["radius"] ?? "") ?? 0.1
+				return .double(meters * 100.0)
+			case "height":
+				let meters = parseUSDDouble(authoredAttributes["height"] ?? "") ?? 0.2
+				return .double(meters * 100.0)
+			case "group":
+				let group = parseUSDDouble(authoredAttributes["group"] ?? "") ?? 1
+				return .string(group >= 4_294_967_295 ? "All" : "Default")
+			case "mask":
+				let mask = parseUSDDouble(authoredAttributes["mask"] ?? "") ?? 4_294_967_295
+				return .string(mask >= 4_294_967_295 ? "All" : "Default")
 			default:
 				break
 			}
@@ -2292,6 +2863,10 @@ private struct ComponentParametersSection: View {
 				return "m_userSetLinearVelocity"
 			case ("RealityKit.MotionState", "angularVelocity"):
 				return "m_userSetAngularVelocity"
+			case ("RealityKit.Collider", "mode"):
+				return "type"
+			case ("RealityKit.Collider", "shape"):
+				return "shapeType"
 			default:
 				return key
 			}
@@ -2323,7 +2898,61 @@ private struct ComponentParametersSection: View {
 		let body = String(trimmed.dropFirst().dropLast())
 		return body
 			.split(separator: ",", omittingEmptySubsequences: true)
-			.compactMap { Double($0.trimmingCharacters(in: .whitespacesAndNewlines)) }
+			.compactMap { parseUSDDouble(String($0).trimmingCharacters(in: .whitespacesAndNewlines)) }
+	}
+
+	private static func parseAnchoringTransform(_ raw: String) -> (
+		positionMeters: SIMD3<Double>,
+		orientationDegrees: SIMD3<Double>,
+		scale: SIMD3<Double>
+	)? {
+		let values = parseNumericSequence(raw)
+		guard values.count >= 16 else { return nil }
+
+		let r0 = SIMD3<Double>(values[0], values[1], values[2])
+		let r1 = SIMD3<Double>(values[4], values[5], values[6])
+		let r2 = SIMD3<Double>(values[8], values[9], values[10])
+
+		let sx = max(0.000_001, sqrt(r0.x * r0.x + r0.y * r0.y + r0.z * r0.z))
+		let sy = max(0.000_001, sqrt(r1.x * r1.x + r1.y * r1.y + r1.z * r1.z))
+		let sz = max(0.000_001, sqrt(r2.x * r2.x + r2.y * r2.y + r2.z * r2.z))
+		let scale = SIMD3<Double>(sx, sy, sz)
+
+		let m11 = r0.x / sx
+		let m12 = r0.y / sx
+		let m13 = r0.z / sx
+		let m23 = r1.z / sy
+		let m33 = r2.z / sz
+
+		let yRadians = asin(max(-1.0, min(1.0, -m13)))
+		let cosY = cos(yRadians)
+		let xRadians: Double
+		let zRadians: Double
+		if Swift.abs(cosY) > 0.000_001 {
+			xRadians = atan2(m23, m33)
+			zRadians = atan2(m12, m11)
+		} else {
+			xRadians = atan2(-r2.y / sz, r1.y / sy)
+			zRadians = 0
+		}
+
+		let orientationDegrees = SIMD3<Double>(
+			xRadians * 180.0 / .pi,
+			yRadians * 180.0 / .pi,
+			zRadians * 180.0 / .pi
+		)
+		let positionMeters = SIMD3<Double>(values[12], values[13], values[14])
+		return (positionMeters, orientationDegrees, scale)
+	}
+
+	private static func parseNumericSequence(_ raw: String) -> [Double] {
+		let pattern = #"[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?"#
+		guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
+		let range = NSRange(raw.startIndex..<raw.endIndex, in: raw)
+		return regex.matches(in: raw, options: [], range: range).compactMap { match in
+			guard let swiftRange = Range(match.range, in: raw) else { return nil }
+			return Double(raw[swiftRange])
+		}
 	}
 
 	private static func formatComponent(_ value: Double) -> String {
@@ -2336,7 +2965,14 @@ private struct ComponentParametersSection: View {
 	}
 
 	private static func parseUSDBool(_ raw: String) -> Bool? {
-		switch raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+		var normalized = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+		if normalized.hasSuffix(",") {
+			normalized.removeLast()
+		}
+		if normalized.count >= 2, normalized.first == "\"", normalized.last == "\"" {
+			normalized = String(normalized.dropFirst().dropLast())
+		}
+		switch normalized.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
 		case "true":
 			return true
 		case "false":
@@ -2351,7 +2987,29 @@ private struct ComponentParametersSection: View {
 	}
 
 	private static func parseUSDDouble(_ raw: String) -> Double? {
-		Double(raw.trimmingCharacters(in: .whitespacesAndNewlines))
+		let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+		if let direct = Double(trimmed) {
+			return direct
+		}
+		let pattern = #"[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?"#
+		guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
+		let range = NSRange(trimmed.startIndex..<trimmed.endIndex, in: trimmed)
+		guard let match = regex.firstMatch(in: trimmed, options: [], range: range),
+			  let swiftRange = Range(match.range, in: trimmed)
+		else {
+			return nil
+		}
+		return Double(trimmed[swiftRange])
+	}
+
+	private static func parseColorLiteral(_ raw: String) -> SIMD3<Double> {
+		let tuple = parseTuple(raw)
+		guard tuple.count >= 3 else { return SIMD3<Double>(1, 1, 1) }
+		return SIMD3<Double>(
+			max(0, min(1, tuple[0])),
+			max(0, min(1, tuple[1])),
+			max(0, min(1, tuple[2]))
+		)
 	}
 
 	private static func parseUSDString(_ raw: String) -> String {

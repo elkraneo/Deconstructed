@@ -62,12 +62,12 @@ struct AssetThumbnail: View {
 		case .audio:
 			Image(systemName: DeconstructedConstants.SFSymbol.waveform)
 				.font(.system(size: size * 0.4))
-				.foregroundStyle(.purple)
+				.foregroundStyle(.cyan)
 
 		case .directory:
 			Image(systemName: DeconstructedConstants.SFSymbol.folderFill)
 				.font(.system(size: size * 0.4))
-				.foregroundStyle(.orange)
+				.foregroundStyle(.blue)
 
 		case .realityFile:
 			Image(systemName: DeconstructedConstants.SFSymbol.arkit)
@@ -77,7 +77,7 @@ struct AssetThumbnail: View {
 		case .swift:
 			Image(systemName: DeconstructedConstants.SFSymbol.swift)
 				.font(.system(size: size * 0.4))
-				.foregroundStyle(.orange)
+				.foregroundStyle(.blue)
 
 		case .json:
 			Image(systemName: DeconstructedConstants.SFSymbol.docText)

@@ -67,7 +67,7 @@ public struct LaunchExperience: View {
 					Color(nsColor: .windowBackgroundColor)
 
 					Circle()
-						.fill(LinearGradient(colors: [.orange, .yellow], startPoint: .topLeading, endPoint: .bottomTrailing))
+						.fill(LinearGradient(colors: [.blue, .cyan], startPoint: .topLeading, endPoint: .bottomTrailing))
 						.frame(width: 400, height: 400)
 						.blur(radius: 100)
 						.opacity(0.15)
@@ -113,7 +113,7 @@ struct LaunchButton: View {
 			HStack {
 				Image(systemName: systemImage)
 					.font(.title3)
-					.foregroundStyle(.orange)
+					.foregroundStyle(.blue)
 					.frame(width: 24)
 
 				Text(title)

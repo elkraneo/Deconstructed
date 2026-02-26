@@ -12,6 +12,28 @@ import USDInteropAdvancedInspection
 // Keep these fileprivate so OpenUSD internals never leak into the module API.
 fileprivate typealias UsdStage = pxrInternal_v0_25_8__pxrReserved__.UsdStage
 fileprivate typealias SdfPath = pxrInternal_v0_25_8__pxrReserved__.SdfPath
+fileprivate typealias SdfPathVector = pxrInternal_v0_25_8__pxrReserved__.SdfPathVector
+fileprivate typealias TfToken = pxrInternal_v0_25_8__pxrReserved__.TfToken
+fileprivate typealias SdfValueTypeName = pxrInternal_v0_25_8__pxrReserved__.SdfValueTypeName
+fileprivate typealias SdfVariability = pxrInternal_v0_25_8__pxrReserved__.SdfVariability
+fileprivate typealias UsdTimeCode = pxrInternal_v0_25_8__pxrReserved__.UsdTimeCode
+fileprivate typealias VtValue = pxrInternal_v0_25_8__pxrReserved__.VtValue
+fileprivate typealias VtStringArray = pxrInternal_v0_25_8__pxrReserved__.VtStringArray
+fileprivate typealias VtTokenArray = pxrInternal_v0_25_8__pxrReserved__.VtTokenArray
+fileprivate typealias GfVec2f = pxrInternal_v0_25_8__pxrReserved__.GfVec2f
+fileprivate typealias GfVec3f = pxrInternal_v0_25_8__pxrReserved__.GfVec3f
+fileprivate typealias GfQuatf = pxrInternal_v0_25_8__pxrReserved__.GfQuatf
+fileprivate typealias SdfAssetPath = pxrInternal_v0_25_8__pxrReserved__.SdfAssetPath
+
+private enum USDMutationCoordinator {
+	static let lock = NSLock()
+
+	static func withLock<T>(_ operation: () throws -> T) rethrows -> T {
+		lock.lock()
+		defer { lock.unlock() }
+		return try operation()
+	}
+}
 
 public enum DeconstructedUSDInteropError: Error, LocalizedError, Sendable {
 	case stageOpenFailed(URL)
@@ -660,6 +682,158 @@ public enum DeconstructedUSDInterop {
 		)
 	}
 
+	@discardableResult
+	public static func addBehaviorToContainer(
+		url: URL,
+		behaviorsContainerPrimPath: String,
+		triggerType: String,
+		actionType: String = "PlayTimeline"
+	) throws -> String {
+		guard let ownerPrimPath = parentPath(of: behaviorsContainerPrimPath) else {
+			throw DeconstructedUSDInteropError.componentAuthoringFailed(
+				reason: "Invalid behaviors container path: \(behaviorsContainerPrimPath)"
+			)
+		}
+
+		let baseBehaviorName = defaultBehaviorName(for: triggerType)
+		let behaviorName = try generateUniqueName(
+			url: url,
+			parentPath: ownerPrimPath,
+			baseName: baseBehaviorName
+		)
+		let behaviorPrimPath = "\(ownerPrimPath)/\(behaviorName)"
+		let triggerPrimPath = "\(behaviorPrimPath)/Trigger"
+		let actionPrimPath = "\(behaviorPrimPath)/Action"
+
+		_ = try ensureTypedPrim(
+			url: url,
+			parentPrimPath: ownerPrimPath,
+			typeName: "Preliminary_Behavior",
+			primName: behaviorName
+		)
+		_ = try ensureTypedPrim(
+			url: url,
+			parentPrimPath: behaviorPrimPath,
+			typeName: "Preliminary_Trigger",
+			primName: "Trigger"
+		)
+		_ = try ensureTypedPrim(
+			url: url,
+			parentPrimPath: behaviorPrimPath,
+			typeName: "Preliminary_Action",
+			primName: "Action"
+		)
+
+		try setRealityKitComponentParameter(
+			url: url,
+			componentPrimPath: behaviorPrimPath,
+			attributeType: "rel",
+			attributeName: "triggers",
+			valueLiteral: "<\(triggerPrimPath)>"
+		)
+		try setRealityKitComponentParameter(
+			url: url,
+			componentPrimPath: behaviorPrimPath,
+			attributeType: "rel",
+			attributeName: "actions",
+			valueLiteral: "<\(actionPrimPath)>"
+		)
+		try setRealityKitComponentParameter(
+			url: url,
+			componentPrimPath: triggerPrimPath,
+			attributeType: "token",
+			attributeName: "info:id",
+			valueLiteral: "\"\(triggerType)\""
+		)
+		try setRealityKitComponentParameter(
+			url: url,
+			componentPrimPath: triggerPrimPath,
+			attributeType: "rel",
+			attributeName: "affectedObjects",
+			valueLiteral: "<\(ownerPrimPath)>"
+		)
+		try setRealityKitComponentParameter(
+			url: url,
+			componentPrimPath: actionPrimPath,
+			attributeType: "token",
+			attributeName: "info:id",
+			valueLiteral: "\"\(actionType)\""
+		)
+		try setRealityKitComponentParameter(
+			url: url,
+			componentPrimPath: actionPrimPath,
+			attributeType: "rel",
+			attributeName: "affectedObjects",
+			valueLiteral: "None"
+		)
+		try setRealityKitComponentParameter(
+			url: url,
+			componentPrimPath: actionPrimPath,
+			attributeType: "rel",
+			attributeName: "animationLibraryKeyOverrideKey",
+			valueLiteral: "<\(triggerPrimPath)>"
+		)
+		try setRealityKitComponentParameter(
+			url: url,
+			componentPrimPath: actionPrimPath,
+			attributeType: "int",
+			attributeName: "loops",
+			valueLiteral: "0"
+		)
+		try setRealityKitComponentParameter(
+			url: url,
+			componentPrimPath: actionPrimPath,
+			attributeType: "int",
+			attributeName: "performCount",
+			valueLiteral: "1"
+		)
+		try setRealityKitComponentParameter(
+			url: url,
+			componentPrimPath: actionPrimPath,
+			attributeType: "token",
+			attributeName: "type",
+			valueLiteral: "\"serial\""
+		)
+
+		var behaviorTargets = primRelationshipTargets(
+			url: url,
+			primPath: behaviorsContainerPrimPath,
+			relationshipName: "behaviors"
+		)
+		if !behaviorTargets.contains(behaviorPrimPath) {
+			behaviorTargets.append(behaviorPrimPath)
+		}
+		try setRealityKitComponentParameter(
+			url: url,
+			componentPrimPath: behaviorsContainerPrimPath,
+			attributeType: "rel",
+			attributeName: "behaviors",
+			valueLiteral: formatUSDRelationshipTargets(behaviorTargets)
+		)
+		return behaviorPrimPath
+	}
+
+	public static func removeBehaviorFromContainer(
+		url: URL,
+		behaviorsContainerPrimPath: String,
+		behaviorPrimPath: String
+	) throws {
+		var behaviorTargets = primRelationshipTargets(
+			url: url,
+			primPath: behaviorsContainerPrimPath,
+			relationshipName: "behaviors"
+		)
+		behaviorTargets.removeAll { $0 == behaviorPrimPath }
+		try setRealityKitComponentParameter(
+			url: url,
+			componentPrimPath: behaviorsContainerPrimPath,
+			attributeType: "rel",
+			attributeName: "behaviors",
+			valueLiteral: formatUSDRelationshipTargets(behaviorTargets)
+		)
+		try deletePrimAtPath(url: url, primPath: behaviorPrimPath)
+	}
+
 	public static func upsertRealityKitAudioFile(
 		url: URL,
 		primPath: String,
@@ -724,33 +898,55 @@ public enum DeconstructedUSDInterop {
 		attributeName: String,
 		valueLiteral: String
 	) throws {
-		guard url.pathExtension.lowercased() == "usda" else {
-			throw DeconstructedUSDInteropError.componentAuthoringFailed(
-				reason: "Only .usda scenes are supported for initial component parameter editing."
+		let normalizedAttributeType = attributeType.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+		if normalizedAttributeType == "customdataasset" {
+			try setRealityKitComponentCustomDataAsset(
+				url: url,
+				componentPrimPath: componentPrimPath,
+				key: attributeName,
+				assetPath: valueLiteral
 			)
+			return
 		}
-		let source: String
-		do {
-			source = try String(contentsOf: url, encoding: .utf8)
-		} catch {
-			throw DeconstructedUSDInteropError.componentAuthoringFailed(
-				reason: "Unable to read USDA scene."
-			)
-		}
+		try USDMutationCoordinator.withLock {
+			if try setComponentParameterWithUSDMutation(
+				url: url,
+				componentPrimPath: componentPrimPath,
+				attributeType: attributeType,
+				attributeName: attributeName,
+				valueLiteral: valueLiteral
+			) {
+				return
+			}
 
-		let updated = try updateRealityKitComponentParameterInUSDA(
-			source,
-			componentPrimPath: componentPrimPath,
-			attributeType: attributeType,
-			attributeName: attributeName,
-			valueLiteral: valueLiteral
-		)
-		do {
-			try updated.write(to: url, atomically: true, encoding: .utf8)
-		} catch {
-			throw DeconstructedUSDInteropError.componentAuthoringFailed(
-				reason: "Unable to write USDA scene."
+			guard url.pathExtension.lowercased() == "usda" else {
+				throw DeconstructedUSDInteropError.componentAuthoringFailed(
+					reason: "Only .usda scenes are supported for initial component parameter editing."
+				)
+			}
+			let source: String
+			do {
+				source = try String(contentsOf: url, encoding: .utf8)
+			} catch {
+				throw DeconstructedUSDInteropError.componentAuthoringFailed(
+					reason: "Unable to read USDA scene."
+				)
+			}
+
+			let updated = try updateRealityKitComponentParameterInUSDA(
+				source,
+				componentPrimPath: componentPrimPath,
+				attributeType: attributeType,
+				attributeName: attributeName,
+				valueLiteral: valueLiteral
 			)
+			do {
+				try updated.write(to: url, atomically: true, encoding: .utf8)
+			} catch {
+				throw DeconstructedUSDInteropError.componentAuthoringFailed(
+					reason: "Unable to write USDA scene."
+				)
+			}
 		}
 	}
 
@@ -759,31 +955,41 @@ public enum DeconstructedUSDInterop {
 		componentPrimPath: String,
 		attributeName: String
 	) throws {
-		guard url.pathExtension.lowercased() == "usda" else {
-			throw DeconstructedUSDInteropError.componentAuthoringFailed(
-				reason: "Only .usda scenes are supported for initial component parameter editing."
-			)
-		}
-		let source: String
-		do {
-			source = try String(contentsOf: url, encoding: .utf8)
-		} catch {
-			throw DeconstructedUSDInteropError.componentAuthoringFailed(
-				reason: "Unable to read USDA scene."
-			)
-		}
+		try USDMutationCoordinator.withLock {
+			if try deleteComponentParameterWithUSDMutation(
+				url: url,
+				componentPrimPath: componentPrimPath,
+				attributeName: attributeName
+			) {
+				return
+			}
 
-		let updated = try removeRealityKitComponentParameterInUSDA(
-			source,
-			componentPrimPath: componentPrimPath,
-			attributeName: attributeName
-		)
-		do {
-			try updated.write(to: url, atomically: true, encoding: .utf8)
-		} catch {
-			throw DeconstructedUSDInteropError.componentAuthoringFailed(
-				reason: "Unable to write USDA scene."
+			guard url.pathExtension.lowercased() == "usda" else {
+				throw DeconstructedUSDInteropError.componentAuthoringFailed(
+					reason: "Only .usda scenes are supported for initial component parameter editing."
+				)
+			}
+			let source: String
+			do {
+				source = try String(contentsOf: url, encoding: .utf8)
+			} catch {
+				throw DeconstructedUSDInteropError.componentAuthoringFailed(
+					reason: "Unable to read USDA scene."
+				)
+			}
+
+			let updated = try removeRealityKitComponentParameterInUSDA(
+				source,
+				componentPrimPath: componentPrimPath,
+				attributeName: attributeName
 			)
+			do {
+				try updated.write(to: url, atomically: true, encoding: .utf8)
+			} catch {
+				throw DeconstructedUSDInteropError.componentAuthoringFailed(
+					reason: "Unable to write USDA scene."
+				)
+			}
 		}
 	}
 
@@ -800,6 +1006,42 @@ public enum DeconstructedUSDInterop {
 		return parseRealityKitComponentPrimsFromUSDA(
 			source: source,
 			parentPrimPath: parentPrimPath
+		)
+	}
+
+	public static func realityKitComponentCustomDataAsset(
+		url: URL,
+		componentPrimPath: String,
+		key: String
+	) -> String? {
+		guard url.pathExtension.lowercased() == "usda" else {
+			return nil
+		}
+		guard let source = try? String(contentsOf: url, encoding: .utf8) else {
+			return nil
+		}
+		return parseComponentCustomDataAssetFromUSDA(
+			source: source,
+			componentPrimPath: componentPrimPath,
+			key: key
+		)
+	}
+
+	public static func primRelationshipTargets(
+		url: URL,
+		primPath: String,
+		relationshipName: String
+	) -> [String] {
+		guard url.pathExtension.lowercased() == "usda" else {
+			return []
+		}
+		guard let source = try? String(contentsOf: url, encoding: .utf8) else {
+			return []
+		}
+		return parsePrimRelationshipTargetsFromUSDA(
+			source: source,
+			primPath: primPath,
+			relationshipName: relationshipName
 		)
 	}
 
@@ -1165,8 +1407,280 @@ private func deletePrim(
 	}
 }
 
+private func setComponentParameterWithUSDMutation(
+	url: URL,
+	componentPrimPath: String,
+	attributeType: String,
+	attributeName: String,
+	valueLiteral: String
+) throws -> Bool {
+	let stagePtr = UsdStage.Open(std.string(url.path), UsdStage.InitialLoadSet.LoadAll)
+	guard stagePtr._isNonnull() else {
+		throw DeconstructedUSDInteropError.stageOpenFailed(url)
+	}
+	let stage = OpenUSD.Overlay.Dereference(stagePtr)
+	let prim = stage.GetPrimAtPath(SdfPath(std.string(componentPrimPath)))
+	guard prim.IsValid() else {
+		throw DeconstructedUSDInteropError.primNotFound(componentPrimPath)
+	}
+
+	let normalizedType = normalizeAttributeType(attributeType)
+	let token = TfToken(std.string(attributeName))
+	let variability = isUniformAttributeType(attributeType)
+		? SdfVariability.SdfVariabilityUniform
+		: SdfVariability.SdfVariabilityVarying
+
+	let didAuthor: Bool
+	switch normalizedType {
+	case "bool":
+		guard let value = parseUSDBoolLiteral(valueLiteral) else { return false }
+		let attr = prim.CreateAttribute(token, SdfValueTypeName.Bool, false, variability)
+		didAuthor = attr.Set(VtValue(value), UsdTimeCode.Default())
+	case "int":
+		guard
+			let parsed = parseUSDIntLiteral(valueLiteral),
+			let value = Int32(exactly: parsed)
+		else { return false }
+		let attr = prim.CreateAttribute(token, SdfValueTypeName.Int, false, variability)
+		didAuthor = attr.Set(VtValue(value), UsdTimeCode.Default())
+	case "uint":
+		guard
+			let parsed = parseUSDUIntLiteral(valueLiteral),
+			let value = UInt32(exactly: parsed)
+		else { return false }
+		let attr = prim.CreateAttribute(token, SdfValueTypeName.UInt, false, variability)
+		didAuthor = attr.Set(VtValue(value), UsdTimeCode.Default())
+	case "float":
+		guard let value = parseUSDFloatLiteral(valueLiteral) else { return false }
+		let attr = prim.CreateAttribute(token, SdfValueTypeName.Float, false, variability)
+		didAuthor = attr.Set(VtValue(value), UsdTimeCode.Default())
+	case "double":
+		guard let value = parseUSDDoubleLiteral(valueLiteral) else { return false }
+		let attr = prim.CreateAttribute(token, SdfValueTypeName.Double, false, variability)
+		didAuthor = attr.Set(VtValue(value), UsdTimeCode.Default())
+	case "string":
+		let value = parseUSDQuotedStringLiteral(valueLiteral)
+		let attr = prim.CreateAttribute(token, SdfValueTypeName.String, false, variability)
+		didAuthor = attr.Set(VtValue(std.string(value)), UsdTimeCode.Default())
+	case "token":
+		let value = parseUSDQuotedStringLiteral(valueLiteral)
+		let attr = prim.CreateAttribute(token, SdfValueTypeName.Token, false, variability)
+		didAuthor = attr.Set(VtValue(TfToken(std.string(value))), UsdTimeCode.Default())
+	case "asset":
+		guard let value = parseUSDAssetLiteral(valueLiteral) else { return false }
+		let attr = prim.CreateAttribute(token, SdfValueTypeName.Asset, false, variability)
+		didAuthor = attr.Set(VtValue(SdfAssetPath(std.string(value))), UsdTimeCode.Default())
+	case "string[]":
+		guard let values = parseUSDStringArrayLiteral(valueLiteral) else { return false }
+		let attr = prim.CreateAttribute(token, SdfValueTypeName.StringArray, false, variability)
+		var array = VtStringArray()
+		for value in values {
+			array.push_back(std.string(value))
+		}
+		didAuthor = attr.Set(array, UsdTimeCode.Default())
+	case "token[]":
+		guard let values = parseUSDStringArrayLiteral(valueLiteral) else { return false }
+		let attr = prim.CreateAttribute(token, SdfValueTypeName.TokenArray, false, variability)
+		var array = VtTokenArray()
+		for value in values {
+			array.push_back(TfToken(std.string(value)))
+		}
+		didAuthor = attr.Set(array, UsdTimeCode.Default())
+	case "float2":
+		guard let value = parseUSDFloatTuple(valueLiteral, count: 2) else { return false }
+		let attr = prim.CreateAttribute(token, SdfValueTypeName.Float2, false, variability)
+		didAuthor = attr.Set(VtValue(GfVec2f(Float(value[0]), Float(value[1]))), UsdTimeCode.Default())
+	case "float3":
+		guard let value = parseUSDFloatTuple(valueLiteral, count: 3) else { return false }
+		let attr = prim.CreateAttribute(token, SdfValueTypeName.Float3, false, variability)
+		didAuthor = attr.Set(
+			VtValue(GfVec3f(Float(value[0]), Float(value[1]), Float(value[2]))),
+			UsdTimeCode.Default()
+		)
+	case "quatf":
+		guard let value = parseUSDFloatTuple(valueLiteral, count: 4) else { return false }
+		let attr = prim.CreateAttribute(token, SdfValueTypeName.Quatf, false, variability)
+		didAuthor = attr.Set(
+			VtValue(
+				GfQuatf(
+					Float(value[0]),
+					GfVec3f(Float(value[1]), Float(value[2]), Float(value[3]))
+				)
+			),
+			UsdTimeCode.Default()
+		)
+	case "rel":
+		let relationship = prim.CreateRelationship(token, false)
+		var targets = SdfPathVector()
+		let parsedTargets = parseUSDRelationshipTargetsLiteral(valueLiteral)
+		for target in parsedTargets {
+			targets.push_back(SdfPath(std.string(target)))
+		}
+		didAuthor = relationship.SetTargets(targets)
+	default:
+		return false
+	}
+
+	guard didAuthor else {
+		throw DeconstructedUSDInteropError.componentAuthoringFailed(
+			reason: "Failed to set \(attributeName) on \(componentPrimPath)."
+		)
+	}
+	let rootLayerHandle = stage.GetRootLayer()
+	guard Bool(rootLayerHandle) else {
+		throw DeconstructedUSDInteropError.rootLayerMissing(url)
+	}
+	let rootLayer = OpenUSD.Overlay.Dereference(rootLayerHandle)
+	guard rootLayer.Save(false) else {
+		throw DeconstructedUSDInteropError.saveFailed(url)
+	}
+	return true
+}
+
+private func deleteComponentParameterWithUSDMutation(
+	url: URL,
+	componentPrimPath: String,
+	attributeName: String
+) throws -> Bool {
+	let stagePtr = UsdStage.Open(std.string(url.path), UsdStage.InitialLoadSet.LoadAll)
+	guard stagePtr._isNonnull() else {
+		throw DeconstructedUSDInteropError.stageOpenFailed(url)
+	}
+	let stage = OpenUSD.Overlay.Dereference(stagePtr)
+	let prim = stage.GetPrimAtPath(SdfPath(std.string(componentPrimPath)))
+	guard prim.IsValid() else {
+		throw DeconstructedUSDInteropError.primNotFound(componentPrimPath)
+	}
+	let token = TfToken(std.string(attributeName))
+	let attribute = prim.GetAttribute(token)
+	if attribute.IsValid() {
+		_ = attribute.Clear()
+	} else {
+		let relationship = prim.GetRelationship(token)
+		guard relationship.IsValid() else {
+			return false
+		}
+		let emptyTargets = SdfPathVector()
+		_ = relationship.SetTargets(emptyTargets)
+	}
+
+	let rootLayerHandle = stage.GetRootLayer()
+	guard Bool(rootLayerHandle) else {
+		throw DeconstructedUSDInteropError.rootLayerMissing(url)
+	}
+	let rootLayer = OpenUSD.Overlay.Dereference(rootLayerHandle)
+	guard rootLayer.Save(false) else {
+		throw DeconstructedUSDInteropError.saveFailed(url)
+	}
+	return true
+}
+
+private func normalizeAttributeType(_ raw: String) -> String {
+	let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+	if trimmed.hasPrefix("uniform ") {
+		return String(trimmed.dropFirst("uniform ".count))
+	}
+	return trimmed
+}
+
+private func isUniformAttributeType(_ raw: String) -> Bool {
+	raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased().hasPrefix("uniform ")
+}
+
+private func parseUSDBoolLiteral(_ raw: String) -> Bool? {
+	var normalized = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+	if normalized.hasSuffix(",") {
+		normalized.removeLast()
+	}
+	if normalized.count >= 2, normalized.first == "\"", normalized.last == "\"" {
+		normalized = String(normalized.dropFirst().dropLast())
+	}
+	switch normalized.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+	case "true", "1":
+		return true
+	case "false", "0":
+		return false
+	default:
+		return nil
+	}
+}
+
+private func parseUSDIntLiteral(_ raw: String) -> Int? {
+	Int(raw.trimmingCharacters(in: .whitespacesAndNewlines))
+}
+
+private func parseUSDUIntLiteral(_ raw: String) -> UInt? {
+	UInt(raw.trimmingCharacters(in: .whitespacesAndNewlines))
+}
+
+private func parseUSDFloatLiteral(_ raw: String) -> Float? {
+	Float(raw.trimmingCharacters(in: .whitespacesAndNewlines))
+}
+
+private func parseUSDDoubleLiteral(_ raw: String) -> Double? {
+	Double(raw.trimmingCharacters(in: .whitespacesAndNewlines))
+}
+
+private func parseUSDQuotedStringLiteral(_ raw: String) -> String {
+	let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+	guard trimmed.count >= 2, trimmed.first == "\"", trimmed.last == "\"" else {
+		return trimmed
+	}
+	let start = trimmed.index(after: trimmed.startIndex)
+	let end = trimmed.index(before: trimmed.endIndex)
+	let inner = String(trimmed[start..<end])
+	return inner
+		.replacingOccurrences(of: "\\\"", with: "\"")
+		.replacingOccurrences(of: "\\\\", with: "\\")
+}
+
+private func parseUSDAssetLiteral(_ raw: String) -> String? {
+	let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+	guard trimmed.count >= 2, trimmed.first == "@", trimmed.last == "@" else {
+		return nil
+	}
+	let start = trimmed.index(after: trimmed.startIndex)
+	let end = trimmed.index(before: trimmed.endIndex)
+	return String(trimmed[start..<end])
+}
+
+private func parseUSDStringArrayLiteral(_ raw: String) -> [String]? {
+	let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+	guard trimmed.hasPrefix("["), trimmed.hasSuffix("]"), trimmed.count >= 2 else {
+		return nil
+	}
+	let body = String(trimmed.dropFirst().dropLast())
+	if body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+		return []
+	}
+	let tokenRegex = /"((?:\\.|[^"\\])*)"/
+	var values: [String] = []
+	var searchStart = body.startIndex
+	while searchStart < body.endIndex,
+	      let match = body[searchStart...].firstMatch(of: tokenRegex) {
+		values.append(parseUSDQuotedStringLiteral("\"\(match.output.1)\""))
+		searchStart = match.range.upperBound
+	}
+	return values
+}
+
+private func parseUSDFloatTuple(_ raw: String, count: Int) -> [Double]? {
+	let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+	guard trimmed.hasPrefix("("), trimmed.hasSuffix(")"), trimmed.count >= 2 else {
+		return nil
+	}
+	let body = String(trimmed.dropFirst().dropLast())
+	let values = body
+		.split(separator: ",", omittingEmptySubsequences: true)
+		.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+		.compactMap(Double.init)
+	guard values.count >= count else { return nil }
+	return Array(values.prefix(count))
+}
+
 private struct ParsedPrimDeclaration {
 	let indent: String
+	let keyword: String
 	let typeName: String?
 	let primName: String
 	let metadataText: String?
@@ -1178,11 +1692,13 @@ private func parsePrimDeclarationLine(_ line: String) -> ParsedPrimDeclaration? 
 		return nil
 	}
 	let indent = String(match.output.1)
+	let keyword = String(match.output.2)
 	let typeName = match.output.3.map(String.init)
 	let primName = String(match.output.4)
 	let metadataText = match.output.5.map(String.init)
 	return ParsedPrimDeclaration(
 		indent: indent,
+		keyword: keyword,
 		typeName: typeName,
 		primName: primName,
 		metadataText: metadataText
@@ -1257,6 +1773,445 @@ private func parseRealityKitComponentPrimsFromUSDA(
 	return components
 }
 
+private func parseComponentCustomDataAssetFromUSDA(
+	source: String,
+	componentPrimPath: String,
+	key: String
+) -> String? {
+	let lines = source.split(whereSeparator: \.isNewline).map(String.init)
+	var stack: [USDAPrimContext] = []
+	var pending: USDAPrimContext?
+
+	for (index, line) in lines.enumerated() {
+		if let declaration = parsePrimDeclarationLine(line) {
+			let path = if let parent = stack.last?.path {
+				"\(parent)/\(declaration.primName)"
+			} else {
+				"/\(declaration.primName)"
+			}
+			let context = USDAPrimContext(path: path, indent: declaration.indent)
+			if line.contains("{") {
+				stack.append(context)
+			} else {
+				pending = context
+			}
+
+			if path == componentPrimPath,
+			   let metadata = parseComponentMetadataBlock(lines: lines, declarationIndex: index)
+			{
+				return parseCustomDataAsset(in: metadata, key: key)
+			}
+		}
+
+		if line.contains("{"), let pendingContext = pending {
+			stack.append(pendingContext)
+			pending = nil
+		}
+
+		let closingCount = line.filter { $0 == "}" }.count
+		if closingCount > 0 {
+			for _ in 0..<closingCount {
+				_ = stack.popLast()
+			}
+		}
+	}
+
+	return nil
+}
+
+private func parsePrimRelationshipTargetsFromUSDA(
+	source: String,
+	primPath: String,
+	relationshipName: String
+) -> [String] {
+	let lines = source.split(whereSeparator: \.isNewline).map(String.init)
+	var stack: [USDAPrimContext] = []
+	var pending: USDAPrimContext?
+	var inTargetPrim = false
+	var pendingRelationshipLiteral: String?
+
+	for line in lines {
+		if let declaration = parsePrimDeclarationLine(line) {
+			let path = if let parent = stack.last?.path {
+				"\(parent)/\(declaration.primName)"
+			} else {
+				"/\(declaration.primName)"
+			}
+			let context = USDAPrimContext(path: path, indent: declaration.indent)
+			if line.contains("{") {
+				stack.append(context)
+				inTargetPrim = context.path == primPath
+			} else {
+				pending = context
+			}
+		}
+
+		if line.contains("{"), let pendingContext = pending {
+			stack.append(pendingContext)
+			inTargetPrim = pendingContext.path == primPath
+			pending = nil
+		}
+
+		if inTargetPrim {
+			if var relationLiteral = pendingRelationshipLiteral {
+				relationLiteral.append(" ")
+				relationLiteral.append(line.trimmingCharacters(in: .whitespacesAndNewlines))
+				if relationLiteral.contains("]") {
+					return parseUSDRelationshipTargetsLiteral(relationLiteral)
+				}
+				pendingRelationshipLiteral = relationLiteral
+			}
+
+			let relationPattern = #"^\s*rel\s+([A-Za-z_][A-Za-z0-9_:]*)\s*=\s*(.+)\s*$"#
+			if let regex = try? NSRegularExpression(pattern: relationPattern) {
+				let nsLine = line as NSString
+				let range = NSRange(location: 0, length: nsLine.length)
+				if let match = regex.firstMatch(in: line, options: [], range: range),
+				   match.numberOfRanges > 2
+				{
+					let name = nsLine.substring(with: match.range(at: 1))
+					if name == relationshipName {
+						let literal = nsLine.substring(with: match.range(at: 2))
+							.trimmingCharacters(in: .whitespacesAndNewlines)
+						if literal.hasPrefix("[") && !literal.contains("]") {
+							pendingRelationshipLiteral = literal
+						} else {
+							return parseUSDRelationshipTargetsLiteral(literal)
+						}
+					}
+				}
+			}
+		}
+
+		let closingCount = line.filter { $0 == "}" }.count
+		if closingCount > 0 {
+			for _ in 0..<closingCount {
+				_ = stack.popLast()
+				inTargetPrim = stack.last?.path == primPath
+			}
+		}
+	}
+	return []
+}
+
+private func parseUSDRelationshipTargetsLiteral(_ literal: String) -> [String] {
+	let pattern = #"<([^>]+)>"#
+	guard let regex = try? NSRegularExpression(pattern: pattern) else {
+		return []
+	}
+	let nsRange = NSRange(literal.startIndex..<literal.endIndex, in: literal)
+	return regex.matches(in: literal, options: [], range: nsRange).compactMap { match in
+		guard let range = Range(match.range(at: 1), in: literal) else {
+			return nil
+		}
+		return String(literal[range])
+	}
+}
+
+private func setRealityKitComponentCustomDataAsset(
+	url: URL,
+	componentPrimPath: String,
+	key: String,
+	assetPath: String
+) throws {
+	try USDMutationCoordinator.withLock {
+		guard url.pathExtension.lowercased() == "usda" else {
+			throw DeconstructedUSDInteropError.componentAuthoringFailed(
+				reason: "Only .usda scenes are supported for customData asset editing."
+			)
+		}
+		let source: String
+		do {
+			source = try String(contentsOf: url, encoding: .utf8)
+		} catch {
+			throw DeconstructedUSDInteropError.componentAuthoringFailed(
+				reason: "Unable to read USDA scene."
+			)
+		}
+		let normalizedPath = normalizeCustomDataAssetLiteral(assetPath)
+		let updated = try updateRealityKitComponentCustomDataAssetInUSDA(
+			source,
+			componentPrimPath: componentPrimPath,
+			key: key,
+			assetPath: normalizedPath
+		)
+		do {
+			try updated.write(to: url, atomically: true, encoding: .utf8)
+		} catch {
+			throw DeconstructedUSDInteropError.componentAuthoringFailed(
+				reason: "Unable to write USDA scene."
+			)
+		}
+	}
+}
+
+private func normalizeCustomDataAssetLiteral(_ raw: String) -> String? {
+	let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+	guard !trimmed.isEmpty else { return nil }
+	if let parsedAsset = parseUSDAssetLiteral(trimmed), !parsedAsset.isEmpty {
+		return parsedAsset
+	}
+	let unquoted = parseUSDQuotedStringLiteral(trimmed)
+	return unquoted.trimmingCharacters(in: .whitespacesAndNewlines)
+}
+
+private func updateRealityKitComponentCustomDataAssetInUSDA(
+	_ source: String,
+	componentPrimPath: String,
+	key: String,
+	assetPath: String?
+) throws -> String {
+	var lines = source.split(whereSeparator: \.isNewline).map(String.init)
+	guard let context = locatePrimDeclarationContext(lines: lines, primPath: componentPrimPath) else {
+		throw DeconstructedUSDInteropError.componentAuthoringFailed(
+			reason: "Component prim not found: \(componentPrimPath)"
+		)
+	}
+
+	let existingMetadata = extractMetadataText(
+		lines: lines,
+		declarationLineIndex: context.declarationLineIndex,
+		openBraceLineIndex: context.openBraceLineIndex
+	)
+	let updatedMetadata = upsertCustomDataAsset(
+		metadata: existingMetadata,
+		key: key,
+		assetPath: assetPath
+	)
+
+	let typeToken = context.typeName.map { "\($0) " } ?? ""
+	let baseDeclaration = "\(context.indent)\(context.keyword) \(typeToken)\"\(context.primName)\""
+	var replacement: [String] = []
+	if let metadata = updatedMetadata, !metadata.isEmpty {
+		replacement.append("\(baseDeclaration) (")
+		replacement.append(contentsOf: metadata.split(separator: "\n").map(String.init))
+		replacement.append("\(context.indent))")
+	} else {
+		replacement.append(baseDeclaration)
+	}
+
+	lines.replaceSubrange(context.declarationLineIndex..<context.openBraceLineIndex, with: replacement)
+	return lines.joined(separator: "\n")
+}
+
+private struct PrimDeclarationContext {
+	let declarationLineIndex: Int
+	let openBraceLineIndex: Int
+	let indent: String
+	let keyword: String
+	let typeName: String?
+	let primName: String
+}
+
+private func locatePrimDeclarationContext(
+	lines: [String],
+	primPath: String
+) -> PrimDeclarationContext? {
+	var stack: [USDAPrimContext] = []
+	var pending: USDAPrimContext?
+	for (index, line) in lines.enumerated() {
+		guard let declaration = parsePrimDeclarationLine(line) else {
+			if line.contains("{"), let pendingContext = pending {
+				stack.append(pendingContext)
+				pending = nil
+			}
+			let closingCount = line.filter { $0 == "}" }.count
+			if closingCount > 0 {
+				for _ in 0..<closingCount {
+					_ = stack.popLast()
+				}
+			}
+			continue
+		}
+		let parentPath = stack.last?.path
+		let path = if let parentPath {
+			"\(parentPath)/\(declaration.primName)"
+		} else {
+			"/\(declaration.primName)"
+		}
+		let context = USDAPrimContext(path: path, indent: declaration.indent)
+		let braceIndex = if line.contains("{") {
+			index
+		} else {
+			findOpenBraceLineIndex(lines: lines, startIndex: index) ?? index
+		}
+		if path == primPath {
+			return PrimDeclarationContext(
+				declarationLineIndex: index,
+				openBraceLineIndex: max(braceIndex, index + 1),
+				indent: declaration.indent,
+				keyword: declaration.keyword,
+				typeName: declaration.typeName,
+				primName: declaration.primName
+			)
+		}
+		if line.contains("{") {
+			stack.append(context)
+		} else {
+			pending = context
+		}
+		if line.contains("{"), let pendingContext = pending {
+			stack.append(pendingContext)
+			pending = nil
+		}
+		let closingCount = line.filter { $0 == "}" }.count
+		if closingCount > 0 {
+			for _ in 0..<closingCount {
+				_ = stack.popLast()
+			}
+		}
+	}
+	return nil
+}
+
+private func findOpenBraceLineIndex(lines: [String], startIndex: Int) -> Int? {
+	guard startIndex < lines.count else { return nil }
+	var idx = startIndex
+	while idx < lines.count {
+		if lines[idx].contains("{") {
+			return idx
+		}
+		idx += 1
+	}
+	return nil
+}
+
+private func extractMetadataText(
+	lines: [String],
+	declarationLineIndex: Int,
+	openBraceLineIndex: Int
+) -> String? {
+	guard declarationLineIndex < lines.count else { return nil }
+	let declarationLine = lines[declarationLineIndex]
+	guard let openParen = declarationLine.firstIndex(of: "(") else {
+		return nil
+	}
+	var metadata = String(declarationLine[declarationLine.index(after: openParen)...])
+	var depth = 1
+	depth += metadata.filter { $0 == "(" }.count
+	depth -= metadata.filter { $0 == ")" }.count
+	if depth <= 0 {
+		if let closeIndex = metadata.lastIndex(of: ")") {
+			return String(metadata[..<closeIndex]).trimmingCharacters(in: .whitespacesAndNewlines)
+		}
+		return metadata.trimmingCharacters(in: .whitespacesAndNewlines)
+	}
+
+	var lineIndex = declarationLineIndex + 1
+	while lineIndex < openBraceLineIndex, lineIndex < lines.count {
+		let line = lines[lineIndex]
+		metadata.append("\n")
+		metadata.append(line)
+		depth += line.filter { $0 == "(" }.count
+		depth -= line.filter { $0 == ")" }.count
+		if depth <= 0 {
+			if let closeIndex = metadata.lastIndex(of: ")") {
+				return String(metadata[..<closeIndex]).trimmingCharacters(in: .whitespacesAndNewlines)
+			}
+			break
+		}
+		lineIndex += 1
+	}
+	return metadata.trimmingCharacters(in: .whitespacesAndNewlines)
+}
+
+private func upsertCustomDataAsset(
+	metadata: String?,
+	key: String,
+	assetPath: String?
+) -> String? {
+	let entryPattern = "asset\\s+\(NSRegularExpression.escapedPattern(for: key))\\s*=\\s*@[^@]*@"
+	let original = metadata?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+	var working = original
+
+	if let regex = try? NSRegularExpression(pattern: entryPattern) {
+		let range = NSRange(working.startIndex..<working.endIndex, in: working)
+		working = regex.stringByReplacingMatches(in: working, options: [], range: range, withTemplate: "")
+	}
+	working = working.replacingOccurrences(of: "\\n\\s*\\n", with: "\n", options: .regularExpression)
+	working = working.trimmingCharacters(in: .whitespacesAndNewlines)
+
+	guard let assetPath, !assetPath.isEmpty else {
+		if working == "customData = {\n}" || working == "customData = { }" || working == "customData = {}" {
+			return nil
+		}
+		return working.isEmpty ? nil : working
+	}
+
+	let entry = "asset \(key) = @\(assetPath)@"
+	if let customDataRange = working.range(of: "customData = {") {
+		let suffix = String(working[customDataRange.upperBound...])
+		if let closeOffset = suffix.firstIndex(of: "}") {
+			let insertIndex = working.index(customDataRange.upperBound, offsetBy: suffix.distance(from: suffix.startIndex, to: closeOffset))
+			let prefix = String(working[..<insertIndex]).trimmingCharacters(in: .whitespacesAndNewlines)
+			let tail = String(working[insertIndex...]).trimmingCharacters(in: .whitespacesAndNewlines)
+			let separator = prefix.hasSuffix("{") ? "\n" : "\n"
+			let rebuilt = "\(prefix)\(separator)\(entry)\n\(tail)"
+			return rebuilt.trimmingCharacters(in: .whitespacesAndNewlines)
+		}
+	}
+	return "customData = {\n\(entry)\n}"
+}
+
+private func parseComponentMetadataBlock(
+	lines: [String],
+	declarationIndex: Int
+) -> String? {
+	guard declarationIndex < lines.count else { return nil }
+	let declarationLine = lines[declarationIndex]
+	guard let openIndex = declarationLine.firstIndex(of: "(") else {
+		return nil
+	}
+	var metadata = String(declarationLine[declarationLine.index(after: openIndex)...])
+	var depth = 1 + metadata.filter { $0 == "(" }.count - metadata.filter { $0 == ")" }.count
+	if depth <= 0 {
+		return metadata
+	}
+	var cursor = declarationIndex + 1
+	while cursor < lines.count {
+		let line = lines[cursor]
+		metadata.append("\n")
+		metadata.append(line)
+		depth += line.filter { $0 == "(" }.count
+		depth -= line.filter { $0 == ")" }.count
+		if depth <= 0 {
+			return metadata
+		}
+		cursor += 1
+	}
+	return metadata
+}
+
+private func defaultBehaviorName(for triggerType: String) -> String {
+	switch triggerType {
+	case "TapGesture":
+		return "OnTap"
+	case "Collide":
+		return "OnCollision"
+	case "AddedToScene":
+		return "OnAddedToScene"
+	case "Notification":
+		return "OnNotification"
+	default:
+		return "Behavior"
+	}
+}
+
+private func parseCustomDataAsset(in metadata: String, key: String) -> String? {
+	let escapedKey = NSRegularExpression.escapedPattern(for: key)
+	let pattern = "asset\\s+\(escapedKey)\\s*=\\s*@([^@]+)@"
+	guard let regex = try? NSRegularExpression(pattern: pattern) else {
+		return nil
+	}
+	let nsRange = NSRange(metadata.startIndex..<metadata.endIndex, in: metadata)
+	guard let match = regex.firstMatch(in: metadata, options: [], range: nsRange),
+		  let valueRange = Range(match.range(at: 1), in: metadata)
+	else {
+		return nil
+	}
+	return String(metadata[valueRange])
+}
+
 private func parseActiveFlag(from text: String?) -> Bool? {
 	guard let text else { return nil }
 	let normalized = text.replacingOccurrences(of: "\t", with: " ")
@@ -1287,7 +2242,7 @@ private func updateRealityKitComponentParameterInUSDA(
 	var componentIndent: String?
 	var inTarget = false
 	var insertIndex: Int?
-	var replaceIndex: Int?
+	var replaceRange: Range<Int>?
 
 	for (index, line) in lines.enumerated() {
 		if let declaration = parsePrimDeclarationLine(line) {
@@ -1323,7 +2278,21 @@ private func updateRealityKitComponentParameterInUSDA(
 				if nameRange.location != NSNotFound {
 					let name = nsLine.substring(with: nameRange)
 					if name == attributeName {
-						replaceIndex = index
+						let start = index
+						var end = index + 1
+						if let equalsRange = line.range(of: "=") {
+							let literal = String(line[equalsRange.upperBound...])
+							var bracketDepth = literal.filter { $0 == "[" }.count - literal.filter { $0 == "]" }.count
+							var cursor = index + 1
+							while bracketDepth > 0, cursor < lines.count {
+								let continuation = lines[cursor]
+								bracketDepth += continuation.filter { $0 == "[" }.count
+								bracketDepth -= continuation.filter { $0 == "]" }.count
+								cursor += 1
+							}
+							end = max(end, cursor)
+						}
+						replaceRange = start..<end
 					}
 				}
 			}
@@ -1351,8 +2320,8 @@ private func updateRealityKitComponentParameterInUSDA(
 	let fieldIndent = componentIndent + indentUnit
 	let authoredLine = "\(fieldIndent)\(attributeType) \(attributeName) = \(valueLiteral)"
 	var updatedLines = lines
-	if let replaceIndex {
-		updatedLines[replaceIndex] = authoredLine
+	if let replaceRange {
+		updatedLines.replaceSubrange(replaceRange, with: [authoredLine])
 	} else {
 		updatedLines.insert(authoredLine, at: insertIndex)
 	}

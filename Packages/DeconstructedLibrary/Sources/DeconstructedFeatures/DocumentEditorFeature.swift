@@ -252,7 +252,7 @@ public struct DocumentEditorFeature {
 					.send(.sceneNavigator(.sceneURLChanged(selectedURL))),
 					.send(.inspector(.sceneURLChanged(selectedURL))),
 					.send(.inspector(.selectionChanged(nil))),
-					.send(.viewport(.loadRequested(selectedURL)))
+					.send(.viewport(.loadRequested(commandID: uuid(), url: selectedURL, preserveCamera: false)))
 				)
 
 			case .cameraHistoryLoaded(let items):
@@ -282,7 +282,7 @@ public struct DocumentEditorFeature {
 						.send(.sceneNavigator(.sceneURLChanged(selectedURL))),
 						.send(.inspector(.sceneURLChanged(selectedURL))),
 						.send(.inspector(.selectionChanged(nil))),
-						.send(.viewport(.loadRequested(selectedURL)))
+						.send(.viewport(.loadRequested(commandID: uuid(), url: selectedURL, preserveCamera: false)))
 					)
 				}
 				state.cameraHistory = []
@@ -325,7 +325,7 @@ public struct DocumentEditorFeature {
 							.send(.sceneNavigator(.sceneURLChanged(normalizedURL))),
 							.send(.inspector(.sceneURLChanged(normalizedURL))),
 							.send(.inspector(.selectionChanged(nil))),
-							.send(.viewport(.loadRequested(normalizedURL)))
+							.send(.viewport(.loadRequested(commandID: uuid(), url: normalizedURL, preserveCamera: false)))
 						)
 					}
 					return .merge(
@@ -336,7 +336,7 @@ public struct DocumentEditorFeature {
 						.send(.sceneNavigator(.sceneURLChanged(normalizedURL))),
 						.send(.inspector(.sceneURLChanged(normalizedURL))),
 						.send(.inspector(.selectionChanged(nil))),
-						.send(.viewport(.loadRequested(normalizedURL)))
+						.send(.viewport(.loadRequested(commandID: uuid(), url: normalizedURL, preserveCamera: false)))
 					)
 				}
 
@@ -362,7 +362,7 @@ public struct DocumentEditorFeature {
 						.send(.sceneNavigator(.sceneURLChanged(normalizedURL))),
 						.send(.inspector(.sceneURLChanged(normalizedURL))),
 						.send(.inspector(.selectionChanged(nil))),
-						.send(.viewport(.loadRequested(normalizedURL)))
+						.send(.viewport(.loadRequested(commandID: uuid(), url: normalizedURL, preserveCamera: false)))
 					)
 				}
 				return .merge(
@@ -373,7 +373,7 @@ public struct DocumentEditorFeature {
 					.send(.sceneNavigator(.sceneURLChanged(normalizedURL))),
 					.send(.inspector(.sceneURLChanged(normalizedURL))),
 					.send(.inspector(.selectionChanged(nil))),
-					.send(.viewport(.loadRequested(normalizedURL)))
+					.send(.viewport(.loadRequested(commandID: uuid(), url: normalizedURL, preserveCamera: false)))
 				)
 
 			case .sceneClosed(let id):
@@ -402,7 +402,7 @@ public struct DocumentEditorFeature {
 						.send(.sceneNavigator(.sceneURLChanged(selectedURL))),
 						.send(.inspector(.sceneURLChanged(selectedURL))),
 						.send(.inspector(.selectionChanged(nil))),
-						.send(.viewport(.loadRequested(selectedURL)))
+						.send(.viewport(.loadRequested(commandID: uuid(), url: selectedURL, preserveCamera: false)))
 					)
 				}
 				state.cameraHistory = []
@@ -473,14 +473,10 @@ public struct DocumentEditorFeature {
 				}
 
 			case .frameSceneRequested, .frameSelectedRequested:
-				guard case .scene(let id) = state.selectedTab,
-					var tab = state.openScenes[id: id]
-				else {
+				guard case .scene = state.selectedTab else {
 					return .none
 				}
-				tab.frameRequestID = uuid()
-				state.openScenes[id: id] = tab
-				return .none
+				return .send(.viewport(.frameRequested))
 
 			case .toggleGridRequested:
 				state.viewportShowGrid.toggle()
@@ -583,7 +579,7 @@ public struct DocumentEditorFeature {
 				{
 					return .merge(
 						.send(.projectBrowser(.sceneModified(tab.fileURL))),
-						.send(.viewport(.loadRequestedPreservingCamera(tab.fileURL)))
+						.send(.viewport(.loadRequested(commandID: uuid(), url: tab.fileURL, preserveCamera: true)))
 					)
 				}
 
@@ -593,7 +589,7 @@ public struct DocumentEditorFeature {
 				{
 					return .merge(
 						.send(.projectBrowser(.sceneModified(tab.fileURL))),
-						.send(.viewport(.loadRequestedPreservingCamera(tab.fileURL)))
+						.send(.viewport(.loadRequested(commandID: uuid(), url: tab.fileURL, preserveCamera: true)))
 					)
 				}
 
@@ -605,7 +601,7 @@ public struct DocumentEditorFeature {
 					state.openScenes[id: tabID] = tab
 					return .merge(
 						.send(.projectBrowser(.sceneModified(tab.fileURL))),
-						.send(.viewport(.loadRequested(tab.fileURL)))
+						.send(.viewport(.loadRequested(commandID: uuid(), url: tab.fileURL, preserveCamera: false)))
 					)
 				}
 
@@ -617,7 +613,7 @@ public struct DocumentEditorFeature {
 					state.openScenes[id: tabID] = tab
 					return .merge(
 						.send(.projectBrowser(.sceneModified(tab.fileURL))),
-						.send(.viewport(.loadRequestedPreservingCamera(tab.fileURL))),
+						.send(.viewport(.loadRequested(commandID: uuid(), url: tab.fileURL, preserveCamera: true))),
 						.send(.sceneNavigator(.refreshRequested))
 					)
 				}
@@ -630,7 +626,7 @@ public struct DocumentEditorFeature {
 					state.openScenes[id: tabID] = tab
 					return .merge(
 						.send(.projectBrowser(.sceneModified(tab.fileURL))),
-						.send(.viewport(.loadRequestedPreservingCamera(tab.fileURL))),
+						.send(.viewport(.loadRequested(commandID: uuid(), url: tab.fileURL, preserveCamera: true))),
 						.send(.sceneNavigator(.refreshRequested)),
 						.send(.inspector(.selectionChanged(state.inspector.selectedNodeID))),
 						.send(.viewport(.selectionChanged(state.inspector.selectedNodeID)))
@@ -644,7 +640,7 @@ public struct DocumentEditorFeature {
 					tab.reloadTrigger = uuid()
 					state.openScenes[id: tabID] = tab
 					return .merge(
-						.send(.viewport(.loadRequestedPreservingCamera(tab.fileURL))),
+						.send(.viewport(.loadRequested(commandID: uuid(), url: tab.fileURL, preserveCamera: true))),
 						.send(.sceneNavigator(.refreshRequested)),
 						.send(.inspector(.selectionChanged(state.inspector.selectedNodeID))),
 						.send(.viewport(.selectionChanged(state.inspector.selectedNodeID)))
@@ -658,7 +654,7 @@ public struct DocumentEditorFeature {
 					tab.reloadTrigger = uuid()
 					state.openScenes[id: tabID] = tab
 					return .merge(
-						.send(.viewport(.loadRequestedPreservingCamera(tab.fileURL))),
+						.send(.viewport(.loadRequested(commandID: uuid(), url: tab.fileURL, preserveCamera: true))),
 						.send(.sceneNavigator(.refreshRequested)),
 						.send(.inspector(.selectionChanged(state.inspector.selectedNodeID))),
 						.send(.viewport(.selectionChanged(state.inspector.selectedNodeID)))

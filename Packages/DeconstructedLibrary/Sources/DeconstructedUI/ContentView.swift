@@ -125,7 +125,7 @@ public struct ContentView: View {
 										environmentRotation: store.environmentRotation,
 										showEnvironmentBackground: store.environmentShowBackground,
 										outlineConfiguration: OutlineConfiguration(
-											color: .orange,
+											color: .cyan,
 											width: 0.15,
 											referenceDistance: 2.0
 										)

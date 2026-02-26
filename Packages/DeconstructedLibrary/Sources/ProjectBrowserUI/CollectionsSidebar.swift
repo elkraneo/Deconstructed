@@ -71,7 +71,7 @@ private struct ProjectSidebarRow: View {
 
 	var body: some View {
 		Label(item.name, systemImage: item.fileType.iconName)
-			.foregroundStyle(.orange)
+			.foregroundStyle(.blue)
 			.contentShape(Rectangle())
 			.onDrag {
 				store.send(.dragStarted([item.id]))

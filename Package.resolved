@@ -1,5 +1,5 @@
 {
-  "originHash" : "9a878e4025f2d804af791ae190ad51e702e0ec330bf53a39ab914b008024ed1a",
+  "originHash" : "2862a3f734e49a158e5067f458cf278aeb58cd7e3d0de0e9b9720fcab9d5be7b",
   "pins" : [
     {
       "identity" : "combine-schedulers",
@@ -132,8 +132,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Reality2713/SwiftUsd.git",
       "state" : {
-        "branch" : "swift-syntax-602",
-        "revision" : "0d6d585427757ff1b80ec25ba65926fb618f9fc0"
+        "branch" : "main",
+        "revision" : "4f67ab07dd72c7ae5064b23c2bc0157e06dff6fb"
       }
     },
     {
@@ -141,7 +141,7 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Reality2713/USDInterop",
       "state" : {
-        "revision" : "9a51edd955db053813d8467d088d07639d7aa46c"
+        "revision" : "1e93a3be7fa7a855c312d5c2457a8bf5ccd77bc0"
       }
     },
     {
