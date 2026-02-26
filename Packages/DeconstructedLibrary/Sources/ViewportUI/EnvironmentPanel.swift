@@ -137,7 +137,7 @@ public struct EnvironmentPanel: View {
 		let name = EnvironmentMaps.displayName(for: path).lowercased()
 		if name.contains("beach") || name.contains("sunset") {
 			return LinearGradient(
-				colors: [.blue, .orange, .red],
+				colors: [.blue, .cyan, .teal],
 				startPoint: .top,
 				endPoint: .bottom
 			)

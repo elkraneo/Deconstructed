@@ -158,9 +158,9 @@ private struct SceneNavigatorRow: View {
 			if type.contains("mesh") || type.contains("sphere") || type.contains("cube") || 
 			   type.contains("plane") || type.contains("cylinder") || type.contains("cone") ||
 			   type.contains("capsule") || type.contains("torus") { return .green }
-			if type.contains("light") { return .yellow }
-			if type.contains("camera") { return .purple }
-			if type.contains("material") || type.contains("shader") { return .orange }
+			if type.contains("light") { return .teal }
+			if type.contains("camera") { return .cyan }
+			if type.contains("material") || type.contains("shader") { return .blue }
 		}
 		return .secondary
 	}

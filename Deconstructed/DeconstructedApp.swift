@@ -30,6 +30,12 @@ struct DeconstructedApp: App {
 						file.document.documentURL = url
 					}
 				}
+				.toolbar {
+					ToolbarItem {
+						Button("Add", systemImage: "plus") {}
+							.disabled(true)
+					}
+				}
 		}
 		.commands {
 			CommandGroup(replacing: .newItem) {

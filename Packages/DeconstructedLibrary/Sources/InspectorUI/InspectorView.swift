@@ -1309,7 +1309,7 @@ private struct ComponentParametersSection: View {
 				} label: {
 					Image(systemName: isActive ? "checkmark.circle" : "circle")
 						.font(.system(size: 16, weight: .semibold))
-						.foregroundStyle(isActive ? .orange : .secondary)
+						.foregroundStyle(isActive ? .blue : .secondary)
 				}
 				.buttonStyle(.plain)
 				.help(isActive ? "Deactivate component" : "Activate component")
