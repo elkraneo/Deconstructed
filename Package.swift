@@ -43,11 +43,11 @@ let package = Package(
 		.package(url: "https://github.com/pointfreeco/swift-sharing", from: "2.3.0"),
 		.package(url: "https://github.com/Reality2713/USDInterop", revision: "1e93a3be7fa7a855c312d5c2457a8bf5ccd77bc0"),
 		.package(url: "https://github.com/reality2713/StageView.git", branch: "main"),
-        .package(
-            name: "USDInteropAdvanced",
-            url: "https://github.com/Reality2713/USDInteropAdvanced-binaries",
-            from: "0.2.15"
-        ),
+		.package(
+			name: "USDInteropAdvanced",
+			url: "https://github.com/Reality2713/USDInteropAdvanced-binaries.git",
+			from: "0.2.29"
+		),
 	],
 	targets: [
 		.target(

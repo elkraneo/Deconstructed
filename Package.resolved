@@ -1,5 +1,5 @@
 {
-  "originHash" : "2862a3f734e49a158e5067f458cf278aeb58cd7e3d0de0e9b9720fcab9d5be7b",
+  "originHash" : "fafa8b1b0169ca532ad73e7030f9cdaeb7e7237198eccacdd99df8004fb3549b",
   "pins" : [
     {
       "identity" : "combine-schedulers",
@@ -149,8 +149,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Reality2713/USDInteropAdvanced-binaries",
       "state" : {
-        "revision" : "1ce00c69b015124227690ef9100aaac8c5a8cdc1",
-        "version" : "0.2.15"
+        "revision" : "2d9cee09f4920f48373cc5834b3a33f4cce6d982",
+        "version" : "0.2.29"
       }
     },
     {
