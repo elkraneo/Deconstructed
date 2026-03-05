@@ -422,8 +422,7 @@ public struct ProjectBrowserFeature {
 
 		case let .fileSystemEvent(event):
 			guard let rootURL = resolveRootDirectory(state: state),
-			      let eventURL = eventURL(event),
-			      isDescendant(eventURL, of: rootURL) else {
+			      eventTouchesRoot(event, rootURL: rootURL) else {
 				return .none
 			}
 			// Debounce file system events to prevent excessive reloads
@@ -498,16 +497,16 @@ private func resolveRootDirectory(state: ProjectBrowserFeature.State) -> URL? {
 	return nil
 }
 
-private func eventURL(_ event: FileWatcherClient.Event) -> URL? {
+private func eventTouchesRoot(_ event: FileWatcherClient.Event, rootURL: URL) -> Bool {
 	switch event {
 	case let .created(url):
-		return url
+		return isDescendant(url, of: rootURL)
 	case let .modified(url):
-		return url
+		return isDescendant(url, of: rootURL)
 	case let .deleted(url):
-		return url
-	case let .renamed(_, to):
-		return to
+		return isDescendant(url, of: rootURL)
+	case let .renamed(from, to):
+		return isDescendant(from, of: rootURL) || isDescendant(to, of: rootURL)
 	}
 }
 

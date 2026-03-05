@@ -1,5 +1,5 @@
-import Foundation
 import ComposableArchitecture
+import Foundation
 
 @DependencyClient
 public struct FileWatcherClient: Sendable {
@@ -117,26 +117,43 @@ private final class FSEventsWatcher: @unchecked Sendable {
 				.fromOpaque(eventPaths)
 				.takeUnretainedValue() as! [String]
 
+			var pendingRenameURL: URL?
+
 			for i in 0..<numEvents {
 				let path = paths[i]
 				let flags = eventFlags[i]
 				let url = URL(fileURLWithPath: path)
 
 				// Determine event type from flags
-				if flags & UInt32(kFSEventStreamEventFlagItemCreated) != 0 {
-					continuation.yield(.created(url))
-				} else if flags & UInt32(kFSEventStreamEventFlagItemRemoved) != 0 {
-					continuation.yield(.deleted(url))
-				} else if flags & UInt32(kFSEventStreamEventFlagItemModified) != 0 {
-					continuation.yield(.modified(url))
-				} else if flags & UInt32(kFSEventStreamEventFlagItemRenamed) != 0 {
-					// Renames need special handling - FSEvents sends two events
-					// We'll treat both as modified and let the consumer figure it out
-					continuation.yield(.modified(url))
+				if flags & UInt32(kFSEventStreamEventFlagItemRenamed) != 0 {
+					if let fromURL = pendingRenameURL {
+						continuation.yield(.renamed(from: fromURL, to: url))
+						pendingRenameURL = nil
+					} else {
+						pendingRenameURL = url
+					}
 				} else {
-					// Generic change
-					continuation.yield(.modified(url))
+					if let pendingRenameURL {
+						// FSEvents can deliver only one side of a rename in a batch.
+						continuation.yield(.modified(pendingRenameURL))
+						pendingRenameURL = nil
+					}
+
+					if flags & UInt32(kFSEventStreamEventFlagItemCreated) != 0 {
+						continuation.yield(.created(url))
+					} else if flags & UInt32(kFSEventStreamEventFlagItemRemoved) != 0 {
+						continuation.yield(.deleted(url))
+					} else if flags & UInt32(kFSEventStreamEventFlagItemModified) != 0 {
+						continuation.yield(.modified(url))
+					} else {
+						// Generic change
+						continuation.yield(.modified(url))
+					}
 				}
+			}
+
+			if let pendingRenameURL {
+				continuation.yield(.modified(pendingRenameURL))
 			}
 		}
 

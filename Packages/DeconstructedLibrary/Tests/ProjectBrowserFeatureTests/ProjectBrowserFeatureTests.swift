@@ -367,4 +367,76 @@ struct ProjectBrowserFeatureTests {
 			$0.selectedItems = [directoryId]
 		}
 	}
+
+	@Test
+	func renameFromInsideProjectToOutside_triggersRefresh() async {
+		let rootURL = URL(fileURLWithPath: "/test/root.rkassets")
+		let movedURL = rootURL.appendingPathComponent("Scene.usda")
+		let outsideURL = URL(fileURLWithPath: "/tmp/Scene.usda")
+		let root = AssetItem(
+			id: UUID(),
+			name: "root.rkassets",
+			url: rootURL,
+			isDirectory: true,
+			fileType: .directory
+		)
+
+		var state = ProjectBrowserFeature.State()
+		state.assetItems = [root]
+		state.documentURL = URL(fileURLWithPath: "/test/Project.realitycomposerpro")
+
+		let clock = TestClock()
+		let store = TestStore(initialState: state) {
+			ProjectBrowserFeature()
+		} withDependencies: {
+			$0.continuousClock = clock
+			$0.assetDiscoveryClient.discover = { _ in [root] }
+		}
+
+		await store.send(.fileSystemEvent(.renamed(from: movedURL, to: outsideURL)))
+		await clock.advance(by: .milliseconds(300))
+		await store.receive(.debouncedRefresh)
+		await store.receive(.loadAssets(documentURL: URL(fileURLWithPath: "/test/Project.realitycomposerpro"))) {
+			$0.isLoading = true
+			$0.errorMessage = nil
+			$0.documentURL = URL(fileURLWithPath: "/test/Project.realitycomposerpro")
+		}
+		await store.receive(.assetsLoaded([root])) {
+			$0.isLoading = false
+			$0.assetItems = [root]
+			$0.currentDirectoryId = root.id
+			$0.expandedDirectories = [root.id]
+			$0.isWatchingFiles = true
+			$0.watchedDirectoryURL = rootURL
+		}
+	}
+
+	@Test
+	func renameOutsideProjectBoundary_isIgnored() async {
+		let rootURL = URL(fileURLWithPath: "/test/root.rkassets")
+		let root = AssetItem(
+			id: UUID(),
+			name: "root.rkassets",
+			url: rootURL,
+			isDirectory: true,
+			fileType: .directory
+		)
+
+		var state = ProjectBrowserFeature.State()
+		state.assetItems = [root]
+		state.documentURL = URL(fileURLWithPath: "/test/Project.realitycomposerpro")
+
+		let store = TestStore(initialState: state) {
+			ProjectBrowserFeature()
+		}
+
+		await store.send(
+			.fileSystemEvent(
+				.renamed(
+					from: URL(fileURLWithPath: "/tmp/from.usda"),
+					to: URL(fileURLWithPath: "/tmp/to.usda")
+				)
+			)
+		)
+	}
 }

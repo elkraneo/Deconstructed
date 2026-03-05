@@ -1,7 +1,8 @@
+import ComposableArchitecture
 import DeconstructedModels
 import Foundation
+import OSLog
 import ProjectBrowserModels
-import ComposableArchitecture
 
 @DependencyClient
 public struct AssetDiscoveryClient: Sendable {
@@ -21,6 +22,10 @@ extension AssetDiscoveryClient: DependencyKey {
 /// Live implementation for asset discovery
 public actor AssetDiscoveryService {
 	private let fileManager: FileManager = .default
+	private let logger = Logger(
+		subsystem: "com.deconstructed.project-browser",
+		category: "AssetDiscovery"
+	)
 
 	public init() {}
 
@@ -131,6 +136,9 @@ public actor AssetDiscoveryService {
 							)
 						}
 					} catch {
+						self.logger.warning(
+							"Skipping unreadable asset at \(url.path, privacy: .public): \(String(describing: error), privacy: .public)"
+						)
 						return nil
 					}
 				}
@@ -149,6 +157,15 @@ public actor AssetDiscoveryService {
 
 public enum AssetDiscoveryError: Error, Sendable {
 	case rkassetsNotFound
+}
+
+extension AssetDiscoveryError: LocalizedError {
+	public var errorDescription: String? {
+		switch self {
+		case .rkassetsNotFound:
+			return "Could not find a .rkassets directory in the project's Sources folder."
+		}
+	}
 }
 
 // MARK: - UUID Lookup
