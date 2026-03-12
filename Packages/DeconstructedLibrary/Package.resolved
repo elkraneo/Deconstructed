@@ -1,13 +1,13 @@
 {
-  "originHash" : "8f4eec96b1234d1bb4e8ddeaaf6e32ca4ece35fcf34892b4416e25371208ccd3",
+  "originHash" : "ada40a22c07e415abe2149a19345131b5fa94773c3063c7c7feb30c2b831eaea",
   "pins" : [
     {
       "identity" : "appleusdschemas",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/reality2713/AppleUSDSchemas",
       "state" : {
-        "branch" : "main",
-        "revision" : "5cb60c1e41bf05dc8b2f44d5490d5dfb4bdc6414"
+        "revision" : "5cb60c1e41bf05dc8b2f44d5490d5dfb4bdc6414",
+        "version" : "0.1.0"
       }
     },
     {
@@ -17,6 +17,15 @@
       "state" : {
         "revision" : "fd16d76fd8b9a976d88bfb6cacc05ca8d19c91b6",
         "version" : "1.1.0"
+      }
+    },
+    {
+      "identity" : "stageview",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/reality2713/StageView.git",
+      "state" : {
+        "revision" : "53647f3b8d8cf450a0eaeca9afced1d8fd6f6065",
+        "version" : "0.1.4"
       }
     },
     {
@@ -132,8 +141,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Reality2713/SwiftUsd.git",
       "state" : {
-        "branch" : "swift-syntax-602",
-        "revision" : "0d6d585427757ff1b80ec25ba65926fb618f9fc0"
+        "revision" : "cda887077b4df251e503262a5d1b60852bb6f4d0",
+        "version" : "6.0.0"
       }
     },
     {
@@ -141,7 +150,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Reality2713/USDInterop",
       "state" : {
-        "revision" : "9a51edd955db053813d8467d088d07639d7aa46c"
+        "revision" : "f0982def5c8e1b215793ab1868569701ee6e15aa",
+        "version" : "0.1.4"
       }
     },
     {
@@ -149,8 +159,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Reality2713/USDInteropAdvanced",
       "state" : {
-        "branch" : "main",
-        "revision" : "81dbfeb9f7e0997b2c2608d16b32c23547bb50f3"
+        "revision" : "207a1c2288142680f43ee1318a555b335ed80549",
+        "version" : "0.2.35"
       }
     },
     {

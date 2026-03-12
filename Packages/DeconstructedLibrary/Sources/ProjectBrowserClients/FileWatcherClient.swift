@@ -133,9 +133,9 @@ private final class FSEventsWatcher: @unchecked Sendable {
 						pendingRenameURL = url
 					}
 				} else {
-					if let pendingRenameURL {
+					if let pendingRenameURLValue = pendingRenameURL {
 						// FSEvents can deliver only one side of a rename in a batch.
-						continuation.yield(.modified(pendingRenameURL))
+						continuation.yield(.modified(pendingRenameURLValue))
 						pendingRenameURL = nil
 					}
 
@@ -152,8 +152,8 @@ private final class FSEventsWatcher: @unchecked Sendable {
 				}
 			}
 
-			if let pendingRenameURL {
-				continuation.yield(.modified(pendingRenameURL))
+			if let pendingRenameURLValue = pendingRenameURL {
+				continuation.yield(.modified(pendingRenameURLValue))
 			}
 		}
 

@@ -1,5 +1,5 @@
 {
-  "originHash" : "fafa8b1b0169ca532ad73e7030f9cdaeb7e7237198eccacdd99df8004fb3549b",
+  "originHash" : "49083a4bb320a6cf9ac2cebca9a9942ccb4dd78d2f3df5fb316b2cb5da1982d4",
   "pins" : [
     {
       "identity" : "combine-schedulers",
@@ -15,8 +15,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/reality2713/StageView.git",
       "state" : {
-        "branch" : "main",
-        "revision" : "5f306fb0ea0fc59af1cf4504e85b64a09307eaef"
+        "revision" : "53647f3b8d8cf450a0eaeca9afced1d8fd6f6065",
+        "version" : "0.1.4"
       }
     },
     {
@@ -132,8 +132,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Reality2713/SwiftUsd.git",
       "state" : {
-        "branch" : "main",
-        "revision" : "4f67ab07dd72c7ae5064b23c2bc0157e06dff6fb"
+        "revision" : "cda887077b4df251e503262a5d1b60852bb6f4d0",
+        "version" : "6.0.0"
       }
     },
     {
@@ -141,7 +141,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Reality2713/USDInterop",
       "state" : {
-        "revision" : "1e93a3be7fa7a855c312d5c2457a8bf5ccd77bc0"
+        "revision" : "f0982def5c8e1b215793ab1868569701ee6e15aa",
+        "version" : "0.1.4"
       }
     },
     {

@@ -10,20 +10,21 @@ import USDInteropAdvancedInspection
 
 // Local aliases for OpenUSD imported C++ symbols.
 // Keep these fileprivate so OpenUSD internals never leak into the module API.
-fileprivate typealias UsdStage = pxrInternal_v0_25_8__pxrReserved__.UsdStage
-fileprivate typealias SdfPath = pxrInternal_v0_25_8__pxrReserved__.SdfPath
-fileprivate typealias SdfPathVector = pxrInternal_v0_25_8__pxrReserved__.SdfPathVector
-fileprivate typealias TfToken = pxrInternal_v0_25_8__pxrReserved__.TfToken
-fileprivate typealias SdfValueTypeName = pxrInternal_v0_25_8__pxrReserved__.SdfValueTypeName
-fileprivate typealias SdfVariability = pxrInternal_v0_25_8__pxrReserved__.SdfVariability
-fileprivate typealias UsdTimeCode = pxrInternal_v0_25_8__pxrReserved__.UsdTimeCode
-fileprivate typealias VtValue = pxrInternal_v0_25_8__pxrReserved__.VtValue
-fileprivate typealias VtStringArray = pxrInternal_v0_25_8__pxrReserved__.VtStringArray
-fileprivate typealias VtTokenArray = pxrInternal_v0_25_8__pxrReserved__.VtTokenArray
-fileprivate typealias GfVec2f = pxrInternal_v0_25_8__pxrReserved__.GfVec2f
-fileprivate typealias GfVec3f = pxrInternal_v0_25_8__pxrReserved__.GfVec3f
-fileprivate typealias GfQuatf = pxrInternal_v0_25_8__pxrReserved__.GfQuatf
-fileprivate typealias SdfAssetPath = pxrInternal_v0_25_8__pxrReserved__.SdfAssetPath
+fileprivate typealias pxr = pxrInternal_v0_26_3__pxrReserved__
+fileprivate typealias UsdStage = pxr.UsdStage
+fileprivate typealias SdfPath = pxr.SdfPath
+fileprivate typealias SdfPathVector = pxr.SdfPathVector
+fileprivate typealias TfToken = pxr.TfToken
+fileprivate typealias SdfValueTypeName = pxr.SdfValueTypeName
+fileprivate typealias SdfVariability = pxr.SdfVariability
+fileprivate typealias UsdTimeCode = pxr.UsdTimeCode
+fileprivate typealias VtValue = pxr.VtValue
+fileprivate typealias VtStringArray = pxr.VtStringArray
+fileprivate typealias VtTokenArray = pxr.VtTokenArray
+fileprivate typealias GfVec2f = pxr.GfVec2f
+fileprivate typealias GfVec3f = pxr.GfVec3f
+fileprivate typealias GfQuatf = pxr.GfQuatf
+fileprivate typealias SdfAssetPath = pxr.SdfAssetPath
 
 private enum USDMutationCoordinator {
 	static let lock = NSLock()

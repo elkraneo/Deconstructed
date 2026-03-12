@@ -117,7 +117,7 @@ let package = Package(
 		// ),
 		.package(
 			url: "https://github.com/Reality2713/USDInterop",
-			branch: "main"
+			from: "0.1.4"
 		),
 
 		// Private source is not accessible from this open-code repo. Use the public
@@ -130,9 +130,9 @@ let package = Package(
 		//     ),
 		.package(
 			url: "https://github.com/Reality2713/USDInteropAdvanced",
-			branch: "main"
+			from: "0.2.35"
 		),
-		.package(url: "https://github.com/reality2713/StageView.git", branch: "main"),
+		.package(url: "https://github.com/reality2713/StageView.git", from: "0.1.4"),
 	],
 	targets: [
 		// Targets are the basic building blocks of a package, defining a module or a test suite.

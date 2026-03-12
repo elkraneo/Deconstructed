@@ -17,6 +17,7 @@ import ViewportUI
 public struct ContentView: View {
 	@Binding public var document: DeconstructedDocument
 	@State private var store: StoreOf<DocumentEditorFeature>?
+	@State private var viewportProvider = RealityKitProvider()
 
 	public init(document: Binding<DeconstructedDocument>) {
 		self._document = document
@@ -104,13 +105,8 @@ public struct ContentView: View {
 							Divider()
 
 							ZStack(alignment: .bottomLeading) {
-								let selectedPrimPath: String? = {
-									if case .prim(let path) = store.inspector.currentTarget {
-										return path
-									}
-									return nil
-								}()
 								RealityKitStageView(
+									provider: viewportProvider,
 									store: store.scope(state: \.viewport, action: \.viewport),
 									configuration: RealityKitConfiguration(
 										showGrid: store.viewportShowGrid,
@@ -128,7 +124,8 @@ public struct ContentView: View {
 											color: .cyan,
 											width: 0.15,
 											referenceDistance: 2.0
-										)
+										),
+										selectionHighlightStyle: .boundingBox
 									)
 								)
 
@@ -163,13 +160,8 @@ public struct ContentView: View {
 								Divider()
 
 								ZStack(alignment: .bottomLeading) {
-									let selectedPrimPath: String? = {
-										if case .prim(let path) = store.inspector.currentTarget {
-											return path
-										}
-										return nil
-									}()
 									RealityKitStageView(
+										provider: viewportProvider,
 										store: store.scope(state: \.viewport, action: \.viewport),
 										configuration: RealityKitConfiguration(
 											showGrid: store.viewportShowGrid,
@@ -188,7 +180,8 @@ public struct ContentView: View {
 												color: .cyan,
 												width: 0.10,
 												referenceDistance: 2.0
-											)
+											),
+											selectionHighlightStyle: .boundingBox
 										)
 									)
 
