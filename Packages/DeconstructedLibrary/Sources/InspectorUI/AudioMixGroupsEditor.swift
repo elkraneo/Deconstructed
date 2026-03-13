@@ -13,6 +13,7 @@ public struct AudioMixGroupsEditor: View {
 
 	@State private var rawValues: [String: String] = [:]
 	@State private var rawAttributeTypes: [String: String] = [:]
+	@State private var selectedGroupPath: String? = nil
 
 	public init(
 		componentPath: String,
@@ -30,117 +31,199 @@ public struct AudioMixGroupsEditor: View {
 
 	public var body: some View {
 		let groups = audioMixGroupEditorModels
-		VStack(alignment: .leading, spacing: 10) {
-			if groups.isEmpty {
-				Text("No mix groups.")
-					.font(.system(size: 11))
-					.foregroundStyle(.secondary)
-			} else {
-				ForEach(groups) { group in
-					VStack(alignment: .leading, spacing: 8) {
-						Text(group.displayName)
-							.font(.system(size: 11, weight: .semibold))
-							.foregroundStyle(.secondary)
+		let groupPathsSignature = groups.map(\.primPath).joined(separator: "|")
+		let selectedGroup = groups.first(where: { $0.primPath == selectedGroupPath }) ?? groups.first
+		HStack(alignment: .top, spacing: 16) {
+			VStack(alignment: .leading, spacing: 12) {
+				HStack(spacing: 8) {
+					Text("Audio Mix Groups")
+						.font(.system(size: 12, weight: .semibold))
+					Spacer()
+					Button {
+						onAddMixGroup(componentPath)
+					} label: {
+						Image(systemName: "plus")
+							.font(.system(size: 12, weight: .medium))
+					}
+					.buttonStyle(.plain)
+				}
 
-						InspectorRow(label: "Speed") {
+				if groups.isEmpty {
+					Text("No mix groups.")
+						.font(.system(size: 11))
+						.foregroundStyle(.secondary)
+				} else {
+					ScrollView {
+						VStack(alignment: .leading, spacing: 8) {
+							ForEach(groups) { group in
+								VStack(alignment: .leading, spacing: 4) {
+									HStack(spacing: 8) {
+										Image(systemName: "slider.horizontal.3")
+											.font(.system(size: 11))
+											.foregroundStyle(.secondary)
+										Text(group.displayName)
+											.font(.system(size: 11, weight: .semibold))
+										Spacer()
+										Button {
+											selectedGroupPath = group.primPath
+											guard let selectedURL = selectAudioFileURL() else { return }
+											onAssignAudioMixGroupResource(
+												componentPath,
+												group.primPath,
+												selectedURL
+											)
+										} label: {
+											Image(systemName: "plus")
+												.font(.system(size: 11, weight: .medium))
+										}
+										.buttonStyle(.plain)
+									}
+									.padding(.horizontal, 8)
+									.padding(.vertical, 6)
+									.frame(maxWidth: .infinity, alignment: .leading)
+									.background(
+										group.primPath == selectedGroup?.primPath
+											? Color.accentColor.opacity(0.15)
+											: Color.clear
+									)
+									.clipShape(RoundedRectangle(cornerRadius: 6))
+									.contentShape(RoundedRectangle(cornerRadius: 6))
+									.onTapGesture {
+										selectedGroupPath = group.primPath
+									}
+
+									if group.primPath == selectedGroup?.primPath {
+										if group.assignedFiles.isEmpty {
+											Text("No audio assigned.")
+												.font(.system(size: 11))
+												.foregroundStyle(.secondary)
+												.padding(.leading, 20)
+										} else {
+											ForEach(group.assignedFiles) { file in
+												HStack(spacing: 8) {
+													Image(systemName: "waveform")
+														.font(.system(size: 11))
+														.foregroundStyle(.cyan)
+													Text(file.displayName)
+														.font(.system(size: 11))
+														.lineLimit(1)
+													Spacer(minLength: 0)
+												}
+												.padding(.leading, 20)
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+			.frame(width: 210)
+
+			Divider()
+
+			VStack(alignment: .leading, spacing: 16) {
+				if let selectedGroup {
+					VStack(alignment: .leading, spacing: 12) {
+						HStack {
+							Text("Speed")
+								.font(.system(size: 11))
+								.foregroundStyle(.secondary)
+							Spacer()
 							TextField(
 								"",
 								value: audioMixGroupDoubleBinding(
-									groupPath: group.primPath,
+									groupPath: selectedGroup.primPath,
 									attributeName: "speed",
-									fallback: group.speed
+									fallback: selectedGroup.speed
 								),
 								format: .number.precision(.fractionLength(0...3))
 							)
 							.textFieldStyle(.roundedBorder)
-							.frame(width: 90)
+							.frame(width: 70)
 							.font(.system(size: 11))
 						}
 
-						InspectorRow(label: "dB") {
+						HStack {
+							Text("dB")
+								.font(.system(size: 11))
+								.foregroundStyle(.secondary)
+							Spacer()
 							TextField(
 								"",
 								value: audioMixGroupDoubleBinding(
-									groupPath: group.primPath,
+									groupPath: selectedGroup.primPath,
 									attributeName: "gain",
-									fallback: group.gain
+									fallback: selectedGroup.gain
 								),
 								format: .number.precision(.fractionLength(0...3))
 							)
 							.textFieldStyle(.roundedBorder)
-							.frame(width: 90)
+							.frame(width: 70)
 							.font(.system(size: 11))
+						}
+
+						VStack(spacing: 6) {
+							Text("Level")
+								.font(.system(size: 11))
+								.foregroundStyle(.secondary)
+							Slider(
+								value: audioMixGroupDoubleBinding(
+									groupPath: selectedGroup.primPath,
+									attributeName: "gain",
+									fallback: selectedGroup.gain
+								),
+								in: -60...6
+							)
+							.rotationEffect(.degrees(-90))
+							.frame(width: 32, height: 160)
 						}
 
 						Toggle(
 							"Mute",
 							isOn: audioMixGroupBoolBinding(
-								groupPath: group.primPath,
+								groupPath: selectedGroup.primPath,
 								attributeName: "mute",
-								fallback: group.mute
+								fallback: selectedGroup.mute
 							)
 						)
-						.font(.system(size: 11))
-						.toggleStyle(.checkbox)
+						.font(.system(size: 11, weight: .semibold))
+						.toggleStyle(.button)
 
-						VStack(alignment: .leading, spacing: 4) {
-							Text("Assigned Audio")
-								.font(.system(size: 11))
-								.foregroundStyle(.secondary)
-							if group.assignedFiles.isEmpty {
-								Text("No audio assigned.")
-									.font(.system(size: 11))
-									.foregroundStyle(.secondary)
-							} else {
-								ForEach(group.assignedFiles) { file in
-									HStack(spacing: 8) {
-										Image(systemName: "waveform")
-											.font(.system(size: 11))
-											.foregroundStyle(.cyan)
-										Text(file.displayName)
-											.font(.system(size: 11))
-											.lineLimit(1)
-										Spacer(minLength: 0)
-									}
-								}
-							}
-						}
-
-						HStack(spacing: 10) {
-							Button("Choose...") {
-								guard let selectedURL = selectAudioFileURL() else { return }
-								onAssignAudioMixGroupResource(
-									componentPath,
-									group.primPath,
-									selectedURL
-								)
-							}
-							.buttonStyle(.borderless)
-							Spacer()
-						}
+						Text(selectedGroup.displayName)
+							.font(.system(size: 11, weight: .semibold))
+							.foregroundStyle(.secondary)
 					}
-					.padding(10)
-					.frame(maxWidth: .infinity, alignment: .leading)
-					.background(.quaternary.opacity(0.35))
-					.clipShape(RoundedRectangle(cornerRadius: 8))
+					.padding(12)
+					.frame(width: 180, alignment: .leading)
+					.background(
+						RoundedRectangle(cornerRadius: 12, style: .continuous)
+							.fill(Color(nsColor: .controlBackgroundColor))
+					)
+				} else {
+					Text("Select a mix group to edit.")
+						.font(.system(size: 11))
+						.foregroundStyle(.secondary)
 				}
 			}
-
-			HStack(spacing: 10) {
-				Button {
-					onAddMixGroup(componentPath)
-				} label: {
-					Image(systemName: "plus")
-						.font(.system(size: 12, weight: .medium))
-				}
-				.buttonStyle(.plain)
-				Spacer()
-			}
-			.padding(.horizontal, 4)
+			.frame(maxWidth: .infinity, alignment: .leading)
 		}
 		.onChange(of: authoredAttributesSignature) { _ in
 			rawValues = [:]
 			rawAttributeTypes = [:]
+		}
+		.onChange(of: groupPathsSignature) { _ in
+			if let first = groups.first?.primPath {
+				selectedGroupPath = first
+			} else {
+				selectedGroupPath = nil
+			}
+		}
+		.onAppear {
+			if selectedGroupPath == nil {
+				selectedGroupPath = groups.first?.primPath
+			}
 		}
 	}
 
