@@ -12,9 +12,11 @@ import USDInteropAdvancedCore
 
 public struct InspectorView: View {
 	@Bindable public var store: StoreOf<InspectorFeature>
+	private let onOpenAudioMixer: (() -> Void)?
 
-	public init(store: StoreOf<InspectorFeature>) {
+	public init(store: StoreOf<InspectorFeature>, onOpenAudioMixer: (() -> Void)? = nil) {
 		self.store = store
+		self.onOpenAudioMixer = onOpenAudioMixer
 	}
 
 	public var body: some View {
@@ -268,6 +270,7 @@ public struct InspectorView: View {
 													)
 												)
 											},
+											onOpenAudioMixer: onOpenAudioMixer,
 											onPasteComponent: { copiedIdentifier in
 												if let copiedDefinition = InspectorComponentCatalog.all.first(
 													where: { $0.identifier == copiedIdentifier }
@@ -1203,6 +1206,7 @@ private struct ComponentParametersSection: View {
 	let onAddBehavior: (String, String) -> Void
 	let onRemoveBehavior: (String, String) -> Void
 	let onRemoveAnimationResource: (String, String) -> Void
+	let onOpenAudioMixer: (() -> Void)?
 	let onPasteComponent: (String) -> Void
 	let onDelete: () -> Void
 	@State private var values: [String: InspectorComponentParameterValue]
@@ -1236,6 +1240,7 @@ private struct ComponentParametersSection: View {
 		onAddBehavior: @escaping (String, String) -> Void,
 		onRemoveBehavior: @escaping (String, String) -> Void,
 		onRemoveAnimationResource: @escaping (String, String) -> Void,
+		onOpenAudioMixer: (() -> Void)?,
 		onPasteComponent: @escaping (String) -> Void,
 		onDelete: @escaping () -> Void
 	) {
@@ -1257,6 +1262,7 @@ private struct ComponentParametersSection: View {
 		self.onAddBehavior = onAddBehavior
 		self.onRemoveBehavior = onRemoveBehavior
 		self.onRemoveAnimationResource = onRemoveAnimationResource
+		self.onOpenAudioMixer = onOpenAudioMixer
 		self.onPasteComponent = onPasteComponent
 		self.onDelete = onDelete
 		let layout = definition?.parameterLayout ?? []
@@ -1665,6 +1671,13 @@ private struct ComponentParametersSection: View {
 	private var audioMixGroupsEditor: some View {
 		let groups = audioMixGroupEditorModels
 		return VStack(alignment: .leading, spacing: 10) {
+			if let onOpenAudioMixer {
+				Button("Open Audio Mixer") {
+					onOpenAudioMixer()
+				}
+				.buttonStyle(.borderless)
+				.font(.system(size: 12, weight: .semibold))
+			}
 			if groups.isEmpty {
 				Text("No mix groups.")
 					.font(.system(size: 11))

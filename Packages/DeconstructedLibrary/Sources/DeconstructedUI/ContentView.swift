@@ -141,7 +141,10 @@ public struct ContentView: View {
 								store: store.scope(
 									state: \.inspector,
 									action: \.inspector
-								)
+								),
+								onOpenAudioMixer: {
+									store.send(.bottomTabSelected(.audio))
+								}
 							)
 							.frame(minWidth: 240, idealWidth: 280, maxWidth: 360)
 						}
@@ -197,7 +200,10 @@ public struct ContentView: View {
 									store: store.scope(
 										state: \.inspector,
 										action: \.inspector
-									)
+									),
+									onOpenAudioMixer: {
+										store.send(.bottomTabSelected(.audio))
+									}
 								)
 								.frame(minWidth: 240, idealWidth: 280, maxWidth: 360)
 							}
@@ -278,7 +284,41 @@ public struct ContentView: View {
 						.frame(maxWidth: .infinity, maxHeight: .infinity)
 						.frame(minHeight: 200, idealHeight: 300)
 
-				case .shaderGraph, .timeline, .audio, .statistics:
+				case .audio:
+					AudioMixerPanel(
+						components: audioMixerComponents(for: store),
+						onAddMixGroup: { componentPath in
+							store.send(.inspector(.addAudioMixGroupRequested(componentPath: componentPath)))
+						},
+						onAssignAudio: { componentPath, mixGroupPath, sourceURL in
+							store.send(
+								.inspector(
+									.assignAudioMixGroupResourceRequested(
+										componentPath: componentPath,
+										mixGroupPath: mixGroupPath,
+										sourceURL: sourceURL
+									)
+								)
+							)
+						},
+						onRawAttributeChanged: { targetPrimPath, refreshComponentPath, type, name, value in
+							store.send(
+								.inspector(
+									.setRawComponentAttributeRequested(
+										targetPrimPath: targetPrimPath,
+										refreshComponentPath: refreshComponentPath,
+										attributeType: type,
+										attributeName: name,
+										valueLiteral: value
+									)
+								)
+							)
+						}
+					)
+					.frame(maxWidth: .infinity, maxHeight: .infinity)
+					.frame(minHeight: 200, idealHeight: 300)
+
+				case .shaderGraph, .timeline, .statistics:
 					ContentUnavailableView(
 						store.selectedBottomTab.displayName,
 						systemImage: store.selectedBottomTab.icon,
@@ -290,6 +330,80 @@ public struct ContentView: View {
 			}
 			.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
 		}
+	}
+}
+
+private struct AudioMixerComponentEntry: Identifiable {
+	let componentPath: String
+	let displayName: String
+	let descendantAttributes: [ComponentDescendantAttributes]
+
+	var id: String { componentPath }
+}
+
+private struct AudioMixerPanel: View {
+	let components: [AudioMixerComponentEntry]
+	let onAddMixGroup: (String) -> Void
+	let onAssignAudio: (String, String, URL) -> Void
+	let onRawAttributeChanged: (String, String, String, String, String) -> Void
+
+	var body: some View {
+		if components.isEmpty {
+			ContentUnavailableView(
+				"Audio Mixer",
+				systemImage: "waveform",
+				description: Text(
+					"Select an entity with Audio Mix Groups or add the component to begin."
+				)
+			)
+		} else {
+			ScrollView {
+				VStack(alignment: .leading, spacing: 16) {
+					ForEach(components) { component in
+						VStack(alignment: .leading, spacing: 10) {
+							Text(component.displayName)
+								.font(.system(size: 12, weight: .semibold))
+								.foregroundStyle(.secondary)
+
+							AudioMixGroupsEditor(
+								componentPath: component.componentPath,
+								descendantAttributes: component.descendantAttributes,
+								onAddMixGroup: onAddMixGroup,
+								onAssignAudioMixGroupResource: onAssignAudio,
+								onRawAttributeChanged: onRawAttributeChanged
+							)
+						}
+						.padding(12)
+						.background(.ultraThinMaterial)
+						.clipShape(RoundedRectangle(cornerRadius: 10))
+					}
+				}
+				.padding(12)
+			}
+		}
+	}
+}
+
+private func audioMixerComponents(
+	for store: StoreOf<DocumentEditorFeature>
+) -> [AudioMixerComponentEntry] {
+	let components = store.inspector.componentAuthoredAttributesByPath
+	let descendantsByPath = store.inspector.componentDescendantAttributesByPath
+	let entries = components.compactMap { componentPath, attrs -> AudioMixerComponentEntry? in
+		let identifier = attrs
+			.first(where: { $0.name == "info:id" })?
+			.value
+			.trimmingCharacters(in: CharacterSet(charactersIn: "\""))
+		guard identifier == "RealityKit.AudioMixGroups" else { return nil }
+		let name = componentPath.split(separator: "/").last.map(String.init) ?? componentPath
+		return AudioMixerComponentEntry(
+			componentPath: componentPath,
+			displayName: name,
+			descendantAttributes: descendantsByPath[componentPath] ?? []
+		)
+	}
+	return entries.sorted {
+		$0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending
 	}
 }
 
