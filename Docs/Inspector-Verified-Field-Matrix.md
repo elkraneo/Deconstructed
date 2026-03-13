@@ -68,8 +68,16 @@ All other components in the fixture set are present as component prims but curre
 
 ### RealityKit.ImageBasedLight
 
-1. Top-level field:
+1. Top-level fields:
    - `bool isGlobalIBL = 0`
+   - `float intensityExponent = -6.6197915`
+   - `bool enableRotation = 1`
+   - `token blendMode = "blend"|"none"`
+   - `bool enableBlend = 1|0`
+   - `asset ibl = @../RenderCrate-HDRI_Orbital_40_4K.hdr@`
+   - `asset iblBlend = @../cayley_lookout_2k.hdr@`
+   - `float blendIBLsFactor = 0.55164933`
+2. In current fixtures, `Single` is represented by baseline state with no authored blend fields.
 
 ### RealityKit.EnvironmentLightingConfiguration
 

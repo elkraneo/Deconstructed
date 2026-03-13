@@ -2773,6 +2773,11 @@ private func parseUSDAssetPath(_ raw: String) -> String {
 	return String(trimmed[start..<end])
 }
 
+private func quoteUSDAssetPath(_ value: String) -> String {
+	let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+	return "@\(trimmed)@"
+}
+
 private func parseUSDRelationshipTargets(_ raw: String) -> [String] {
 	let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
 	if trimmed.hasPrefix("["), trimmed.hasSuffix("]"), trimmed.count >= 2 {
@@ -3840,6 +3845,69 @@ private func componentParameterAuthoringSpec(
 			operation: .set(valueLiteral: usdBoolLiteral(boolValue)),
 			primPathSuffix: nil
 		)
+	case ("RealityKit.ImageBasedLight", "intensityExponent", .double(let value)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "float",
+			attributeName: "intensityExponent",
+			operation: .set(valueLiteral: formatUSDFloat(value)),
+			primPathSuffix: nil
+		)
+	case ("RealityKit.ImageBasedLight", "inheritsRotation", .bool(let boolValue)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "bool",
+			attributeName: "enableRotation",
+			operation: boolValue ? .set(valueLiteral: "1") : .clear,
+			primPathSuffix: nil
+		)
+	case ("RealityKit.ImageBasedLight", "mode", .string(let value)):
+		switch value {
+		case "Blend":
+			return ComponentParameterAuthoringSpec(
+				attributeType: "token",
+				attributeName: "blendMode",
+				operation: .set(valueLiteral: quoteUSDString("blend")),
+				primPathSuffix: nil
+			)
+		case "None":
+			return ComponentParameterAuthoringSpec(
+				attributeType: "token",
+				attributeName: "blendMode",
+				operation: .set(valueLiteral: quoteUSDString("none")),
+				primPathSuffix: nil
+			)
+		default:
+			return ComponentParameterAuthoringSpec(
+				attributeType: "token",
+				attributeName: "blendMode",
+				operation: .clear,
+				primPathSuffix: nil
+			)
+		}
+	case ("RealityKit.ImageBasedLight", "environmentResource", .string(let value)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "asset",
+			attributeName: "ibl",
+			operation: value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+				? .clear
+				: .set(valueLiteral: quoteUSDAssetPath(value)),
+			primPathSuffix: nil
+		)
+	case ("RealityKit.ImageBasedLight", "environmentResourceBlend", .string(let value)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "asset",
+			attributeName: "iblBlend",
+			operation: value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+				? .clear
+				: .set(valueLiteral: quoteUSDAssetPath(value)),
+			primPathSuffix: nil
+		)
+	case ("RealityKit.ImageBasedLight", "blend", .double(let value)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "float",
+			attributeName: "blendIBLsFactor",
+			operation: value == 0 ? .clear : .set(valueLiteral: formatUSDFloat(value)),
+			primPathSuffix: nil
+		)
 	case ("RealityKit.VirtualEnvironmentProbe", "blendMode", .string(let value)):
 		return ComponentParameterAuthoringSpec(
 			attributeType: "token",
@@ -4430,6 +4498,42 @@ private func supplementalComponentAuthoringSpecs(
 				ComponentParameterAuthoringSpec(
 					attributeType: "bool",
 					attributeName: "enableReceiveMeshShadow",
+					operation: .clear,
+					primPathSuffix: nil
+				),
+			]
+		}
+	case ("RealityKit.ImageBasedLight", "mode", .string(let value)):
+		switch value {
+		case "Blend":
+			return [
+				ComponentParameterAuthoringSpec(
+					attributeType: "bool",
+					attributeName: "enableBlend",
+					operation: .set(valueLiteral: "1"),
+					primPathSuffix: nil
+				)
+			]
+		case "None":
+			return [
+				ComponentParameterAuthoringSpec(
+					attributeType: "bool",
+					attributeName: "enableBlend",
+					operation: .set(valueLiteral: "0"),
+					primPathSuffix: nil
+				)
+			]
+		default:
+			return [
+				ComponentParameterAuthoringSpec(
+					attributeType: "bool",
+					attributeName: "enableBlend",
+					operation: .clear,
+					primPathSuffix: nil
+				),
+				ComponentParameterAuthoringSpec(
+					attributeType: "float",
+					attributeName: "blendIBLsFactor",
 					operation: .clear,
 					primPathSuffix: nil
 				),

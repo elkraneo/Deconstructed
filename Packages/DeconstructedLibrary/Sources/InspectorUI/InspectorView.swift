@@ -3081,6 +3081,27 @@ private struct ComponentParametersSection: View {
 				return .string("None")
 			}
 		}
+		if identifier == "RealityKit.ImageBasedLight" {
+			switch parameter.key {
+			case "mode":
+				let blendMode = parseUSDString(authoredAttributes["blendMode"] ?? "")
+				let enableBlend = parseUSDBool(authoredAttributes["enableBlend"] ?? "")
+				switch (blendMode, enableBlend) {
+				case ("blend", .some(true)):
+					return .string("Blend")
+				case ("none", .some(false)):
+					return .string("None")
+				default:
+					return .string("Single")
+				}
+			case "environmentResource":
+				return .string(parseUSDAssetPathLiteral(authoredAttributes["ibl"] ?? ""))
+			case "environmentResourceBlend":
+				return .string(parseUSDAssetPathLiteral(authoredAttributes["iblBlend"] ?? ""))
+			default:
+				break
+			}
+		}
 		if identifier == "RealityKit.Anchoring" {
 			let targetRaw = parseUSDString(authoredAttributes["type"] ?? "")
 			let targetValue = targetRaw.isEmpty ? "World" : targetRaw
@@ -3219,6 +3240,14 @@ private struct ComponentParametersSection: View {
 			return "isEnabled"
 		case ("RealityKit.Reverb", "preset"):
 			return "reverbPreset"
+		case ("RealityKit.ImageBasedLight", "inheritsRotation"):
+			return "enableRotation"
+		case ("RealityKit.ImageBasedLight", "environmentResource"):
+			return "ibl"
+		case ("RealityKit.ImageBasedLight", "environmentResourceBlend"):
+			return "iblBlend"
+		case ("RealityKit.ImageBasedLight", "blend"):
+			return "blendIBLsFactor"
 		case ("RealityKit.PointLight", "attenuationFalloff"):
 			return "attenuationFalloffExponent"
 		case ("RealityKit.SpotLight", "attenuationFalloff"):

@@ -225,32 +225,30 @@ Current counts:
 
 1. RCP built-in Add Component catalog: `28` components.
 2. Internal Deconstructed catalog including `Behaviors`: `29` entries.
-3. Current fixture component directories in `RCPComponentDiffFixtures` (excluding `textures`): `25`.
+3. Current fixture component directories in `RCPComponentDiffFixtures` (excluding `textures`): `26`.
 
 Baseline A (publishing/full RCP built-ins):
 
-1. Missing fixtures to reach all `28` built-ins: `4`.
+1. Missing fixtures to reach all `28` built-ins: `3`.
 2. Missing list:
-   `Particle Emitter`, `Image Based Light`, `Image Based Light Receiver`, `Virtual Environment Probe`
-3. Note: if counting internal `29` (adds `Behaviors`), missing is `4`.
+   `Particle Emitter`, `Image Based Light Receiver`, `Virtual Environment Probe`
+3. Note: if counting internal `29` (adds `Behaviors`), missing is `3`.
 4. If counting `New Component` as a separate fixture track, add `+1` missing fixture set.
 
 Baseline B (current fixture-parity process scope used for ongoing implementation):
 
 1. Current priority track remains unchanged after the Audio Mix Groups fixture drop.
-2. Remaining fixtures to provide for this scope: `2`.
+2. Remaining fixtures to provide for this scope: `1`.
 3. Missing list for this scope:
-   `Image Based Light`, `Virtual Environment Probe`
+   `Virtual Environment Probe`
 
 Next fixture drop checklist (continue current process first):
 
-1. Add `Image Based Light` fixture variants under:
-   `/Volumes/Plutonian/_Developer/Deconstructed/source/RCPComponentDiffFixtures/Sources/RCPComponentDiffFixtures/RCPComponentDiffFixtures.rkassets/Image Based Light`
-2. Add `Virtual Environment Probe` fixture variants under:
+1. Add `Virtual Environment Probe` fixture variants under:
    `/Volumes/Plutonian/_Developer/Deconstructed/source/RCPComponentDiffFixtures/Sources/RCPComponentDiffFixtures/RCPComponentDiffFixtures.rkassets/Virtual Environment Probe`
-3. For each component folder, provide at minimum:
+2. For each component folder, provide at minimum:
    `BASE.usda` plus one-file-per-parameter delta fixtures (single-control change per file) and an `ALL.usda` aggregate.
-4. After fixture drop, update:
+3. After fixture drop, update:
    `Docs/Inspector-Verified-Field-Matrix.md` and this file's count snapshot.
 
 ## Audio Mix Groups Fixture Notes (2026-03-13)
