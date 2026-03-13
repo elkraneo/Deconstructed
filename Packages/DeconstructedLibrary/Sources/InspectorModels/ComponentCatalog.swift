@@ -227,19 +227,14 @@ public struct InspectorComponentDefinition: Equatable, Sendable, Identifiable, H
 				),
 			]
 		case "RealityKit.Reverb":
+			let options = ReverbPreset.options.map(\.displayName)
 			return [
 				InspectorComponentParameter(
 					key: "preset",
 					label: "Preset",
 					kind: .choice(
-						defaultValue: "Medium Room",
-						options: [
-							"Small Room",
-							"Medium Room",
-							"Large Room",
-							"Cathedral",
-							"Plate"
-						]
+						defaultValue: ReverbPreset.defaultDisplayName,
+						options: options
 					)
 				)
 			]

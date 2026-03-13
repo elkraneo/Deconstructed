@@ -74,7 +74,11 @@ All other components in the fixture set are present as component prims but curre
 ### RealityKit.Reverb
 
 1. Top-level field:
-   - `token reverbPreset = "MediumRoomTreated"`
+   - `token reverbPreset = "<Preset>"`
+2. Observed presets:
+   `Anechoic`, `VerySmallRoomBright`, `SmallRoom`, `SmallRoomBright`, `MediumRoomDry`,
+   `MediumRoomTreated`, `LargeRoom`, `LargeRoomTreated`, `VeryLargeRoom`,
+   `ConcertHall`, `Outside`
 
 ### RealityKit.VirtualEnvironmentProbe
 

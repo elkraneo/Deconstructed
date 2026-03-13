@@ -225,34 +225,32 @@ Current counts:
 
 1. RCP built-in Add Component catalog: `28` components.
 2. Internal Deconstructed catalog including `Behaviors`: `29` entries.
-3. Current fixture component directories in `RCPComponentDiffFixtures` (excluding `textures`): `22`.
+3. Current fixture component directories in `RCPComponentDiffFixtures` (excluding `textures`): `23`.
 
 Baseline A (publishing/full RCP built-ins):
 
-1. Missing fixtures to reach all `28` built-ins: `7`.
+1. Missing fixtures to reach all `28` built-ins: `6`.
 2. Missing list:
-   `Particle Emitter`, `Reverb`, `Environment Lighting Configuration`, `Grounding Shadow`, `Image Based Light`, `Image Based Light Receiver`, `Virtual Environment Probe`
-3. Note: if counting internal `29` (adds `Behaviors`), missing is `7`.
+   `Particle Emitter`, `Environment Lighting Configuration`, `Grounding Shadow`, `Image Based Light`, `Image Based Light Receiver`, `Virtual Environment Probe`
+3. Note: if counting internal `29` (adds `Behaviors`), missing is `6`.
 4. If counting `New Component` as a separate fixture track, add `+1` missing fixture set.
 
 Baseline B (current fixture-parity process scope used for ongoing implementation):
 
 1. Current priority track remains unchanged after the Audio Mix Groups fixture drop.
-2. Remaining fixtures to provide for this scope: `3`.
+2. Remaining fixtures to provide for this scope: `2`.
 3. Missing list for this scope:
-   `Reverb`, `Image Based Light`, `Virtual Environment Probe`
+   `Image Based Light`, `Virtual Environment Probe`
 
 Next fixture drop checklist (continue current process first):
 
-1. Add `Reverb` fixture variants under:
-   `/Volumes/Plutonian/_Developer/Deconstructed/source/RCPComponentDiffFixtures/Sources/RCPComponentDiffFixtures/RCPComponentDiffFixtures.rkassets/Reverb`
-2. Add `Image Based Light` fixture variants under:
+1. Add `Image Based Light` fixture variants under:
    `/Volumes/Plutonian/_Developer/Deconstructed/source/RCPComponentDiffFixtures/Sources/RCPComponentDiffFixtures/RCPComponentDiffFixtures.rkassets/Image Based Light`
-3. Add `Virtual Environment Probe` fixture variants under:
+2. Add `Virtual Environment Probe` fixture variants under:
    `/Volumes/Plutonian/_Developer/Deconstructed/source/RCPComponentDiffFixtures/Sources/RCPComponentDiffFixtures/RCPComponentDiffFixtures.rkassets/Virtual Environment Probe`
-4. For each component folder, provide at minimum:
+3. For each component folder, provide at minimum:
    `BASE.usda` plus one-file-per-parameter delta fixtures (single-control change per file) and an `ALL.usda` aggregate.
-5. After fixture drop, update:
+4. After fixture drop, update:
    `Docs/Inspector-Verified-Field-Matrix.md` and this file's count snapshot.
 
 ## Audio Mix Groups Fixture Notes (2026-03-13)

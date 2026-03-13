@@ -3179,6 +3179,11 @@ private struct ComponentParametersSection: View {
 				return .string(defaultValue)
 			}
 			let parsed = parseUSDString(authoredRaw)
+			if identifier == "RealityKit.Reverb", parameter.key == "preset" {
+				let display = ReverbPreset.displayName(for: parsed)
+				let resolved = options.contains(display) ? display : defaultValue
+				return .string(resolved)
+			}
 			let resolved = options.contains(parsed) ? parsed : defaultValue
 			return .string(resolved)
 		}

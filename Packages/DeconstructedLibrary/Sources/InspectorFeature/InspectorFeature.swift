@@ -4436,13 +4436,7 @@ private func dockingRegionMinLiteral(widthCM: Double) -> String {
 }
 
 private func mapReverbPresetToToken(_ displayName: String) -> String {
-	switch displayName {
-	case "Small Room": return "SmallRoom"
-	case "Large Room": return "LargeRoom"
-	case "Cathedral": return "Cathedral"
-	case "Plate": return "Plate"
-	default: return "MediumRoomTreated"
-	}
+	ReverbPreset.token(for: displayName)
 }
 
 private enum PrimAttributesLoadCancellationID {
