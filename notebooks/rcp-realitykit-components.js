@@ -5,7 +5,7 @@
 // Markdown cells are indicated — switch cell type to Markdown and paste
 // the text without the // prefixes.
 //
-// Data verified against: Xcode 26.3 RC
+// Data verified against: Xcode 26.3
 //   iOS 26.2 SDK, visionOS 26.2 SDK, macOS 26.2 SDK
 //   Source: RealityFoundation.swiftmodule .swiftinterface files
 //   RCP catalog: strings extracted from RealityToolsFoundation.framework
@@ -22,7 +22,7 @@
 // what's truly shared vs platform-exclusive, and what Reality Composer Pro
 // actually exposes in its Add Component menu.
 //
-// *Data extracted from Xcode 26.3 RC `.swiftinterface` files and RCP framework binaries.*
+// *Data extracted from Xcode 26.3 `.swiftinterface` files and RCP framework binaries.*
 
 
 // --- CELL --- data
@@ -541,7 +541,7 @@ Plot.plot({
       RCP Covers Less Than Half of RealityKit's Components
     </text>
     <text x="${w/2}" y="54" fill="${palette.muted}" text-anchor="middle" font-size="13">
-      ${exposed} of ${total} public component types · Xcode 26.3 RC
+      ${exposed} of ${total} public component types · Xcode 26.3
     </text>
     <text x="${w/2}" y="74" fill="${palette.muted}" text-anchor="middle" font-size="11">
       iOS 26.2 · visionOS 26.2 · macOS 26.2
@@ -625,5 +625,5 @@ Inputs.table(
 // Best cells to embed: `hero`, `chart_waffle`, `chart_category`, `chart_eras`
 //
 // ---
-// *Data from Xcode 26.3 RC `.swiftinterface` files and RCP `RealityToolsFoundation.framework` binary strings.*
+// *Data from Xcode 26.3 `.swiftinterface` files and RCP `RealityToolsFoundation.framework` binary strings.*
 // *Built with Observable Plot.*
