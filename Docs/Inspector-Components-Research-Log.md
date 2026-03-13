@@ -1,6 +1,6 @@
 # Inspector Components Research Log
 
-Last updated: 2026-02-16
+Last updated: 2026-03-13
 
 ## Goal
 
@@ -214,6 +214,73 @@ Implemented modules/files:
 ### Listed but intentionally disabled
 
 1. None currently for built-ins represented in local fixtures.
+
+## Fixture Inventory Snapshot (2026-03-13)
+
+Canonical fixture root for diff-based inspector work:
+
+1. `/Volumes/Plutonian/_Developer/Deconstructed/source/RCPComponentDiffFixtures/Sources/RCPComponentDiffFixtures/RCPComponentDiffFixtures.rkassets`
+
+Current counts:
+
+1. RCP built-in Add Component catalog: `28` components.
+2. Internal Deconstructed catalog including `Behaviors`: `29` entries.
+3. Current fixture component directories in `RCPComponentDiffFixtures` (excluding `textures`): `22`.
+
+Baseline A (publishing/full RCP built-ins):
+
+1. Missing fixtures to reach all `28` built-ins: `7`.
+2. Missing list:
+   `Particle Emitter`, `Reverb`, `Environment Lighting Configuration`, `Grounding Shadow`, `Image Based Light`, `Image Based Light Receiver`, `Virtual Environment Probe`
+3. Note: if counting internal `29` (adds `Behaviors`), missing is `7`.
+4. If counting `New Component` as a separate fixture track, add `+1` missing fixture set.
+
+Baseline B (current fixture-parity process scope used for ongoing implementation):
+
+1. Current priority track remains unchanged after the Audio Mix Groups fixture drop.
+2. Remaining fixtures to provide for this scope: `3`.
+3. Missing list for this scope:
+   `Reverb`, `Image Based Light`, `Virtual Environment Probe`
+
+Next fixture drop checklist (continue current process first):
+
+1. Add `Reverb` fixture variants under:
+   `/Volumes/Plutonian/_Developer/Deconstructed/source/RCPComponentDiffFixtures/Sources/RCPComponentDiffFixtures/RCPComponentDiffFixtures.rkassets/Reverb`
+2. Add `Image Based Light` fixture variants under:
+   `/Volumes/Plutonian/_Developer/Deconstructed/source/RCPComponentDiffFixtures/Sources/RCPComponentDiffFixtures/RCPComponentDiffFixtures.rkassets/Image Based Light`
+3. Add `Virtual Environment Probe` fixture variants under:
+   `/Volumes/Plutonian/_Developer/Deconstructed/source/RCPComponentDiffFixtures/Sources/RCPComponentDiffFixtures/RCPComponentDiffFixtures.rkassets/Virtual Environment Probe`
+4. For each component folder, provide at minimum:
+   `BASE.usda` plus one-file-per-parameter delta fixtures (single-control change per file) and an `ALL.usda` aggregate.
+5. After fixture drop, update:
+   `Docs/Inspector-Verified-Field-Matrix.md` and this file's count snapshot.
+
+## Audio Mix Groups Fixture Notes (2026-03-13)
+
+Observed in:
+
+1. `/Volumes/Plutonian/_Developer/Deconstructed/source/RCPComponentDiffFixtures/Sources/RCPComponentDiffFixtures/RCPComponentDiffFixtures.rkassets/Audio Mix Groups/BASE.usda`
+2. `/Volumes/Plutonian/_Developer/Deconstructed/source/RCPComponentDiffFixtures/Sources/RCPComponentDiffFixtures/RCPComponentDiffFixtures.rkassets/Audio Mix Groups/AddMixGroup.usda`
+3. `/Volumes/Plutonian/_Developer/Deconstructed/source/RCPComponentDiffFixtures/Sources/RCPComponentDiffFixtures/RCPComponentDiffFixtures.rkassets/Audio Mix Groups/AssignSingleAudio.usda`
+4. `/Volumes/Plutonian/_Developer/Deconstructed/source/RCPComponentDiffFixtures/Sources/RCPComponentDiffFixtures/RCPComponentDiffFixtures.rkassets/Audio Mix Groups/AssignSecondAudioSameGroup.usda`
+5. `/Volumes/Plutonian/_Developer/Deconstructed/source/RCPComponentDiffFixtures/Sources/RCPComponentDiffFixtures/RCPComponentDiffFixtures.rkassets/Audio Mix Groups/CreateSecondGroupAndAssign.usda`
+6. `/Volumes/Plutonian/_Developer/Deconstructed/source/RCPComponentDiffFixtures/Sources/RCPComponentDiffFixtures/RCPComponentDiffFixtures.rkassets/Audio Mix Groups/Gain.usda`
+7. `/Volumes/Plutonian/_Developer/Deconstructed/source/RCPComponentDiffFixtures/Sources/RCPComponentDiffFixtures/RCPComponentDiffFixtures.rkassets/Audio Mix Groups/Mute.usda`
+8. `/Volumes/Plutonian/_Developer/Deconstructed/source/RCPComponentDiffFixtures/Sources/RCPComponentDiffFixtures/RCPComponentDiffFixtures.rkassets/Audio Mix Groups/Speed.usda`
+
+Notes:
+
+1. The inspector card for `Audio Mix Groups` is launcher-only; RCP opens the bottom-pane Audio Mixer editor instead of exposing inline inspector fields.
+2. Clean `BASE.usda` contains only:
+   `def RealityKitComponent "AudioMixGroups"` with `uniform token info:id = "RealityKit.AudioMixGroups"`.
+3. Mix-group state is authored as child prims under the component:
+   `def RealityKitAudioMixGroup "<GroupName>"`.
+4. Observed mix-group fields:
+   `float gain`, `bool mute`, `float speed`.
+5. Audio assignment is authored outside the component as:
+   `def RealityKitAudioFile "<sanitized_name>"` with `uniform asset file = @...@` and `rel mixGroup = </Root/.../AudioMixGroups/<GroupName>>`.
+6. `AssignSecondAudioSameGroup.usda` confirms multiple `RealityKitAudioFile` prims can target the same mix group.
+7. `CreateSecondGroupAndAssign.usda` confirms multiple mix groups are represented by sibling `RealityKitAudioMixGroup` prims under the same `AudioMixGroups` component.
 
 ## Apple Schema Coverage Note
 

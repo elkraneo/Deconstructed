@@ -1,9 +1,10 @@
 # Inspector Verified Field Matrix
 
-Last updated: 2026-02-19
+Last updated: 2026-03-13
 Source fixture set:
 - `/Volumes/Plutonian/_Developer/Deconstructed/references/ComponentExploration/Sources/ComponentExploration/ComponentExploration.rkassets`
 - `/Volumes/Plutonian/_Developer/Deconstructed/references/ComponentFieldExploration/Sources/ComponentFieldExploration/ComponentFieldExploration.rkassets`
+- `/Volumes/Plutonian/_Developer/Deconstructed/source/RCPComponentDiffFixtures/Sources/RCPComponentDiffFixtures/RCPComponentDiffFixtures.rkassets`
 
 ## Intent
 
@@ -35,6 +36,7 @@ Only these component IDs currently have authored parameter lines in the fixture 
 16. `RealityKit.CharacterController` (from `ComponentFieldExploration` diffs)
 17. `RCP.BehaviorsContainer` (from `ComponentFieldExploration` diffs)
 18. `RealityKit.InputTarget` (from `ComponentFieldExploration` diffs)
+19. `RealityKit.AudioMixGroups` (from `RCPComponentDiffFixtures` diffs)
 
 All other components in the fixture set are present as component prims but currently only author `info:id` (no parameter lines yet).
 
@@ -155,6 +157,23 @@ All other components in the fixture set are present as component prims but curre
    - `uniform asset file = @...@`
    - `uniform bool shouldLoop = 0|1`
 
+### RealityKit.AudioMixGroups
+
+1. Top-level component:
+   - `uniform token info:id = "RealityKit.AudioMixGroups"`
+2. Mix groups are authored as child prims under the component:
+   - `def RealityKitAudioMixGroup "<name>"`
+3. Observed mix-group fields:
+   - `float gain = ...`
+   - `bool mute = 0|1`
+   - `float speed = ...`
+4. Audio assignment is authored outside the component as separate audio file prims:
+   - `def RealityKitAudioFile "<sanitized_name>"`
+   - `uniform asset file = @...@`
+   - `rel mixGroup = </Root/.../AudioMixGroups/<group>>`
+5. `AssignSecondAudioSameGroup.usda` confirms multiple audio files can target the same mix group relation.
+6. `CreateSecondGroupAndAssign.usda` confirms multiple `RealityKitAudioMixGroup` children can coexist under one `AudioMixGroups` component.
+
 ### RealityKit.AnimationLibrary
 
 1. Top-level component:
@@ -228,6 +247,14 @@ All other components in the fixture set are present as component prims but curre
 2. In current fixtures, selecting a Spatial Audio Preview resource does not author a direct field on `RealityKit.SpatialAudio`.
 3. In current fixtures, selecting a Channel Audio Preview resource does not author a direct field on `RealityKit.ChannelAudio`.
 4. Persisted resource data appears to live in `RealityKit.AudioLibrary` + `RealityKitAudioFile` prims.
+
+### Audio Mix Groups + Audio File routing
+
+1. `Audio Mix Groups` does not currently behave like a normal inline-inspector parameter component in RCP.
+2. The inspector card acts as a launcher into the bottom-pane Audio Mixer editor.
+3. The authored state is split between:
+   - `RealityKit.AudioMixGroups` / `RealityKitAudioMixGroup` for mixer groups and group-level controls
+   - `RealityKitAudioFile` prims for file resources and `mixGroup` routing
 
 ### RealityKit.MeshSorting (Model Sorting)
 

@@ -193,10 +193,11 @@ public struct InspectorView: View {
 													)
 												)
 											},
-											onRawAttributeChanged: { targetPrimPath, attributeType, attributeName, valueLiteral in
+											onRawAttributeChanged: { targetPrimPath, refreshComponentPath, attributeType, attributeName, valueLiteral in
 												store.send(
 													.setRawComponentAttributeRequested(
-														componentPath: targetPrimPath,
+														targetPrimPath: targetPrimPath,
+														refreshComponentPath: refreshComponentPath,
 														attributeType: attributeType,
 														attributeName: attributeName,
 														valueLiteral: valueLiteral
@@ -216,6 +217,22 @@ public struct InspectorView: View {
 													.removeAudioLibraryResourceRequested(
 														componentPath: targetPath,
 														resourceKey: resourceKey
+													)
+												)
+											},
+											onAddAudioMixGroup: { targetPath in
+												store.send(
+													.addAudioMixGroupRequested(
+														componentPath: targetPath
+													)
+												)
+											},
+											onAssignAudioMixGroupResource: { targetPath, mixGroupPath, sourceURL in
+												store.send(
+													.assignAudioMixGroupResourceRequested(
+														componentPath: targetPath,
+														mixGroupPath: mixGroupPath,
+														sourceURL: sourceURL
 													)
 												)
 											},
@@ -1177,9 +1194,11 @@ private struct ComponentParametersSection: View {
 	let isActive: Bool
 	let onToggleActive: (Bool) -> Void
 	let onParameterChanged: (String, String, InspectorComponentParameterValue) -> Void
-	let onRawAttributeChanged: (String, String, String, String) -> Void
+	let onRawAttributeChanged: (String, String, String, String, String) -> Void
 	let onAddAudioResource: (String, URL) -> Void
 	let onRemoveAudioResource: (String, String) -> Void
+	let onAddAudioMixGroup: (String) -> Void
+	let onAssignAudioMixGroupResource: (String, String, URL) -> Void
 	let onAddAnimationResource: (String, URL) -> Void
 	let onAddBehavior: (String, String) -> Void
 	let onRemoveBehavior: (String, String) -> Void
@@ -1208,9 +1227,11 @@ private struct ComponentParametersSection: View {
 		isActive: Bool,
 		onToggleActive: @escaping (Bool) -> Void,
 		onParameterChanged: @escaping (String, String, InspectorComponentParameterValue) -> Void,
-		onRawAttributeChanged: @escaping (String, String, String, String) -> Void,
+		onRawAttributeChanged: @escaping (String, String, String, String, String) -> Void,
 		onAddAudioResource: @escaping (String, URL) -> Void,
 		onRemoveAudioResource: @escaping (String, String) -> Void,
+		onAddAudioMixGroup: @escaping (String) -> Void,
+		onAssignAudioMixGroupResource: @escaping (String, String, URL) -> Void,
 		onAddAnimationResource: @escaping (String, URL) -> Void,
 		onAddBehavior: @escaping (String, String) -> Void,
 		onRemoveBehavior: @escaping (String, String) -> Void,
@@ -1230,6 +1251,8 @@ private struct ComponentParametersSection: View {
 		self.onRawAttributeChanged = onRawAttributeChanged
 		self.onAddAudioResource = onAddAudioResource
 		self.onRemoveAudioResource = onRemoveAudioResource
+		self.onAddAudioMixGroup = onAddAudioMixGroup
+		self.onAssignAudioMixGroupResource = onAssignAudioMixGroupResource
 		self.onAddAnimationResource = onAddAnimationResource
 		self.onAddBehavior = onAddBehavior
 		self.onRemoveBehavior = onRemoveBehavior
@@ -1241,13 +1264,15 @@ private struct ComponentParametersSection: View {
 		let authoredMap = Self.authoredMap(from: allAuthoredAttributes)
 		self._values = State(initialValue: Self.initialValues(layout: layout, authoredAttributes: authoredMap, identifier: definition?.identifier))
 		self._rawValues = State(
-			initialValue: Dictionary(
-				uniqueKeysWithValues: authoredAttributes.map { ($0.name, $0.value) }
+			initialValue: Self.initialRawValues(
+				authoredAttributes: authoredAttributes,
+				descendantAttributes: descendantAttributes
 			)
 		)
 		self._rawAttributeTypes = State(
-			initialValue: Self.inferredTypeMap(
-				for: authoredAttributes + descendantAttributes.flatMap(\.authoredAttributes)
+			initialValue: Self.initialRawAttributeTypes(
+				authoredAttributes: authoredAttributes,
+				descendantAttributes: descendantAttributes
 			)
 		)
 		self._isExpanded = State(initialValue: true)
@@ -1319,6 +1344,8 @@ private struct ComponentParametersSection: View {
 					let parameters = definition?.parameterLayout ?? []
 					if componentIdentifier == "RealityKit.AudioLibrary" {
 						audioLibraryEditor
+					} else if componentIdentifier == "RealityKit.AudioMixGroups" {
+						audioMixGroupsEditor
 					} else if componentIdentifier == "RealityKit.AnimationLibrary" {
 						animationLibraryEditor
 					} else if componentIdentifier == "RealityKit.CustomDockingRegion" {
@@ -1351,6 +1378,7 @@ private struct ComponentParametersSection: View {
 										rawValues[attribute.name] = value
 										rawAttributeTypes[attribute.name] = type
 										onRawAttributeChanged(
+											componentPath,
 											componentPath,
 											type,
 											attribute.name,
@@ -1392,6 +1420,7 @@ private struct ComponentParametersSection: View {
 												rawAttributeTypes[storageKey] = type
 												onRawAttributeChanged(
 													descendant.primPath,
+													componentPath,
 													type,
 													attribute.name,
 													value
@@ -1509,11 +1538,13 @@ private struct ComponentParametersSection: View {
 		.animation(.default, value: isActive)
 		.onChange(of: authoredAttributesSignature) { _, _ in
 			let layout = definition?.parameterLayout ?? []
-			rawValues = Dictionary(
-				uniqueKeysWithValues: authoredAttributes.map { ($0.name, $0.value) }
+			rawValues = Self.initialRawValues(
+				authoredAttributes: authoredAttributes,
+				descendantAttributes: descendantAttributes
 			)
-			rawAttributeTypes = Self.inferredTypeMap(
-				for: authoredAttributes + descendantAttributes.flatMap(\.authoredAttributes)
+			rawAttributeTypes = Self.initialRawAttributeTypes(
+				authoredAttributes: authoredAttributes,
+				descendantAttributes: descendantAttributes
 			)
 			let availableKeys = Set(audioLibraryResources.map(\.key))
 			if let selectedAudioResourceKey, !availableKeys.contains(selectedAudioResourceKey) {
@@ -1611,6 +1642,138 @@ private struct ComponentParametersSection: View {
 		}
 	}
 
+	private struct AudioMixGroupAssignedFileEditorModel: Identifiable {
+		let primPath: String
+		let displayName: String
+		let relativeAssetPath: String
+		let mixGroupTarget: String
+
+		var id: String { primPath }
+	}
+
+	private struct AudioMixGroupEditorModel: Identifiable {
+		let primPath: String
+		let displayName: String
+		let gain: Double
+		let mute: Bool
+		let speed: Double
+		let assignedFiles: [AudioMixGroupAssignedFileEditorModel]
+
+		var id: String { primPath }
+	}
+
+	private var audioMixGroupsEditor: some View {
+		let groups = audioMixGroupEditorModels
+		return VStack(alignment: .leading, spacing: 10) {
+			if groups.isEmpty {
+				Text("No mix groups.")
+					.font(.system(size: 11))
+					.foregroundStyle(.secondary)
+			} else {
+				ForEach(groups) { group in
+					VStack(alignment: .leading, spacing: 8) {
+						Text(group.displayName)
+							.font(.system(size: 11, weight: .semibold))
+							.foregroundStyle(.secondary)
+
+						InspectorRow(label: "Speed") {
+							TextField(
+								"",
+								value: audioMixGroupDoubleBinding(
+									groupPath: group.primPath,
+									attributeName: "speed",
+									fallback: group.speed
+								),
+								format: .number.precision(.fractionLength(0...3))
+							)
+							.textFieldStyle(.roundedBorder)
+							.frame(width: 90)
+							.font(.system(size: 11))
+						}
+
+						InspectorRow(label: "dB") {
+							TextField(
+								"",
+								value: audioMixGroupDoubleBinding(
+									groupPath: group.primPath,
+									attributeName: "gain",
+									fallback: group.gain
+								),
+								format: .number.precision(.fractionLength(0...3))
+							)
+							.textFieldStyle(.roundedBorder)
+							.frame(width: 90)
+							.font(.system(size: 11))
+						}
+
+						Toggle(
+							"Mute",
+							isOn: audioMixGroupBoolBinding(
+								groupPath: group.primPath,
+								attributeName: "mute",
+								fallback: group.mute
+							)
+						)
+						.font(.system(size: 11))
+						.toggleStyle(.checkbox)
+
+						VStack(alignment: .leading, spacing: 4) {
+							Text("Assigned Audio")
+								.font(.system(size: 11))
+								.foregroundStyle(.secondary)
+							if group.assignedFiles.isEmpty {
+								Text("No audio assigned.")
+									.font(.system(size: 11))
+									.foregroundStyle(.secondary)
+							} else {
+								ForEach(group.assignedFiles) { file in
+									HStack(spacing: 8) {
+										Image(systemName: "waveform")
+											.font(.system(size: 11))
+											.foregroundStyle(.cyan)
+										Text(file.displayName)
+											.font(.system(size: 11))
+											.lineLimit(1)
+										Spacer(minLength: 0)
+									}
+								}
+							}
+						}
+
+						HStack(spacing: 10) {
+							Button("Choose...") {
+								guard let selectedURL = selectAudioFileURL() else { return }
+								onAssignAudioMixGroupResource(
+									componentPath,
+									group.primPath,
+									selectedURL
+								)
+							}
+							.buttonStyle(.borderless)
+							Spacer()
+						}
+					}
+					.padding(10)
+					.frame(maxWidth: .infinity, alignment: .leading)
+					.background(.quaternary.opacity(0.35))
+					.clipShape(RoundedRectangle(cornerRadius: 8))
+				}
+			}
+
+			HStack(spacing: 10) {
+				Button {
+					onAddAudioMixGroup(componentPath)
+				} label: {
+					Image(systemName: "plus")
+						.font(.system(size: 12, weight: .medium))
+				}
+				.buttonStyle(.plain)
+				Spacer()
+			}
+			.padding(.horizontal, 4)
+		}
+	}
+
 	private var animationLibraryEditor: some View {
 		VStack(alignment: .leading, spacing: 8) {
 			VStack(alignment: .leading, spacing: 0) {
@@ -1702,6 +1865,136 @@ private struct ComponentParametersSection: View {
 		parseAnimationLibraryResources(from: descendantAttributes)
 	}
 
+	private var audioMixGroupEditorModels: [AudioMixGroupEditorModel] {
+		let files = descendantAttributes.compactMap { descendant -> AudioMixGroupAssignedFileEditorModel? in
+			let fileLiteral = authoredLiteralValue(
+				in: descendant.authoredAttributes,
+				names: ["file"],
+				allowLooseMatch: false
+			)
+			guard !fileLiteral.isEmpty else { return nil }
+			let mixGroupTarget = parseUSDRelationshipTargets(
+				authoredLiteralValue(
+					in: descendant.authoredAttributes,
+					names: ["mixGroup"],
+					allowLooseMatch: false
+				)
+			).first ?? ""
+			guard !mixGroupTarget.isEmpty else { return nil }
+			let relativeAssetPath = parseUSDAssetPathLiteral(fileLiteral)
+			let displayName = URL(fileURLWithPath: relativeAssetPath).lastPathComponent
+			return AudioMixGroupAssignedFileEditorModel(
+				primPath: descendant.primPath,
+				displayName: displayName.isEmpty ? descendant.displayName : displayName,
+				relativeAssetPath: relativeAssetPath,
+				mixGroupTarget: mixGroupTarget
+			)
+		}
+
+		return descendantAttributes.compactMap { descendant in
+			let fileLiteral = authoredLiteralValue(
+				in: descendant.authoredAttributes,
+				names: ["file"],
+				allowLooseMatch: false
+			)
+			guard fileLiteral.isEmpty else { return nil }
+			let gainLiteral = authoredLiteralValue(
+				in: descendant.authoredAttributes,
+				names: ["gain"],
+				allowLooseMatch: false
+			)
+			let muteLiteral = authoredLiteralValue(
+				in: descendant.authoredAttributes,
+				names: ["mute"],
+				allowLooseMatch: false
+			)
+			let speedLiteral = authoredLiteralValue(
+				in: descendant.authoredAttributes,
+				names: ["speed"],
+				allowLooseMatch: false
+			)
+			guard !gainLiteral.isEmpty || !muteLiteral.isEmpty || !speedLiteral.isEmpty else {
+				return nil
+			}
+			return AudioMixGroupEditorModel(
+				primPath: descendant.primPath,
+				displayName: descendant.displayName,
+				gain: Self.parseUSDDouble(gainLiteral) ?? 0,
+				mute: Self.parseUSDBool(muteLiteral) ?? false,
+				speed: Self.parseUSDDouble(speedLiteral) ?? 1,
+				assignedFiles: files
+					.filter { $0.mixGroupTarget == descendant.primPath }
+					.sorted {
+						$0.displayName.localizedStandardCompare($1.displayName)
+							== .orderedAscending
+					}
+			)
+		}
+		.sorted {
+			$0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending
+		}
+	}
+
+	private func audioMixGroupDoubleBinding(
+		groupPath: String,
+		attributeName: String,
+		fallback: Double
+	) -> Binding<Double> {
+		let storageKey = "\(groupPath)#\(attributeName)"
+		return Binding(
+			get: {
+				if let raw = rawValues[storageKey],
+				   let parsed = Self.parseUSDDouble(raw)
+				{
+					return parsed
+				}
+				return fallback
+			},
+			set: { newValue in
+				let literal = Self.formatComponent(newValue)
+				rawValues[storageKey] = literal
+				rawAttributeTypes[storageKey] = "float"
+				onRawAttributeChanged(
+					groupPath,
+					componentPath,
+					"float",
+					attributeName,
+					literal
+				)
+			}
+		)
+	}
+
+	private func audioMixGroupBoolBinding(
+		groupPath: String,
+		attributeName: String,
+		fallback: Bool
+	) -> Binding<Bool> {
+		let storageKey = "\(groupPath)#\(attributeName)"
+		return Binding(
+			get: {
+				if let raw = rawValues[storageKey],
+				   let parsed = Self.parseUSDBool(raw)
+				{
+					return parsed
+				}
+				return fallback
+			},
+			set: { newValue in
+				let literal = newValue ? "1" : "0"
+				rawValues[storageKey] = literal
+				rawAttributeTypes[storageKey] = "bool"
+				onRawAttributeChanged(
+					groupPath,
+					componentPath,
+					"bool",
+					attributeName,
+					literal
+				)
+			}
+		)
+	}
+
 	private struct BehaviorEditorModel: Identifiable {
 		let id: String
 		let path: String
@@ -1746,6 +2039,7 @@ private struct ComponentParametersSection: View {
 											set: { newValue in
 												onRawAttributeChanged(
 													triggerPath,
+													componentPath,
 													"token",
 													"info:id",
 													quoteUSDString(newValue)
@@ -1777,6 +2071,7 @@ private struct ComponentParametersSection: View {
 											set: { newValue in
 												onRawAttributeChanged(
 													triggerPath,
+													componentPath,
 													"rel",
 													"colliders",
 													formatUSDRelationshipTargetsLiteral(
@@ -1799,6 +2094,7 @@ private struct ComponentParametersSection: View {
 											set: { newValue in
 												onRawAttributeChanged(
 													actionPath,
+													componentPath,
 													"token",
 													"info:id",
 													quoteUSDString(newValue)
@@ -1830,6 +2126,7 @@ private struct ComponentParametersSection: View {
 													: "<\(newValue)>"
 												onRawAttributeChanged(
 													actionPath,
+													componentPath,
 													"rel",
 													"animationLibraryKeyOverrideKey",
 													literal
@@ -1867,6 +2164,7 @@ private struct ComponentParametersSection: View {
 											set: { newValue in
 												onRawAttributeChanged(
 													triggerPath,
+													componentPath,
 													"string",
 													"identifier",
 													quoteUSDString(newValue)
@@ -1932,12 +2230,24 @@ private struct ComponentParametersSection: View {
 					guard let selectedURL = selectPreviewVideoFileURL() else { return }
 					let path = selectedURL.path
 					rawValues["previewVideo"] = quoteUSDString(path)
-					onRawAttributeChanged(componentPath, "customDataAsset", "previewVideo", path)
+					onRawAttributeChanged(
+						componentPath,
+						componentPath,
+						"customDataAsset",
+						"previewVideo",
+						path
+					)
 				}
 				.buttonStyle(.borderless)
 				Button("Clear") {
 					rawValues["previewVideo"] = ""
-					onRawAttributeChanged(componentPath, "customDataAsset", "previewVideo", "")
+					onRawAttributeChanged(
+						componentPath,
+						componentPath,
+						"customDataAsset",
+						"previewVideo",
+						""
+					)
 				}
 				.buttonStyle(.borderless)
 				.disabled(previewVideoLabel == "None")
@@ -2496,6 +2806,43 @@ private struct ComponentParametersSection: View {
 		var result: [String: String] = [:]
 		for attribute in attributes {
 			result[attribute.name] = Self.inferAttributeType(name: attribute.name, literal: attribute.value)
+		}
+		return result
+	}
+
+	private static func initialRawValues(
+		authoredAttributes: [USDPrimAttributes.AuthoredAttribute],
+		descendantAttributes: [ComponentDescendantAttributes]
+	) -> [String: String] {
+		var result = Dictionary(
+			uniqueKeysWithValues: authoredAttributes.map { ($0.name, $0.value) }
+		)
+		for descendant in descendantAttributes {
+			for attribute in descendant.authoredAttributes {
+				result["\(descendant.primPath)#\(attribute.name)"] = attribute.value
+			}
+		}
+		return result
+	}
+
+	private static func initialRawAttributeTypes(
+		authoredAttributes: [USDPrimAttributes.AuthoredAttribute],
+		descendantAttributes: [ComponentDescendantAttributes]
+	) -> [String: String] {
+		var result: [String: String] = [:]
+		for attribute in authoredAttributes {
+			result[attribute.name] = inferAttributeType(
+				name: attribute.name,
+				literal: attribute.value
+			)
+		}
+		for descendant in descendantAttributes {
+			for attribute in descendant.authoredAttributes {
+				result["\(descendant.primPath)#\(attribute.name)"] = inferAttributeType(
+					name: attribute.name,
+					literal: attribute.value
+				)
+			}
 		}
 		return result
 	}

@@ -192,6 +192,16 @@ public struct InspectorFeature {
 		)
 		case removeAudioLibraryResourceSucceeded(componentPath: String)
 		case removeAudioLibraryResourceFailed(String)
+		case addAudioMixGroupRequested(componentPath: String)
+		case addAudioMixGroupSucceeded(componentPath: String)
+		case addAudioMixGroupFailed(String)
+		case assignAudioMixGroupResourceRequested(
+			componentPath: String,
+			mixGroupPath: String,
+			sourceURL: URL
+		)
+		case assignAudioMixGroupResourceSucceeded(componentPath: String)
+		case assignAudioMixGroupResourceFailed(String)
 		case addAnimationLibraryResourceRequested(
 			componentPath: String,
 			sourceURL: URL
@@ -217,7 +227,8 @@ public struct InspectorFeature {
 		case removeAnimationLibraryResourceSucceeded(componentPath: String)
 		case removeAnimationLibraryResourceFailed(String)
 		case setRawComponentAttributeRequested(
-			componentPath: String,
+			targetPrimPath: String,
+			refreshComponentPath: String,
 			attributeType: String,
 			attributeName: String,
 			valueLiteral: String
@@ -1362,6 +1373,175 @@ public struct InspectorFeature {
 				state.primErrorMessage = "Failed to remove audio resource: \(message)"
 				return .none
 
+			case .addAudioMixGroupRequested(let componentPath):
+				guard let url = state.sceneURL else {
+					return .none
+				}
+				let sceneNodesSnapshot = state.sceneNodes
+				let existingMixGroupPaths = (state.componentDescendantAttributesByPath[componentPath] ?? [])
+					.filter { authoredLiteral(in: $0.authoredAttributes, names: ["file"]).isEmpty }
+					.map(\.primPath)
+				return .run { send in
+					do {
+						let mixGroupPath = uniqueAudioMixGroupPrimPath(
+							baseName: "MixGroup",
+							componentPath: componentPath,
+							existingPrimPaths: existingMixGroupPaths
+						)
+						guard let mixGroupName = primName(of: mixGroupPath) else {
+							throw NSError(
+								domain: "InspectorFeature",
+								code: 1,
+								userInfo: [
+									NSLocalizedDescriptionKey: "Failed to derive audio mix group prim name."
+								]
+							)
+						}
+						_ = try DeconstructedUSDInterop.ensureTypedPrim(
+							url: url,
+							parentPrimPath: componentPath,
+							typeName: "RealityKitAudioMixGroup",
+							primName: mixGroupName
+						)
+						try DeconstructedUSDInterop.setRealityKitComponentParameter(
+							url: url,
+							componentPrimPath: mixGroupPath,
+							attributeType: "float",
+							attributeName: "gain",
+							valueLiteral: "0"
+						)
+						try DeconstructedUSDInterop.setRealityKitComponentParameter(
+							url: url,
+							componentPrimPath: mixGroupPath,
+							attributeType: "bool",
+							attributeName: "mute",
+							valueLiteral: "0"
+						)
+						try DeconstructedUSDInterop.setRealityKitComponentParameter(
+							url: url,
+							componentPrimPath: mixGroupPath,
+							attributeType: "float",
+							attributeName: "speed",
+							valueLiteral: "1"
+						)
+						let refreshed =
+							DeconstructedUSDInterop.getPrimAttributes(
+								url: url,
+								primPath: componentPath
+							)?.authoredAttributes ?? []
+						await send(
+							.componentAuthoredAttributesLoaded([
+								componentPath: mergedComponentAuthoredAttributes(
+									componentPath: componentPath,
+									authoredAttributes: refreshed,
+									url: url
+								)
+							])
+						)
+						await send(
+							.componentDescendantAttributesLoaded([
+								componentPath: loadComponentDescendantAttributes(
+									componentPath: componentPath,
+									sceneNodes: sceneNodesSnapshot,
+									url: url
+								)
+							])
+						)
+						await send(.addAudioMixGroupSucceeded(componentPath: componentPath))
+					} catch {
+						await send(.addAudioMixGroupFailed(error.localizedDescription))
+					}
+				}
+
+			case .addAudioMixGroupSucceeded:
+				state.primErrorMessage = nil
+				return .none
+
+			case .addAudioMixGroupFailed(let message):
+				state.primErrorMessage = "Failed to add audio mix group: \(message)"
+				return .none
+
+			case let .assignAudioMixGroupResourceRequested(componentPath, mixGroupPath, sourceURL):
+				guard let url = state.sceneURL else {
+					return .none
+				}
+				let sceneNodesSnapshot = state.sceneNodes
+				let existingFiles = audioMixGroupAssignedFiles(
+					from: state.componentDescendantAttributesByPath[componentPath] ?? []
+				)
+				return .run { send in
+					do {
+						let copied = try importAudioResource(
+							sourceURL: sourceURL,
+							sceneURL: url
+						)
+						let rootPrimPath = sceneNodesSnapshot.first?.path ?? "/Root"
+						let audioFilePrimPath: String
+						if let existing = existingFiles.first(where: {
+							$0.relativeAssetPath == copied.relativeAssetPath
+						}) {
+							audioFilePrimPath = existing.primPath
+						} else {
+							audioFilePrimPath = uniqueAudioFilePrimPath(
+								baseName: copied.resourceKey,
+								rootPrimPath: rootPrimPath,
+								existingTargets: existingFiles.map(\.primPath)
+							)
+							try DeconstructedUSDInterop.upsertRealityKitAudioFile(
+								url: url,
+								primPath: audioFilePrimPath,
+								relativeAssetPath: copied.relativeAssetPath,
+								shouldLoop: false
+							)
+						}
+						try DeconstructedUSDInterop.setRealityKitComponentParameter(
+							url: url,
+							componentPrimPath: audioFilePrimPath,
+							attributeType: "rel",
+							attributeName: "mixGroup",
+							valueLiteral: "<\(mixGroupPath)>"
+						)
+						let refreshed =
+							DeconstructedUSDInterop.getPrimAttributes(
+								url: url,
+								primPath: componentPath
+							)?.authoredAttributes ?? []
+						await send(
+							.componentAuthoredAttributesLoaded([
+								componentPath: mergedComponentAuthoredAttributes(
+									componentPath: componentPath,
+									authoredAttributes: refreshed,
+									url: url
+								)
+							])
+						)
+						await send(
+							.componentDescendantAttributesLoaded([
+								componentPath: loadComponentDescendantAttributes(
+									componentPath: componentPath,
+									sceneNodes: sceneNodesSnapshot,
+									url: url
+								)
+							])
+						)
+						await send(
+							.assignAudioMixGroupResourceSucceeded(componentPath: componentPath)
+						)
+					} catch {
+						await send(
+							.assignAudioMixGroupResourceFailed(error.localizedDescription)
+						)
+					}
+				}
+
+			case .assignAudioMixGroupResourceSucceeded:
+				state.primErrorMessage = nil
+				return .none
+
+			case .assignAudioMixGroupResourceFailed(let message):
+				state.primErrorMessage = "Failed to assign audio to mix group: \(message)"
+				return .none
+
 			case .addAnimationLibraryResourceRequested(
 				let componentPath,
 				let sourceURL
@@ -1612,7 +1792,8 @@ public struct InspectorFeature {
 				return .none
 
 			case .setRawComponentAttributeRequested(
-				let componentPath,
+				let targetPrimPath,
+				let refreshComponentPath,
 				let attributeType,
 				let attributeName,
 				let valueLiteral
@@ -1625,7 +1806,7 @@ public struct InspectorFeature {
 					do {
 						try DeconstructedUSDInterop.setRealityKitComponentParameter(
 							url: url,
-							componentPrimPath: componentPath,
+							componentPrimPath: targetPrimPath,
 							attributeType: attributeType,
 							attributeName: attributeName,
 							valueLiteral: valueLiteral
@@ -1633,12 +1814,12 @@ public struct InspectorFeature {
 						let refreshed =
 							DeconstructedUSDInterop.getPrimAttributes(
 								url: url,
-								primPath: componentPath
+								primPath: refreshComponentPath
 							)?.authoredAttributes ?? []
 						await send(
 							.componentAuthoredAttributesLoaded([
-								componentPath: mergedComponentAuthoredAttributes(
-									componentPath: componentPath,
+								refreshComponentPath: mergedComponentAuthoredAttributes(
+									componentPath: refreshComponentPath,
 									authoredAttributes: refreshed,
 									url: url
 								)
@@ -1646,8 +1827,8 @@ public struct InspectorFeature {
 						)
 						await send(
 							.componentDescendantAttributesLoaded([
-								componentPath: loadComponentDescendantAttributes(
-									componentPath: componentPath,
+								refreshComponentPath: loadComponentDescendantAttributes(
+									componentPath: refreshComponentPath,
 									sceneNodes: sceneNodesSnapshot,
 									url: url
 								)
@@ -1655,7 +1836,7 @@ public struct InspectorFeature {
 						)
 						await send(
 							.setRawComponentAttributeSucceeded(
-								componentPath: componentPath,
+								componentPath: refreshComponentPath,
 								attributeName: attributeName
 							)
 						)
@@ -2130,6 +2311,12 @@ public struct AnimationLibraryResource: Equatable, Sendable {
 	}
 }
 
+private struct AudioMixGroupAssignedFile: Equatable, Sendable {
+	let primPath: String
+	let relativeAssetPath: String
+	let mixGroupTarget: String
+}
+
 private func loadComponentDescendantAttributes(
 	componentPath: String,
 	sceneNodes: [SceneNode],
@@ -2237,6 +2424,44 @@ private func loadComponentDescendantAttributes(
 			)
 		}
 	}
+	if componentID == "RealityKit.AudioMixGroups" {
+		let mixGroupPaths = Set(
+			collected
+				.filter { authoredLiteral(in: $0.authoredAttributes, names: ["file"]).isEmpty }
+				.map(\.primPath)
+		)
+		if !mixGroupPaths.isEmpty {
+			for node in allNodes(in: sceneNodes) where node.typeName == "RealityKitAudioFile" {
+				var attrs =
+					DeconstructedUSDInterop.getPrimAttributes(
+						url: url,
+						primPath: node.path
+					)?.authoredAttributes ?? []
+				let targets = DeconstructedUSDInterop.primRelationshipTargets(
+					url: url,
+					primPath: node.path,
+					relationshipName: "mixGroup"
+				)
+				guard targets.contains(where: { mixGroupPaths.contains($0) }) else {
+					continue
+				}
+				attrs.removeAll { $0.name == "mixGroup" }
+				attrs.append(
+					USDPrimAttributes.AuthoredAttribute(
+						name: "mixGroup",
+						value: formatUSDRelationshipTargets(targets)
+					)
+				)
+				collected.append(
+					ComponentDescendantAttributes(
+						primPath: node.path,
+						displayName: node.name,
+						authoredAttributes: attrs
+					)
+				)
+			}
+		}
+	}
 	return collected
 }
 
@@ -2312,6 +2537,15 @@ private func allNodePaths(in nodes: [SceneNode]) -> [String] {
 	for node in nodes {
 		result.append(node.path)
 		result.append(contentsOf: allNodePaths(in: node.children))
+	}
+	return result
+}
+
+private func allNodes(in nodes: [SceneNode]) -> [SceneNode] {
+	var result: [SceneNode] = []
+	for node in nodes {
+		result.append(node)
+		result.append(contentsOf: allNodes(in: node.children))
 	}
 	return result
 }
@@ -2653,6 +2887,20 @@ private func importResourceFile(
 			]
 		)
 	}
+	let standardizedSourceURL = sourceURL.standardizedFileURL
+	let standardizedRKAssetsURL = rkassetsURL.standardizedFileURL
+	if standardizedSourceURL.path == standardizedRKAssetsURL.path
+		|| standardizedSourceURL.path.hasPrefix(standardizedRKAssetsURL.path + "/")
+	{
+		let relativePath = relativePathFromSceneDirectory(
+			sceneURL: sceneURL,
+			targetURL: standardizedSourceURL
+		)
+		return ImportedResourceFile(
+			destinationURL: standardizedSourceURL,
+			relativeAssetPath: relativePath
+		)
+	}
 	var destinationURL = rkassetsURL.appendingPathComponent(
 		sourceURL.lastPathComponent
 	)
@@ -2741,6 +2989,21 @@ private func uniqueAnimationLibraryResourcePrimPath(
 	return candidate
 }
 
+private func uniqueAudioMixGroupPrimPath(
+	baseName: String,
+	componentPath: String,
+	existingPrimPaths: [String]
+) -> String {
+	var candidate = "\(componentPath)/\(baseName)"
+	var index = 2
+	let existing = Set(existingPrimPaths)
+	while existing.contains(candidate) {
+		candidate = "\(componentPath)/\(baseName)_\(index)"
+		index += 1
+	}
+	return candidate
+}
+
 private func sanitizeAudioFilePrimName(_ key: String) -> String {
 	let base =
 		key
@@ -2778,6 +3041,27 @@ private func sanitizeAnimationLibraryPrimName(_ value: String) -> String {
 		name = "_" + name
 	}
 	return name.isEmpty ? "_animation" : name
+}
+
+private func audioMixGroupAssignedFiles(
+	from descendantAttributes: [ComponentDescendantAttributes]
+) -> [AudioMixGroupAssignedFile] {
+	descendantAttributes.compactMap { descendant in
+		let fileLiteral = authoredLiteral(
+			in: descendant.authoredAttributes,
+			names: ["file"]
+		)
+		guard !fileLiteral.isEmpty else { return nil }
+		let mixGroupTarget = parseUSDRelationshipTargets(
+			authoredLiteral(in: descendant.authoredAttributes, names: ["mixGroup"])
+		).first ?? ""
+		guard !mixGroupTarget.isEmpty else { return nil }
+		return AudioMixGroupAssignedFile(
+			primPath: descendant.primPath,
+			relativeAssetPath: parseUSDAssetPath(fileLiteral),
+			mixGroupTarget: mixGroupTarget
+		)
+	}
 }
 
 private func applyMeshSortingParameterChange(
