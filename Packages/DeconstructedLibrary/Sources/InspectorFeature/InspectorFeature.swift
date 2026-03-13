@@ -3760,6 +3760,23 @@ private func componentParameterAuthoringSpec(
 			operation: .set(valueLiteral: formatUSDFloat(value)),
 			primPathSuffix: nil
 		)
+	case ("RealityKit.GroundingShadow", "shadowMode", .string(let value)):
+		switch value {
+		case "All", "Casts Shadow":
+			return ComponentParameterAuthoringSpec(
+				attributeType: "bool",
+				attributeName: "enableIBLShadow",
+				operation: .set(valueLiteral: "1"),
+				primPathSuffix: nil
+			)
+		default:
+			return ComponentParameterAuthoringSpec(
+				attributeType: "bool",
+				attributeName: "enableIBLShadow",
+				operation: .clear,
+				primPathSuffix: nil
+			)
+		}
 	case ("RealityKit.AmbientAudio", "gain", .double(let value)):
 		return ComponentParameterAuthoringSpec(
 			attributeType: "float",
@@ -4331,6 +4348,93 @@ private func supplementalComponentAuthoringSpecs(
 				)
 			]
 			}
+	case ("RealityKit.GroundingShadow", "shadowMode", .string(let value)):
+		switch value {
+		case "All":
+			return [
+				ComponentParameterAuthoringSpec(
+					attributeType: "bool",
+					attributeName: "enableMeshShadow",
+					operation: .set(valueLiteral: "1"),
+					primPathSuffix: nil
+				),
+				ComponentParameterAuthoringSpec(
+					attributeType: "bool",
+					attributeName: "enableReceiveIBLShadow",
+					operation: .clear,
+					primPathSuffix: nil
+				),
+				ComponentParameterAuthoringSpec(
+					attributeType: "bool",
+					attributeName: "enableReceiveMeshShadow",
+					operation: .clear,
+					primPathSuffix: nil
+				),
+			]
+		case "Casts Shadow":
+			return [
+				ComponentParameterAuthoringSpec(
+					attributeType: "bool",
+					attributeName: "enableMeshShadow",
+					operation: .set(valueLiteral: "1"),
+					primPathSuffix: nil
+				),
+				ComponentParameterAuthoringSpec(
+					attributeType: "bool",
+					attributeName: "enableReceiveIBLShadow",
+					operation: .set(valueLiteral: "0"),
+					primPathSuffix: nil
+				),
+				ComponentParameterAuthoringSpec(
+					attributeType: "bool",
+					attributeName: "enableReceiveMeshShadow",
+					operation: .set(valueLiteral: "0"),
+					primPathSuffix: nil
+				),
+			]
+		case "Receives Shadow":
+			return [
+				ComponentParameterAuthoringSpec(
+					attributeType: "bool",
+					attributeName: "enableMeshShadow",
+					operation: .clear,
+					primPathSuffix: nil
+				),
+				ComponentParameterAuthoringSpec(
+					attributeType: "bool",
+					attributeName: "enableReceiveIBLShadow",
+					operation: .set(valueLiteral: "0"),
+					primPathSuffix: nil
+				),
+				ComponentParameterAuthoringSpec(
+					attributeType: "bool",
+					attributeName: "enableReceiveMeshShadow",
+					operation: .set(valueLiteral: "0"),
+					primPathSuffix: nil
+				),
+			]
+		default:
+			return [
+				ComponentParameterAuthoringSpec(
+					attributeType: "bool",
+					attributeName: "enableMeshShadow",
+					operation: .clear,
+					primPathSuffix: nil
+				),
+				ComponentParameterAuthoringSpec(
+					attributeType: "bool",
+					attributeName: "enableReceiveIBLShadow",
+					operation: .clear,
+					primPathSuffix: nil
+				),
+				ComponentParameterAuthoringSpec(
+					attributeType: "bool",
+					attributeName: "enableReceiveMeshShadow",
+					operation: .clear,
+					primPathSuffix: nil
+				),
+			]
+		}
 	case ("RealityKit.CustomDockingRegion", "width", .double(let valueCM)):
 		return [
 			ComponentParameterAuthoringSpec(

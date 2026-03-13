@@ -246,6 +246,17 @@ public struct InspectorComponentDefinition: Equatable, Sendable, Identifiable, H
 					kind: .scalar(defaultValue: 1, unit: "%")
 				)
 			]
+		case "RealityKit.GroundingShadow":
+			return [
+				InspectorComponentParameter(
+					key: "shadowMode",
+					label: "Grounding Shadow",
+					kind: .choice(
+						defaultValue: "None",
+						options: ["None", "All", "Casts Shadow", "Receives Shadow"]
+					)
+				)
+			]
 		case "RealityKit.HierarchicalFade":
 			return [
 				InspectorComponentParameter(

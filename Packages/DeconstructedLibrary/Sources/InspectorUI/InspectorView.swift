@@ -3060,6 +3060,27 @@ private struct ComponentParametersSection: View {
 				break
 			}
 		}
+		if identifier == "RealityKit.GroundingShadow", parameter.key == "shadowMode" {
+			let enableIBLShadow = parseUSDBool(authoredAttributes["enableIBLShadow"] ?? "")
+			let enableMeshShadow = parseUSDBool(authoredAttributes["enableMeshShadow"] ?? "")
+			let enableReceiveIBLShadow = parseUSDBool(authoredAttributes["enableReceiveIBLShadow"] ?? "")
+			let enableReceiveMeshShadow = parseUSDBool(authoredAttributes["enableReceiveMeshShadow"] ?? "")
+			switch (
+				enableIBLShadow,
+				enableMeshShadow,
+				enableReceiveIBLShadow,
+				enableReceiveMeshShadow
+			) {
+			case (.some(true), .some(true), .some(false), .some(false)):
+				return .string("Casts Shadow")
+			case (.some(true), .some(true), _, _):
+				return .string("All")
+			case (_, _, .some(false), .some(false)):
+				return .string("Receives Shadow")
+			default:
+				return .string("None")
+			}
+		}
 		if identifier == "RealityKit.Anchoring" {
 			let targetRaw = parseUSDString(authoredAttributes["type"] ?? "")
 			let targetValue = targetRaw.isEmpty ? "World" : targetRaw

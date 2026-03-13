@@ -77,6 +77,18 @@ All other components in the fixture set are present as component prims but curre
    - `float environmentLightingWeight = 0.48552084`
 2. In current fixtures, baseline omits the field. RCP authors it once the slider is changed.
 
+### RealityKit.GroundingShadow
+
+1. Top-level fields:
+   - `bool enableIBLShadow = 1`
+   - `bool enableMeshShadow = 1`
+   - `bool enableReceiveIBLShadow = 0`
+   - `bool enableReceiveMeshShadow = 0`
+2. Observed authored combinations:
+   `BASE/None` omits all four fields, `All` authors only the two enable flags,
+   `Receives Shadow` authors only the two receive flags as `0`,
+   `Casts Shadow` authors all four fields.
+
 ### RealityKit.Reverb
 
 1. Top-level field:
