@@ -71,6 +71,12 @@ All other components in the fixture set are present as component prims but curre
 1. Top-level field:
    - `bool isGlobalIBL = 0`
 
+### RealityKit.EnvironmentLightingConfiguration
+
+1. Top-level field:
+   - `float environmentLightingWeight = 0.48552084`
+2. In current fixtures, baseline omits the field. RCP authors it once the slider is changed.
+
 ### RealityKit.Reverb
 
 1. Top-level field:

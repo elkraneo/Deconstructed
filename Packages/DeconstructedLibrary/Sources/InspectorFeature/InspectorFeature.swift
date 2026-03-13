@@ -3753,6 +3753,13 @@ private func componentParameterAuthoringSpec(
 			operation: .set(valueLiteral: quoteUSDString(token)),
 			primPathSuffix: nil
 		)
+	case ("RealityKit.EnvironmentLightingConfiguration", "environmentLightingWeight", .double(let value)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "float",
+			attributeName: "environmentLightingWeight",
+			operation: .set(valueLiteral: formatUSDFloat(value)),
+			primPathSuffix: nil
+		)
 	case ("RealityKit.AmbientAudio", "gain", .double(let value)):
 		return ComponentParameterAuthoringSpec(
 			attributeType: "float",

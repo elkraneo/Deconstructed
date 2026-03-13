@@ -238,6 +238,14 @@ public struct InspectorComponentDefinition: Equatable, Sendable, Identifiable, H
 					)
 				)
 			]
+		case "RealityKit.EnvironmentLightingConfiguration":
+			return [
+				InspectorComponentParameter(
+					key: "environmentLightingWeight",
+					label: "Environment Lighting Weight",
+					kind: .scalar(defaultValue: 1, unit: "%")
+				)
+			]
 		case "RealityKit.HierarchicalFade":
 			return [
 				InspectorComponentParameter(

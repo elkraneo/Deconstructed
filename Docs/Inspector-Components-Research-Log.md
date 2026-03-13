@@ -225,14 +225,14 @@ Current counts:
 
 1. RCP built-in Add Component catalog: `28` components.
 2. Internal Deconstructed catalog including `Behaviors`: `29` entries.
-3. Current fixture component directories in `RCPComponentDiffFixtures` (excluding `textures`): `23`.
+3. Current fixture component directories in `RCPComponentDiffFixtures` (excluding `textures`): `24`.
 
 Baseline A (publishing/full RCP built-ins):
 
-1. Missing fixtures to reach all `28` built-ins: `6`.
+1. Missing fixtures to reach all `28` built-ins: `5`.
 2. Missing list:
-   `Particle Emitter`, `Environment Lighting Configuration`, `Grounding Shadow`, `Image Based Light`, `Image Based Light Receiver`, `Virtual Environment Probe`
-3. Note: if counting internal `29` (adds `Behaviors`), missing is `6`.
+   `Particle Emitter`, `Grounding Shadow`, `Image Based Light`, `Image Based Light Receiver`, `Virtual Environment Probe`
+3. Note: if counting internal `29` (adds `Behaviors`), missing is `5`.
 4. If counting `New Component` as a separate fixture track, add `+1` missing fixture set.
 
 Baseline B (current fixture-parity process scope used for ongoing implementation):
@@ -336,11 +336,12 @@ Current slice:
 1. Accessibility: Add yes, Typed UI yes, Persist yes, Fallback Raw yes
 2. Billboard: Add yes, Typed UI yes, Persist yes, Fallback Raw yes
 3. Reverb: Add yes, Typed UI yes, Persist yes, Fallback Raw yes
-4. Image Based Light: Add yes, Typed UI yes, Persist yes, Fallback Raw yes
-5. Virtual Environment Probe (top-level blend mode): Add yes, Typed UI yes, Persist yes, Fallback Raw yes
-6. Collision (top-level group/mask/type): Add yes, Typed UI yes, Persist yes, Fallback Raw yes
-7. Point Light (color/intensity/attenuation): Add yes, Typed UI yes, Persist yes, Fallback Raw yes
-8. Remaining catalog components: Add yes, Typed UI no, Persist via typed mapping no, Fallback Raw yes (top-level + descendant authored attributes)
+4. Environment Lighting Configuration: Add yes, Typed UI yes, Persist yes, Fallback Raw yes
+5. Image Based Light: Add yes, Typed UI yes, Persist yes, Fallback Raw yes
+6. Virtual Environment Probe (top-level blend mode): Add yes, Typed UI yes, Persist yes, Fallback Raw yes
+7. Collision (top-level group/mask/type): Add yes, Typed UI yes, Persist yes, Fallback Raw yes
+8. Point Light (color/intensity/attenuation): Add yes, Typed UI yes, Persist yes, Fallback Raw yes
+9. Remaining catalog components: Add yes, Typed UI no, Persist via typed mapping no, Fallback Raw yes (top-level + descendant authored attributes)
 
 Additional capability:
 
