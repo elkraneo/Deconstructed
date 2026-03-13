@@ -389,12 +389,14 @@ private func audioMixerComponents(
 ) -> [AudioMixerComponentEntry] {
 	let components = store.inspector.componentAuthoredAttributesByPath
 	let descendantsByPath = store.inspector.componentDescendantAttributesByPath
-	let entries = components.compactMap { componentPath, attrs -> AudioMixerComponentEntry? in
+	var seen: Set<String> = []
+	var entries = components.compactMap { componentPath, attrs -> AudioMixerComponentEntry? in
 		let identifier = attrs
 			.first(where: { $0.name == "info:id" })?
 			.value
 			.trimmingCharacters(in: CharacterSet(charactersIn: "\""))
 		guard identifier == "RealityKit.AudioMixGroups" else { return nil }
+		seen.insert(componentPath)
 		let name = componentPath.split(separator: "/").last.map(String.init) ?? componentPath
 		return AudioMixerComponentEntry(
 			componentPath: componentPath,
@@ -402,6 +404,21 @@ private func audioMixerComponents(
 			descendantAttributes: descendantsByPath[componentPath] ?? []
 		)
 	}
+
+	if let selected = store.inspector.selectedNode {
+		for child in selected.children where child.name == "AudioMixGroups" {
+			guard !seen.contains(child.path) else { continue }
+			seen.insert(child.path)
+			entries.append(
+				AudioMixerComponentEntry(
+					componentPath: child.path,
+					displayName: child.name,
+					descendantAttributes: descendantsByPath[child.path] ?? []
+				)
+			)
+		}
+	}
+
 	return entries.sorted {
 		$0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending
 	}
