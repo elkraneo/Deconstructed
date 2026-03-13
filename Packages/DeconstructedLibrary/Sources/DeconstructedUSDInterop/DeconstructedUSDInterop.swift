@@ -910,14 +910,22 @@ public enum DeconstructedUSDInterop {
 			return
 		}
 		try USDMutationCoordinator.withLock {
-			if try setComponentParameterWithUSDMutation(
-				url: url,
-				componentPrimPath: componentPrimPath,
-				attributeType: attributeType,
-				attributeName: attributeName,
-				valueLiteral: valueLiteral
-			) {
-				return
+			do {
+				if try setComponentParameterWithUSDMutation(
+					url: url,
+					componentPrimPath: componentPrimPath,
+					attributeType: attributeType,
+					attributeName: attributeName,
+					valueLiteral: valueLiteral
+				) {
+					return
+				}
+			} catch let error as DeconstructedUSDInteropError {
+				// Newly inserted USDA-only prims may not be visible to the live USD mutation
+				// path yet. Fall back to the text mutator for those creation flows.
+				guard case .primNotFound = error else {
+					throw error
+				}
 			}
 
 			guard url.pathExtension.lowercased() == "usda" else {
