@@ -119,7 +119,17 @@ All other components in the fixture set are present as component prims but curre
 ### RealityKit.VirtualEnvironmentProbe
 
 1. Top-level field:
-   - `token blendMode = "single"`
+   - `token blendMode = "single"|"blend"|"none"`
+2. Descendant `Resource1` fields:
+   - `asset ibl = @../RenderCrate-HDRI_Orbital_40_4K.hdr@`
+   - `float intensityExponent = 5.511979`
+   - `float relativeWeight = 0.7195486`
+3. Descendant `Resource2` fields:
+   - `asset ibl = @../cayley_lookout_2k.hdr@`
+   - `float intensityExponent = 8.561459`
+   - `float relativeWeight = 0.2804514`
+4. `Mode Single` matches the default authored shape:
+   `blendMode = "single"` plus empty `Resource1` / `Resource2` structs.
 
 ### RealityKit.PointLight
 

@@ -376,12 +376,37 @@ public struct InspectorComponentDefinition: Equatable, Sendable, Identifiable, H
 		case "RealityKit.VirtualEnvironmentProbe":
 			return [
 				InspectorComponentParameter(
-					key: "blendMode",
-					label: "Blend Mode",
+					key: "mode",
+					label: "Mode",
 					kind: .choice(
-						defaultValue: "single",
-						options: ["single", "additive", "multiply"]
+						defaultValue: "Single",
+						options: ["Single", "Blend", "None"]
 					)
+				),
+				InspectorComponentParameter(
+					key: "resource1IntensityExponent",
+					label: "Intensity Exponent",
+					kind: .scalar(defaultValue: 0, unit: nil)
+				),
+				InspectorComponentParameter(
+					key: "resource1EnvironmentResource",
+					label: "Environment Resource",
+					kind: .text(defaultValue: "", placeholder: "../RenderCrate-HDRI_Orbital_40_4K.hdr")
+				),
+				InspectorComponentParameter(
+					key: "resource2IntensityExponent",
+					label: "Intensity Exponent 2",
+					kind: .scalar(defaultValue: 0, unit: nil)
+				),
+				InspectorComponentParameter(
+					key: "resource2EnvironmentResource",
+					label: "Environment Resource 2",
+					kind: .text(defaultValue: "", placeholder: "../cayley_lookout_2k.hdr")
+				),
+				InspectorComponentParameter(
+					key: "blend",
+					label: "Blend",
+					kind: .scalar(defaultValue: 0, unit: "%")
 				)
 			]
 		case "RealityKit.Collider":

@@ -3916,12 +3916,63 @@ private func componentParameterAuthoringSpec(
 			operation: trimmed.isEmpty ? .clear : .set(valueLiteral: "<\(trimmed)>"),
 			primPathSuffix: nil
 		)
-	case ("RealityKit.VirtualEnvironmentProbe", "blendMode", .string(let value)):
+	case ("RealityKit.VirtualEnvironmentProbe", "mode", .string(let value)):
+		let token: String
+		switch value {
+		case "Blend":
+			token = "blend"
+		case "None":
+			token = "none"
+		default:
+			token = "single"
+		}
 		return ComponentParameterAuthoringSpec(
 			attributeType: "token",
 			attributeName: "blendMode",
-			operation: .set(valueLiteral: quoteUSDString(value)),
+			operation: .set(valueLiteral: quoteUSDString(token)),
 			primPathSuffix: nil
+		)
+	case ("RealityKit.VirtualEnvironmentProbe", "resource1EnvironmentResource", .string(let value)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "asset",
+			attributeName: "ibl",
+			operation: value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+				? .clear
+				: .set(valueLiteral: quoteUSDAssetPath(value)),
+			primPathSuffix: "Resource1"
+		)
+	case ("RealityKit.VirtualEnvironmentProbe", "resource2EnvironmentResource", .string(let value)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "asset",
+			attributeName: "ibl",
+			operation: value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+				? .clear
+				: .set(valueLiteral: quoteUSDAssetPath(value)),
+			primPathSuffix: "Resource2"
+		)
+	case ("RealityKit.VirtualEnvironmentProbe", "resource1IntensityExponent", .double(let value)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "float",
+			attributeName: "intensityExponent",
+			operation: value == 0 ? .clear : .set(valueLiteral: formatUSDFloat(value)),
+			primPathSuffix: "Resource1"
+		)
+	case ("RealityKit.VirtualEnvironmentProbe", "resource2IntensityExponent", .double(let value)):
+		return ComponentParameterAuthoringSpec(
+			attributeType: "float",
+			attributeName: "intensityExponent",
+			operation: value == 0 ? .clear : .set(valueLiteral: formatUSDFloat(value)),
+			primPathSuffix: "Resource2"
+		)
+	case ("RealityKit.VirtualEnvironmentProbe", "blend", .double(let value)):
+		let clamped = max(0, min(100, value))
+		let secondWeight = clamped / 100.0
+		let firstWeight = 1.0 - secondWeight
+		return ComponentParameterAuthoringSpec(
+			attributeType: "float",
+			attributeName: "relativeWeight",
+			operation: clamped == 0 ? .clear : .set(valueLiteral: formatUSDFloat(firstWeight)),
+			primPathSuffix: "Resource1"
 		)
 	case ("RealityKit.CustomDockingRegion", "width", .double(let valueCM)):
 		return ComponentParameterAuthoringSpec(
@@ -4547,6 +4598,33 @@ private func supplementalComponentAuthoringSpecs(
 				),
 			]
 		}
+	case ("RealityKit.VirtualEnvironmentProbe", "blend", .double(let value)):
+		let clamped = max(0, min(100, value))
+		let secondWeight = clamped / 100.0
+		return [
+			ComponentParameterAuthoringSpec(
+				attributeType: "float",
+				attributeName: "relativeWeight",
+				operation: clamped == 0 ? .clear : .set(valueLiteral: formatUSDFloat(secondWeight)),
+				primPathSuffix: "Resource2"
+			)
+		]
+	case ("RealityKit.VirtualEnvironmentProbe", "mode", .string(let value)):
+		guard value != "Blend" else { return [] }
+		return [
+			ComponentParameterAuthoringSpec(
+				attributeType: "float",
+				attributeName: "relativeWeight",
+				operation: .clear,
+				primPathSuffix: "Resource1"
+			),
+			ComponentParameterAuthoringSpec(
+				attributeType: "float",
+				attributeName: "relativeWeight",
+				operation: .clear,
+				primPathSuffix: "Resource2"
+			),
+		]
 	case ("RealityKit.CustomDockingRegion", "width", .double(let valueCM)):
 		return [
 			ComponentParameterAuthoringSpec(

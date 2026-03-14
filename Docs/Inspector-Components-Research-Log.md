@@ -225,30 +225,28 @@ Current counts:
 
 1. RCP built-in Add Component catalog: `28` components.
 2. Internal Deconstructed catalog including `Behaviors`: `29` entries.
-3. Current fixture component directories in `RCPComponentDiffFixtures` (excluding `textures`): `27`.
+3. Current fixture component directories in `RCPComponentDiffFixtures` (excluding `textures`): `28`.
 
 Baseline A (publishing/full RCP built-ins):
 
-1. Missing fixtures to reach all `28` built-ins: `2`.
+1. Missing fixtures to reach all `28` built-ins: `1`.
 2. Missing list:
-   `Particle Emitter`, `Virtual Environment Probe`
-3. Note: if counting internal `29` (adds `Behaviors`), missing is `2`.
+   `Particle Emitter`
+3. Note: if counting internal `29` (adds `Behaviors`), missing is `1`.
 4. If counting `New Component` as a separate fixture track, add `+1` missing fixture set.
 
 Baseline B (current fixture-parity process scope used for ongoing implementation):
 
 1. Current priority track remains unchanged after the Audio Mix Groups fixture drop.
-2. Remaining fixtures to provide for this scope: `1`.
+2. Remaining fixtures to provide for this scope: `0`.
 3. Missing list for this scope:
-   `Virtual Environment Probe`
+   none
 
 Next fixture drop checklist (continue current process first):
 
-1. Add `Virtual Environment Probe` fixture variants under:
-   `/Volumes/Plutonian/_Developer/Deconstructed/source/RCPComponentDiffFixtures/Sources/RCPComponentDiffFixtures/RCPComponentDiffFixtures.rkassets/Virtual Environment Probe`
-2. For each component folder, provide at minimum:
+1. For each component folder, provide at minimum:
    `BASE.usda` plus one-file-per-parameter delta fixtures (single-control change per file) and an `ALL.usda` aggregate.
-3. After fixture drop, update:
+2. After fixture drop, update:
    `Docs/Inspector-Verified-Field-Matrix.md` and this file's count snapshot.
 
 ## Audio Mix Groups Fixture Notes (2026-03-13)
@@ -338,7 +336,7 @@ Current slice:
 5. Grounding Shadow: Add yes, Typed UI yes, Persist yes, Fallback Raw yes
 6. Image Based Light: Add yes, Typed UI yes, Persist yes, Fallback Raw yes
 7. Image Based Light Receiver: Add yes, Typed UI yes, Persist yes, Fallback Raw yes
-8. Virtual Environment Probe (top-level blend mode): Add yes, Typed UI yes, Persist yes, Fallback Raw yes
+8. Virtual Environment Probe: Add yes, Typed UI yes, Persist yes, Fallback Raw yes
 9. Collision (top-level group/mask/type): Add yes, Typed UI yes, Persist yes, Fallback Raw yes
 10. Point Light (color/intensity/attenuation): Add yes, Typed UI yes, Persist yes, Fallback Raw yes
 11. Remaining catalog components: Add yes, Typed UI no, Persist via typed mapping no, Fallback Raw yes (top-level + descendant authored attributes)

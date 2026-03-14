@@ -1268,7 +1268,12 @@ private struct ComponentParametersSection: View {
 		let layout = definition?.parameterLayout ?? []
 		let allAuthoredAttributes = authoredAttributes + descendantAttributes.flatMap(\.authoredAttributes)
 		let authoredMap = Self.authoredMap(from: allAuthoredAttributes)
-		self._values = State(initialValue: Self.initialValues(layout: layout, authoredAttributes: authoredMap, identifier: definition?.identifier))
+		self._values = State(initialValue: Self.initialValues(
+			layout: layout,
+			authoredAttributes: authoredMap,
+			descendantAttributes: descendantAttributes,
+			identifier: definition?.identifier
+		))
 		self._rawValues = State(
 			initialValue: Self.initialRawValues(
 				authoredAttributes: authoredAttributes,
@@ -1578,6 +1583,7 @@ private struct ComponentParametersSection: View {
 			values = Self.initialValues(
 				layout: layout,
 				authoredAttributes: Self.authoredMap(from: allAuthoredAttributes),
+				descendantAttributes: descendantAttributes,
 				identifier: componentIdentifier
 			)
 		}
@@ -2735,18 +2741,31 @@ private struct ComponentParametersSection: View {
 	}
 
 		private func shouldDisplay(parameter: InspectorComponentParameter) -> Bool {
-			guard componentIdentifier == "RealityKit.Collider" else { return true }
-			let shape = currentStringValue(for: "shape", fallback: "Box")
-			switch parameter.key {
-			case "extent":
-				return shape == "Box"
-			case "radius":
-				return shape == "Sphere" || shape == "Capsule"
-			case "height":
-				return shape == "Capsule"
-			default:
-				return true
+			if componentIdentifier == "RealityKit.Collider" {
+				let shape = currentStringValue(for: "shape", fallback: "Box")
+				switch parameter.key {
+				case "extent":
+					return shape == "Box"
+				case "radius":
+					return shape == "Sphere" || shape == "Capsule"
+				case "height":
+					return shape == "Capsule"
+				default:
+					return true
+				}
 			}
+			if componentIdentifier == "RealityKit.VirtualEnvironmentProbe" {
+				let mode = currentStringValue(for: "mode", fallback: "Single")
+				switch parameter.key {
+				case "resource2IntensityExponent", "resource2EnvironmentResource", "blend":
+					return mode == "Blend"
+				case "resource1IntensityExponent", "resource1EnvironmentResource":
+					return mode != "None"
+				default:
+					return true
+				}
+			}
+			return true
 		}
 
 		private func currentStringValue(for key: String, fallback: String) -> String {
@@ -3012,6 +3031,7 @@ private struct ComponentParametersSection: View {
 	private static func initialValues(
 		layout: [InspectorComponentParameter],
 		authoredAttributes: [String: String],
+		descendantAttributes: [ComponentDescendantAttributes],
 		identifier: String?
 	) -> [String: InspectorComponentParameterValue] {
 		Dictionary(
@@ -3021,6 +3041,7 @@ private struct ComponentParametersSection: View {
 					initialValue(
 						for: parameter,
 						authoredAttributes: authoredAttributes,
+						descendantAttributes: descendantAttributes,
 						identifier: identifier
 					)
 				)
@@ -3031,6 +3052,7 @@ private struct ComponentParametersSection: View {
 	private static func initialValue(
 		for parameter: InspectorComponentParameter,
 		authoredAttributes: [String: String],
+		descendantAttributes: [ComponentDescendantAttributes],
 		identifier: String?
 	) -> InspectorComponentParameterValue {
 		if identifier == "RealityKit.MeshSorting", parameter.key == "group" {
@@ -3105,6 +3127,34 @@ private struct ComponentParametersSection: View {
 		if identifier == "RealityKit.ImageBasedLightReceiver", parameter.key == "imageBasedLight" {
 			let raw = authoredAttributes["iblEntity"] ?? ""
 			return .string(parseUSDRelationshipTarget(raw))
+		}
+		if identifier == "RealityKit.VirtualEnvironmentProbe" {
+			let resource1 = descendantAttributes.first(where: { $0.displayName == "Resource1" })
+			let resource2 = descendantAttributes.first(where: { $0.displayName == "Resource2" })
+			let resource1Map = authoredMap(from: resource1?.authoredAttributes ?? [])
+			let resource2Map = authoredMap(from: resource2?.authoredAttributes ?? [])
+			switch parameter.key {
+			case "mode":
+				let blendMode = parseUSDString(authoredAttributes["blendMode"] ?? "")
+				return .string(blendMode.isEmpty ? "Single" : blendMode.capitalized)
+			case "resource1EnvironmentResource":
+				return .string(parseUSDAssetPathLiteral(resource1Map["ibl"] ?? ""))
+			case "resource2EnvironmentResource":
+				return .string(parseUSDAssetPathLiteral(resource2Map["ibl"] ?? ""))
+			case "resource1IntensityExponent":
+				return .double(parseUSDDouble(resource1Map["intensityExponent"] ?? "") ?? 0)
+			case "resource2IntensityExponent":
+				return .double(parseUSDDouble(resource2Map["intensityExponent"] ?? "") ?? 0)
+			case "blend":
+				let resource1Weight = parseUSDDouble(resource1Map["relativeWeight"] ?? "")
+				let resource2Weight = parseUSDDouble(resource2Map["relativeWeight"] ?? "")
+				guard let resource2Weight else { return .double(0) }
+				let total = (resource1Weight ?? 0) + resource2Weight
+				guard total > 0 else { return .double(0) }
+				return .double((resource2Weight / total) * 100.0)
+			default:
+				break
+			}
 		}
 		if identifier == "RealityKit.Anchoring" {
 			let targetRaw = parseUSDString(authoredAttributes["type"] ?? "")
@@ -3254,6 +3304,18 @@ private struct ComponentParametersSection: View {
 			return "blendIBLsFactor"
 		case ("RealityKit.ImageBasedLightReceiver", "imageBasedLight"):
 			return "iblEntity"
+		case ("RealityKit.VirtualEnvironmentProbe", "mode"):
+			return "blendMode"
+		case ("RealityKit.VirtualEnvironmentProbe", "resource1EnvironmentResource"):
+			return "ibl"
+		case ("RealityKit.VirtualEnvironmentProbe", "resource2EnvironmentResource"):
+			return "ibl"
+		case ("RealityKit.VirtualEnvironmentProbe", "resource1IntensityExponent"):
+			return "intensityExponent"
+		case ("RealityKit.VirtualEnvironmentProbe", "resource2IntensityExponent"):
+			return "intensityExponent"
+		case ("RealityKit.VirtualEnvironmentProbe", "blend"):
+			return "relativeWeight"
 		case ("RealityKit.PointLight", "attenuationFalloff"):
 			return "attenuationFalloffExponent"
 		case ("RealityKit.SpotLight", "attenuationFalloff"):
