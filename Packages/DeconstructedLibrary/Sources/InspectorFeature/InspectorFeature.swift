@@ -3908,6 +3908,14 @@ private func componentParameterAuthoringSpec(
 			operation: value == 0 ? .clear : .set(valueLiteral: formatUSDFloat(value)),
 			primPathSuffix: nil
 		)
+	case ("RealityKit.ImageBasedLightReceiver", "imageBasedLight", .string(let value)):
+		let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+		return ComponentParameterAuthoringSpec(
+			attributeType: "rel",
+			attributeName: "iblEntity",
+			operation: trimmed.isEmpty ? .clear : .set(valueLiteral: "<\(trimmed)>"),
+			primPathSuffix: nil
+		)
 	case ("RealityKit.VirtualEnvironmentProbe", "blendMode", .string(let value)):
 		return ComponentParameterAuthoringSpec(
 			attributeType: "token",

@@ -97,6 +97,16 @@ All other components in the fixture set are present as component prims but curre
    `Receives Shadow` authors only the two receive flags as `0`,
    `Casts Shadow` authors all four fields.
 
+### RealityKit.ImageBasedLightReceiver
+
+1. Top-level field:
+   - `rel iblEntity = </Root/Cube|/Root/Sphere>`
+2. Observed behavior:
+   - Receiver targets an entity path, not the `ImageBasedLight` component prim path.
+   - Cross-entity targeting is valid.
+   - RCP blocks choosing entities without an `ImageBasedLight` component.
+   - If the source `ImageBasedLight` component is removed later, the stale `iblEntity` relationship remains authored.
+
 ### RealityKit.Reverb
 
 1. Top-level field:

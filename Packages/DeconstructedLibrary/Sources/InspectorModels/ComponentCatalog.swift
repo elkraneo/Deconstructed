@@ -365,6 +365,14 @@ public struct InspectorComponentDefinition: Equatable, Sendable, Identifiable, H
 					kind: .scalar(defaultValue: 0, unit: "%")
 				)
 			]
+		case "RealityKit.ImageBasedLightReceiver":
+			return [
+				InspectorComponentParameter(
+					key: "imageBasedLight",
+					label: "Image Based Light",
+					kind: .text(defaultValue: "", placeholder: "/Root/Cube")
+				)
+			]
 		case "RealityKit.VirtualEnvironmentProbe":
 			return [
 				InspectorComponentParameter(

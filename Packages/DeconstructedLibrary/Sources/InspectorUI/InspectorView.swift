@@ -3102,6 +3102,10 @@ private struct ComponentParametersSection: View {
 				break
 			}
 		}
+		if identifier == "RealityKit.ImageBasedLightReceiver", parameter.key == "imageBasedLight" {
+			let raw = authoredAttributes["iblEntity"] ?? ""
+			return .string(parseUSDRelationshipTarget(raw))
+		}
 		if identifier == "RealityKit.Anchoring" {
 			let targetRaw = parseUSDString(authoredAttributes["type"] ?? "")
 			let targetValue = targetRaw.isEmpty ? "World" : targetRaw
@@ -3248,6 +3252,8 @@ private struct ComponentParametersSection: View {
 			return "iblBlend"
 		case ("RealityKit.ImageBasedLight", "blend"):
 			return "blendIBLsFactor"
+		case ("RealityKit.ImageBasedLightReceiver", "imageBasedLight"):
+			return "iblEntity"
 		case ("RealityKit.PointLight", "attenuationFalloff"):
 			return "attenuationFalloffExponent"
 		case ("RealityKit.SpotLight", "attenuationFalloff"):

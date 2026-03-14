@@ -225,14 +225,14 @@ Current counts:
 
 1. RCP built-in Add Component catalog: `28` components.
 2. Internal Deconstructed catalog including `Behaviors`: `29` entries.
-3. Current fixture component directories in `RCPComponentDiffFixtures` (excluding `textures`): `26`.
+3. Current fixture component directories in `RCPComponentDiffFixtures` (excluding `textures`): `27`.
 
 Baseline A (publishing/full RCP built-ins):
 
-1. Missing fixtures to reach all `28` built-ins: `3`.
+1. Missing fixtures to reach all `28` built-ins: `2`.
 2. Missing list:
-   `Particle Emitter`, `Image Based Light Receiver`, `Virtual Environment Probe`
-3. Note: if counting internal `29` (adds `Behaviors`), missing is `3`.
+   `Particle Emitter`, `Virtual Environment Probe`
+3. Note: if counting internal `29` (adds `Behaviors`), missing is `2`.
 4. If counting `New Component` as a separate fixture track, add `+1` missing fixture set.
 
 Baseline B (current fixture-parity process scope used for ongoing implementation):
@@ -337,10 +337,11 @@ Current slice:
 4. Environment Lighting Configuration: Add yes, Typed UI yes, Persist yes, Fallback Raw yes
 5. Grounding Shadow: Add yes, Typed UI yes, Persist yes, Fallback Raw yes
 6. Image Based Light: Add yes, Typed UI yes, Persist yes, Fallback Raw yes
-7. Virtual Environment Probe (top-level blend mode): Add yes, Typed UI yes, Persist yes, Fallback Raw yes
-8. Collision (top-level group/mask/type): Add yes, Typed UI yes, Persist yes, Fallback Raw yes
-9. Point Light (color/intensity/attenuation): Add yes, Typed UI yes, Persist yes, Fallback Raw yes
-10. Remaining catalog components: Add yes, Typed UI no, Persist via typed mapping no, Fallback Raw yes (top-level + descendant authored attributes)
+7. Image Based Light Receiver: Add yes, Typed UI yes, Persist yes, Fallback Raw yes
+8. Virtual Environment Probe (top-level blend mode): Add yes, Typed UI yes, Persist yes, Fallback Raw yes
+9. Collision (top-level group/mask/type): Add yes, Typed UI yes, Persist yes, Fallback Raw yes
+10. Point Light (color/intensity/attenuation): Add yes, Typed UI yes, Persist yes, Fallback Raw yes
+11. Remaining catalog components: Add yes, Typed UI no, Persist via typed mapping no, Fallback Raw yes (top-level + descendant authored attributes)
 
 Additional capability:
 
