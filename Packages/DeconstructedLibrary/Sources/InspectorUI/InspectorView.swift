@@ -2564,33 +2564,47 @@ private struct ComponentParametersSection: View {
 			mainEmitterValues: $particleEmitterMainEmitterValues,
 			spawnedEmitterValues: $particleEmitterSpawnedEmitterValues,
 			onCurrentStateChanged: { key, value in
+				let (type, formatted) = formatParameterValue(value)
 				onRawAttributeChanged(
 					componentPath,
 					componentPath,
-					Self.inferType(from: value),
+					type,
 					key,
-					Self.formatValue(value)
+					formatted
 				)
 			},
 			onMainEmitterChanged: { key, value in
+				let (type, formatted) = formatParameterValue(value)
 				onRawAttributeChanged(
 					componentPath + "/currentState/mainEmitter",
 					componentPath,
-					Self.inferType(from: value),
+					type,
 					key,
-					Self.formatValue(value)
+					formatted
 				)
 			},
 			onSpawnedEmitterChanged: { key, value in
+				let (type, formatted) = formatParameterValue(value)
 				onRawAttributeChanged(
 					componentPath + "/currentState/spawnedEmitter",
 					componentPath,
-					Self.inferType(from: value),
+					type,
 					key,
-					Self.formatValue(value)
+					formatted
 				)
 			}
 		)
+	}
+
+	private func formatParameterValue(_ value: InspectorComponentParameterValue) -> (type: String, value: String) {
+		switch value {
+		case .bool(let v):
+			return ("bool", v ? "1" : "0")
+		case .double(let v):
+			return ("float", String(format: "%g", v))
+		case .string(let v):
+			return ("token", v)
+		}
 	}
 
 	private func physicsSubsection<Content: View>(
@@ -3854,32 +3868,6 @@ private struct EditableAxisField: View {
 		return try? Self.numberFormat.parseStrategy.parse(trimmed)
 	}
 
-	private static func inferType(from value: InspectorComponentParameterValue) -> String {
-		switch value {
-		case .bool: return "bool"
-		case .int: return "int64"
-		case .float, .double: return "float"
-		case .string: return "token"
-		case .vector3: return "float3"
-		case .vector4: return "float4"
-		case .color: return "color3f"
-		default: return "string"
-		}
-	}
-
-	private static func formatValue(_ value: InspectorComponentParameterValue) -> String {
-		switch value {
-		case .bool(let v): return v ? "1" : "0"
-		case .int(let v): return String(v)
-		case .float(let v): return String(format: "%g", v)
-		case .double(let v): return String(format: "%g", v)
-		case .string(let v): return v
-		case .vector3(let v): return String(format: "(%g, %g, %g)", v.x, v.y, v.z)
-		case .vector4(let v): return String(format: "(%g, %g, %g, %g)", v.x, v.y, v.z, v.w)
-		case .color(let v): return String(format: "(%g, %g, %g)", v.red, v.green, v.blue)
-		default: return ""
-		}
-	}
 }
 
 struct ScenePlaybackSection: View {

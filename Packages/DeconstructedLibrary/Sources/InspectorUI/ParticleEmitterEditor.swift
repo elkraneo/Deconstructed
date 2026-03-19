@@ -109,7 +109,7 @@ public struct ParticleEmitterEditor: View {
                         .font(.system(size: 11))
                         .toggleStyle(.checkbox)
                     
-                    InspectorRow(label: "Emission Duration") {
+                    PEInspectorRow(label: "Emission Duration") {
                         HStack(spacing: 4) {
                             TextField("", value: currentStateDoubleBinding(for: "emissionDuration", fallback: 1.0), format: .number.precision(.fractionLength(0...2)))
                                 .textFieldStyle(.roundedBorder)
@@ -120,7 +120,7 @@ public struct ParticleEmitterEditor: View {
                         }
                     }
                     
-                    InspectorRow(label: "Idle Duration") {
+                    PEInspectorRow(label: "Idle Duration") {
                         HStack(spacing: 4) {
                             TextField("", value: currentStateDoubleBinding(for: "idleDuration", fallback: 0.0), format: .number.precision(.fractionLength(0...2)))
                                 .textFieldStyle(.roundedBorder)
@@ -131,7 +131,7 @@ public struct ParticleEmitterEditor: View {
                         }
                     }
                     
-                    InspectorRow(label: "Warmup Duration") {
+                    PEInspectorRow(label: "Warmup Duration") {
                         HStack(spacing: 4) {
                             TextField("", value: currentStateDoubleBinding(for: "warmupDuration", fallback: 0.0), format: .number.precision(.fractionLength(0...2)))
                                 .textFieldStyle(.roundedBorder)
@@ -142,7 +142,7 @@ public struct ParticleEmitterEditor: View {
                         }
                     }
                     
-                    InspectorRow(label: "Speed") {
+                    PEInspectorRow(label: "Speed") {
                         HStack(spacing: 4) {
                             TextField("", value: currentStateDoubleBinding(for: "simulationSpeed", fallback: 1.0), format: .number.precision(.fractionLength(0...2)))
                                 .textFieldStyle(.roundedBorder)
@@ -160,7 +160,7 @@ public struct ParticleEmitterEditor: View {
             // Shape Section
             DisclosureGroup("Shape", isExpanded: $shapeExpanded) {
                 VStack(alignment: .leading, spacing: 8) {
-                    InspectorRow(label: "Emitter Shape") {
+                    PEInspectorRow(label: "Emitter Shape") {
                         Picker("", selection: currentStateStringBinding(for: "emitterShape", fallback: "Plane")) {
                             Text("Box").tag("Box")
                             Text("Sphere").tag("Sphere")
@@ -177,23 +177,23 @@ public struct ParticleEmitterEditor: View {
                     // Shape-specific fields
                     if let shape = currentStateValues["emitterShape"], case .string(let shapeName) = shape {
                         if shapeName == "Torus" {
-                            InspectorRow(label: "Inner Radius") {
-                                TextField("", value: currentStateFloatBinding(for: "torusInnerRadius", fallback: 0.5), format: .number.precision(.fractionLength(0...2)))
+                            PEInspectorRow(label: "Inner Radius") {
+                                TextField("", value: currentStateDoubleBinding(for: "torusInnerRadius", fallback: 0.5), format: .number.precision(.fractionLength(0...2)))
                                     .textFieldStyle(.roundedBorder)
                                     .frame(width: 80)
                             }
                         }
                         
                         if ["Sphere", "Cone", "Cylinder", "Torus"].contains(shapeName) {
-                            InspectorRow(label: "Radial Amount") {
-                                TextField("", value: currentStateFloatBinding(for: "radialAmount", fallback: Float.pi), format: .number.precision(.fractionLength(0...2)))
+                            PEInspectorRow(label: "Radial Amount") {
+                                TextField("", value: currentStateDoubleBinding(for: "radialAmount", fallback: Double.pi), format: .number.precision(.fractionLength(0...2)))
                                     .textFieldStyle(.roundedBorder)
                                     .frame(width: 80)
                             }
                         }
                     }
                     
-                    InspectorRow(label: "Birth Location") {
+                    PEInspectorRow(label: "Birth Location") {
                         Picker("", selection: currentStateStringBinding(for: "birthLocation", fallback: "Surface")) {
                             Text("Surface").tag("Surface")
                             Text("Volume").tag("Volume")
@@ -203,7 +203,7 @@ public struct ParticleEmitterEditor: View {
                         .frame(width: 120)
                     }
                     
-                    InspectorRow(label: "Birth Direction") {
+                    PEInspectorRow(label: "Birth Direction") {
                         Picker("", selection: currentStateStringBinding(for: "birthDirection", fallback: "Normal")) {
                             Text("Normal").tag("Normal")
                             Text("World").tag("World")
@@ -213,7 +213,7 @@ public struct ParticleEmitterEditor: View {
                         .frame(width: 120)
                     }
                     
-                    InspectorRow(label: "Shape Size") {
+                    PEInspectorRow(label: "Shape Size") {
                         HStack(spacing: 4) {
                             TextField("X", text: vectorComponentBinding(for: "shapeSize", index: 0, fallback: 0.1))
                                 .textFieldStyle(.roundedBorder)
@@ -242,7 +242,7 @@ public struct ParticleEmitterEditor: View {
             // Spawning Section
             DisclosureGroup("Spawning", isExpanded: $spawningExpanded) {
                 VStack(alignment: .leading, spacing: 8) {
-                    InspectorRow(label: "Spawn Occasion") {
+                    PEInspectorRow(label: "Spawn Occasion") {
                         Picker("", selection: currentStateStringBinding(for: "spawnOccasion", fallback: "OnDeath")) {
                             Text("On Birth").tag("OnBirth")
                             Text("On Death").tag("OnDeath")
@@ -252,20 +252,20 @@ public struct ParticleEmitterEditor: View {
                         .frame(width: 120)
                     }
                     
-                    InspectorRow(label: "Velocity Factor") {
-                        TextField("", value: currentStateFloatBinding(for: "spawnVelocityFactor", fallback: 1.0), format: .number.precision(.fractionLength(0...2)))
+                    PEInspectorRow(label: "Velocity Factor") {
+                        TextField("", value: currentStateDoubleBinding(for: "spawnVelocityFactor", fallback: 1.0), format: .number.precision(.fractionLength(0...2)))
                             .textFieldStyle(.roundedBorder)
                             .frame(width: 80)
                     }
                     
-                    InspectorRow(label: "Spread Factor") {
-                        TextField("", value: currentStateFloatBinding(for: "spawnSpreadFactor", fallback: 0.0), format: .number.precision(.fractionLength(0...4)))
+                    PEInspectorRow(label: "Spread Factor") {
+                        TextField("", value: currentStateDoubleBinding(for: "spawnSpreadFactor", fallback: 0.0), format: .number.precision(.fractionLength(0...4)))
                             .textFieldStyle(.roundedBorder)
                             .frame(width: 80)
                     }
                     
-                    InspectorRow(label: "Spread Variation") {
-                        TextField("", value: currentStateFloatBinding(for: "spawnSpreadFactorVariation", fallback: 0.0), format: .number.precision(.fractionLength(0...4)))
+                    PEInspectorRow(label: "Spread Variation") {
+                        TextField("", value: currentStateDoubleBinding(for: "spawnSpreadFactorVariation", fallback: 0.0), format: .number.precision(.fractionLength(0...4)))
                             .textFieldStyle(.roundedBorder)
                             .frame(width: 80)
                     }
@@ -295,26 +295,26 @@ public struct ParticleEmitterEditor: View {
             // Main Section
             DisclosureGroup("Main", isExpanded: $mainExpanded) {
                 VStack(alignment: .leading, spacing: 8) {
-                    InspectorRow(label: "Birth Rate") {
-                        TextField("", value: emitterFloatBinding(for: "birthRate", fallback: 100.0), format: .number.precision(.fractionLength(0...0)))
+                    PEInspectorRow(label: "Birth Rate") {
+                        TextField("", value: emitterDoubleBinding(for: "birthRate", fallback: 100.0), format: .number.precision(.fractionLength(0...0)))
                             .textFieldStyle(.roundedBorder)
                             .frame(width: 80)
                     }
                     
-                    InspectorRow(label: "Birth Rate Variation") {
-                        TextField("", value: emitterFloatBinding(for: "birthRateVariation", fallback: 0.0), format: .number.precision(.fractionLength(0...0)))
+                    PEInspectorRow(label: "Birth Rate Variation") {
+                        TextField("", value: emitterDoubleBinding(for: "birthRateVariation", fallback: 0.0), format: .number.precision(.fractionLength(0...0)))
                             .textFieldStyle(.roundedBorder)
                             .frame(width: 80)
                     }
                     
-                    InspectorRow(label: "Burst Count") {
-                        TextField("", value: emitterIntBinding(for: "burstCount", fallback: 100), format: .number)
+                    PEInspectorRow(label: "Burst Count") {
+                        TextField("", value: emitterIntStringBinding(for: "burstCount", fallback: 100))
                             .textFieldStyle(.roundedBorder)
                             .frame(width: 80)
                     }
                     
-                    InspectorRow(label: "Burst Count Variation") {
-                        TextField("", value: emitterIntBinding(for: "burstCountVariation", fallback: 0), format: .number)
+                    PEInspectorRow(label: "Burst Count Variation") {
+                        TextField("", value: emitterIntStringBinding(for: "burstCountVariation", fallback: 0))
                             .textFieldStyle(.roundedBorder)
                             .frame(width: 80)
                     }
@@ -326,7 +326,7 @@ public struct ParticleEmitterEditor: View {
             // Properties Section
             DisclosureGroup("Properties", isExpanded: $propertiesExpanded) {
                 VStack(alignment: .leading, spacing: 8) {
-                    InspectorRow(label: "Life Span") {
+                    PEInspectorRow(label: "Life Span") {
                         HStack(spacing: 4) {
                             TextField("", value: emitterDoubleBinding(for: "particleLifeSpan", fallback: 1.0), format: .number.precision(.fractionLength(0...2)))
                                 .textFieldStyle(.roundedBorder)
@@ -337,7 +337,7 @@ public struct ParticleEmitterEditor: View {
                         }
                     }
                     
-                    InspectorRow(label: "Life Span Variation") {
+                    PEInspectorRow(label: "Life Span Variation") {
                         HStack(spacing: 4) {
                             TextField("", value: emitterDoubleBinding(for: "particleLifeSpanVariation", fallback: 0.0), format: .number.precision(.fractionLength(0...2)))
                                 .textFieldStyle(.roundedBorder)
@@ -348,9 +348,9 @@ public struct ParticleEmitterEditor: View {
                         }
                     }
                     
-                    InspectorRow(label: "Size") {
+                    PEInspectorRow(label: "Size") {
                         HStack(spacing: 4) {
-                            TextField("", value: emitterFloatBinding(for: "particleSize", fallback: 0.02), format: .number.precision(.fractionLength(0...3)))
+                            TextField("", value: emitterDoubleBinding(for: "particleSize", fallback: 0.02), format: .number.precision(.fractionLength(0...3)))
                                 .textFieldStyle(.roundedBorder)
                                 .frame(width: 60)
                             Text("cm")
@@ -359,9 +359,9 @@ public struct ParticleEmitterEditor: View {
                         }
                     }
                     
-                    InspectorRow(label: "Size Variation") {
+                    PEInspectorRow(label: "Size Variation") {
                         HStack(spacing: 4) {
-                            TextField("", value: emitterFloatBinding(for: "particleSizeVariation", fallback: 0.0), format: .number.precision(.fractionLength(0...3)))
+                            TextField("", value: emitterDoubleBinding(for: "particleSizeVariation", fallback: 0.0), format: .number.precision(.fractionLength(0...3)))
                                 .textFieldStyle(.roundedBorder)
                                 .frame(width: 60)
                             Text("cm")
@@ -370,21 +370,21 @@ public struct ParticleEmitterEditor: View {
                         }
                     }
                     
-                    InspectorRow(label: "Size Over Life") {
-                        TextField("", value: emitterFloatBinding(for: "sizeOverLife", fallback: 1.0), format: .number.precision(.fractionLength(0...2)))
+                    PEInspectorRow(label: "Size Over Life") {
+                        TextField("", value: emitterDoubleBinding(for: "sizeOverLife", fallback: 1.0), format: .number.precision(.fractionLength(0...2)))
                             .textFieldStyle(.roundedBorder)
                             .frame(width: 80)
                     }
                     
-                    InspectorRow(label: "Size Over Life Power") {
-                        TextField("", value: emitterFloatBinding(for: "sizeOverLifePower", fallback: 1.0), format: .number.precision(.fractionLength(0...2)))
+                    PEInspectorRow(label: "Size Over Life Power") {
+                        TextField("", value: emitterDoubleBinding(for: "sizeOverLifePower", fallback: 1.0), format: .number.precision(.fractionLength(0...2)))
                             .textFieldStyle(.roundedBorder)
                             .frame(width: 80)
                     }
                     
-                    InspectorRow(label: "Mass") {
+                    PEInspectorRow(label: "Mass") {
                         HStack(spacing: 4) {
-                            TextField("", value: emitterFloatBinding(for: "particleMass", fallback: 1.0), format: .number.precision(.fractionLength(0...2)))
+                            TextField("", value: emitterDoubleBinding(for: "particleMass", fallback: 1.0), format: .number.precision(.fractionLength(0...2)))
                                 .textFieldStyle(.roundedBorder)
                                 .frame(width: 60)
                             Text("g")
@@ -393,9 +393,9 @@ public struct ParticleEmitterEditor: View {
                         }
                     }
                     
-                    InspectorRow(label: "Mass Variation") {
+                    PEInspectorRow(label: "Mass Variation") {
                         HStack(spacing: 4) {
-                            TextField("", value: emitterFloatBinding(for: "particleMassVariation", fallback: 0.0), format: .number.precision(.fractionLength(0...2)))
+                            TextField("", value: emitterDoubleBinding(for: "particleMassVariation", fallback: 0.0), format: .number.precision(.fractionLength(0...2)))
                                 .textFieldStyle(.roundedBorder)
                                 .frame(width: 60)
                             Text("g")
@@ -404,7 +404,7 @@ public struct ParticleEmitterEditor: View {
                         }
                     }
                     
-                    InspectorRow(label: "Orientation Mode") {
+                    PEInspectorRow(label: "Orientation Mode") {
                         Picker("", selection: emitterStringBinding(for: "billboardMode", fallback: "Billboard")) {
                             Text("Billboard").tag("Billboard")
                             Text("Billboard Y Aligned").tag("BillboardYAligned")
@@ -414,9 +414,9 @@ public struct ParticleEmitterEditor: View {
                         .frame(width: 150)
                     }
                     
-                    InspectorRow(label: "Angle") {
+                    PEInspectorRow(label: "Angle") {
                         HStack(spacing: 4) {
-                            TextField("", value: emitterFloatBinding(for: "particleAngle", fallback: 0.0), format: .number.precision(.fractionLength(0...1)))
+                            TextField("", value: emitterDoubleBinding(for: "particleAngle", fallback: 0.0), format: .number.precision(.fractionLength(0...1)))
                                 .textFieldStyle(.roundedBorder)
                                 .frame(width: 60)
                             Text("°")
@@ -425,9 +425,9 @@ public struct ParticleEmitterEditor: View {
                         }
                     }
                     
-                    InspectorRow(label: "Angle Variation") {
+                    PEInspectorRow(label: "Angle Variation") {
                         HStack(spacing: 4) {
-                            TextField("", value: emitterFloatBinding(for: "particleAngleVariation", fallback: 0.0), format: .number.precision(.fractionLength(0...1)))
+                            TextField("", value: emitterDoubleBinding(for: "particleAngleVariation", fallback: 0.0), format: .number.precision(.fractionLength(0...1)))
                                 .textFieldStyle(.roundedBorder)
                                 .frame(width: 60)
                             Text("°")
@@ -436,8 +436,8 @@ public struct ParticleEmitterEditor: View {
                         }
                     }
                     
-                    InspectorRow(label: "Stretch Factor") {
-                        TextField("", value: emitterFloatBinding(for: "stretchFactor", fallback: 0.0), format: .number.precision(.fractionLength(0...2)))
+                    PEInspectorRow(label: "Stretch Factor") {
+                        TextField("", value: emitterDoubleBinding(for: "stretchFactor", fallback: 0.0), format: .number.precision(.fractionLength(0...2)))
                             .textFieldStyle(.roundedBorder)
                             .frame(width: 80)
                     }
@@ -459,13 +459,19 @@ public struct ParticleEmitterEditor: View {
                             .toggleStyle(.checkbox)
                     }
                     
-                    // Color picker for startColorA
-                    ColorPicker("", selection: colorBinding(for: "startColorA"))
-                        .labelsHidden()
+                    // Color text field for startColorA
+                    PEInspectorRow(label: "") {
+                        TextField("RGBA", text: emitterColorStringBinding(for: "startColorA", fallback: "(1, 1, 1, 1)"))
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 150)
+                    }
                     
                     if let useRange = emitterValues["useStartColorRange"], case .bool(let isRange) = useRange, isRange {
-                        ColorPicker("", selection: colorBinding(for: "startColorB"))
-                            .labelsHidden()
+                        PEInspectorRow(label: "") {
+                            TextField("RGBA", text: emitterColorStringBinding(for: "startColorB", fallback: "(1, 1, 1, 1)"))
+                                .textFieldStyle(.roundedBorder)
+                                .frame(width: 150)
+                        }
                     }
                     
                     Divider()
@@ -485,24 +491,30 @@ public struct ParticleEmitterEditor: View {
                             .font(.system(size: 10))
                             .toggleStyle(.checkbox)
                         
-                        ColorPicker("", selection: colorBinding(for: "endColorA"))
-                            .labelsHidden()
+                        PEInspectorRow(label: "") {
+                            TextField("RGBA", text: emitterColorStringBinding(for: "endColorA", fallback: "(1, 1, 1, 1)"))
+                                .textFieldStyle(.roundedBorder)
+                                .frame(width: 150)
+                        }
                         
                         if let useRange = emitterValues["useEndColorRange"], case .bool(let isRange) = useRange, isRange {
-                            ColorPicker("", selection: colorBinding(for: "endColorB"))
-                                .labelsHidden()
+                            PEInspectorRow(label: "") {
+                                TextField("RGBA", text: emitterColorStringBinding(for: "endColorB", fallback: "(1, 1, 1, 1)"))
+                                    .textFieldStyle(.roundedBorder)
+                                    .frame(width: 150)
+                            }
                         }
                     }
                     
                     Divider()
                     
-                    InspectorRow(label: "Color Evolution Power") {
-                        TextField("", value: emitterFloatBinding(for: "colorEvolutionPower", fallback: 1.0), format: .number.precision(.fractionLength(0...2)))
+                    PEInspectorRow(label: "Color Evolution Power") {
+                        TextField("", value: emitterDoubleBinding(for: "colorEvolutionPower", fallback: 1.0), format: .number.precision(.fractionLength(0...2)))
                             .textFieldStyle(.roundedBorder)
                             .frame(width: 80)
                     }
                     
-                    InspectorRow(label: "Opacity Over Life") {
+                    PEInspectorRow(label: "Opacity Over Life") {
                         Picker("", selection: emitterStringBinding(for: "opacityOverLife", fallback: "QuickFadeInOut")) {
                             Text("Constant").tag("Constant")
                             Text("Ease Fade In").tag("EaseFadeIn")
@@ -523,8 +535,7 @@ public struct ParticleEmitterEditor: View {
             // Textures Section
             DisclosureGroup("Textures", isExpanded: $texturesExpanded) {
                 VStack(alignment: .leading, spacing: 8) {
-                    // TODO: Asset picker for particleImage
-                    InspectorRow(label: "Particle Image") {
+                    PEInspectorRow(label: "Particle Image") {
                         Button("Choose...") {
                             // TODO: Open file picker
                         }
@@ -532,7 +543,7 @@ public struct ParticleEmitterEditor: View {
                         .controlSize(.small)
                     }
                     
-                    InspectorRow(label: "Blend Mode") {
+                    PEInspectorRow(label: "Blend Mode") {
                         Picker("", selection: emitterStringBinding(for: "blendMode", fallback: "Alpha")) {
                             Text("Alpha").tag("Alpha")
                             Text("Additive").tag("Additive")
@@ -554,43 +565,43 @@ public struct ParticleEmitterEditor: View {
                         .toggleStyle(.checkbox)
                     
                     if let isAnim = emitterValues["isAnimated"], case .bool(let animated) = isAnim, animated {
-                        InspectorRow(label: "Frame Rate") {
-                            TextField("", value: emitterFloatBinding(for: "frameRate", fallback: 12.0), format: .number.precision(.fractionLength(0...1)))
+                        PEInspectorRow(label: "Frame Rate") {
+                            TextField("", value: emitterDoubleBinding(for: "frameRate", fallback: 12.0), format: .number.precision(.fractionLength(0...1)))
                                 .textFieldStyle(.roundedBorder)
                                 .frame(width: 80)
                         }
                         
-                        InspectorRow(label: "Frame Rate Variation") {
-                            TextField("", value: emitterFloatBinding(for: "frameRateVariation", fallback: 0.0), format: .number.precision(.fractionLength(0...1)))
+                        PEInspectorRow(label: "Frame Rate Variation") {
+                            TextField("", value: emitterDoubleBinding(for: "frameRateVariation", fallback: 0.0), format: .number.precision(.fractionLength(0...1)))
                                 .textFieldStyle(.roundedBorder)
                                 .frame(width: 80)
                         }
                         
-                        InspectorRow(label: "Initial Frame") {
-                            TextField("", value: emitterIntBinding(for: "initialFrame", fallback: 0), format: .number)
+                        PEInspectorRow(label: "Initial Frame") {
+                            TextField("", value: emitterIntStringBinding(for: "initialFrame", fallback: 0))
                                 .textFieldStyle(.roundedBorder)
                                 .frame(width: 80)
                         }
                         
-                        InspectorRow(label: "Initial Frame Variation") {
-                            TextField("", value: emitterIntBinding(for: "initialFrameVariation", fallback: 0), format: .number)
+                        PEInspectorRow(label: "Initial Frame Variation") {
+                            TextField("", value: emitterIntStringBinding(for: "initialFrameVariation", fallback: 0))
                                 .textFieldStyle(.roundedBorder)
                                 .frame(width: 80)
                         }
                         
-                        InspectorRow(label: "Row Count") {
-                            TextField("", value: emitterIntBinding(for: "rowCount", fallback: 1), format: .number)
+                        PEInspectorRow(label: "Row Count") {
+                            TextField("", value: emitterIntStringBinding(for: "rowCount", fallback: 1))
                                 .textFieldStyle(.roundedBorder)
                                 .frame(width: 80)
                         }
                         
-                        InspectorRow(label: "Column Count") {
-                            TextField("", value: emitterIntBinding(for: "columnCount", fallback: 1), format: .number)
+                        PEInspectorRow(label: "Column Count") {
+                            TextField("", value: emitterIntStringBinding(for: "columnCount", fallback: 1))
                                 .textFieldStyle(.roundedBorder)
                                 .frame(width: 80)
                         }
                         
-                        InspectorRow(label: "Animation Mode") {
+                        PEInspectorRow(label: "Animation Mode") {
                             Picker("", selection: emitterStringBinding(for: "animationRepeatMode", fallback: "Looping")) {
                                 Text("Looping").tag("Looping")
                                 Text("Auto Reverse").tag("AutoReverse")
@@ -608,7 +619,7 @@ public struct ParticleEmitterEditor: View {
             // Motion Section
             DisclosureGroup("Motion", isExpanded: $motionExpanded) {
                 VStack(alignment: .leading, spacing: 8) {
-                    InspectorRow(label: "Acceleration") {
+                    PEInspectorRow(label: "Acceleration") {
                         HStack(spacing: 4) {
                             TextField("X", text: emitterVectorComponentBinding(for: "acceleration", index: 0, fallback: 0.0))
                                 .textFieldStyle(.roundedBorder)
@@ -622,15 +633,15 @@ public struct ParticleEmitterEditor: View {
                         }
                     }
                     
-                    InspectorRow(label: "Drag") {
-                        TextField("", value: emitterFloatBinding(for: "dampingFactor", fallback: 0.0), format: .number.precision(.fractionLength(0...2)))
+                    PEInspectorRow(label: "Drag") {
+                        TextField("", value: emitterDoubleBinding(for: "dampingFactor", fallback: 0.0), format: .number.precision(.fractionLength(0...2)))
                             .textFieldStyle(.roundedBorder)
                             .frame(width: 80)
                     }
                     
-                    InspectorRow(label: "Spreading Angle") {
+                    PEInspectorRow(label: "Spreading Angle") {
                         HStack(spacing: 4) {
-                            TextField("", value: emitterFloatBinding(for: "spreadingAngle", fallback: 0.0), format: .number.precision(.fractionLength(0...1)))
+                            TextField("", value: emitterDoubleBinding(for: "spreadingAngle", fallback: 0.0), format: .number.precision(.fractionLength(0...1)))
                                 .textFieldStyle(.roundedBorder)
                                 .frame(width: 60)
                             Text("°")
@@ -639,9 +650,9 @@ public struct ParticleEmitterEditor: View {
                         }
                     }
                     
-                    InspectorRow(label: "Angular Velocity") {
+                    PEInspectorRow(label: "Angular Velocity") {
                         HStack(spacing: 4) {
-                            TextField("", value: emitterFloatBinding(for: "particleAngularVelocity", fallback: 0.0), format: .number.precision(.fractionLength(0...1)))
+                            TextField("", value: emitterDoubleBinding(for: "particleAngularVelocity", fallback: 0.0), format: .number.precision(.fractionLength(0...1)))
                                 .textFieldStyle(.roundedBorder)
                                 .frame(width: 60)
                             Text("rad/s")
@@ -650,9 +661,9 @@ public struct ParticleEmitterEditor: View {
                         }
                     }
                     
-                    InspectorRow(label: "Angular Velocity Var") {
+                    PEInspectorRow(label: "Angular Velocity Var") {
                         HStack(spacing: 4) {
-                            TextField("", value: emitterFloatBinding(for: "particleAngularVelocityVariation", fallback: 0.0), format: .number.precision(.fractionLength(0...1)))
+                            TextField("", value: emitterDoubleBinding(for: "particleAngularVelocityVariation", fallback: 0.0), format: .number.precision(.fractionLength(0...1)))
                                 .textFieldStyle(.roundedBorder)
                                 .frame(width: 60)
                             Text("rad/s")
@@ -672,7 +683,7 @@ public struct ParticleEmitterEditor: View {
                         .font(.system(size: 11))
                         .toggleStyle(.checkbox)
                     
-                    InspectorRow(label: "Sort Order") {
+                    PEInspectorRow(label: "Sort Order") {
                         Picker("", selection: emitterStringBinding(for: "sortOrder", fallback: "Unsorted")) {
                             Text("Unsorted").tag("Unsorted")
                             Text("Increasing ID").tag("IncreasingID")
@@ -693,7 +704,7 @@ public struct ParticleEmitterEditor: View {
             // Force Fields Section
             DisclosureGroup("Force Fields", isExpanded: $forceFieldsExpanded) {
                 VStack(alignment: .leading, spacing: 8) {
-                    InspectorRow(label: "Attraction Center") {
+                    PEInspectorRow(label: "Attraction Center") {
                         HStack(spacing: 4) {
                             TextField("X", text: emitterVectorComponentBinding(for: "radialGravityCenter", index: 0, fallback: 0.0))
                                 .textFieldStyle(.roundedBorder)
@@ -707,13 +718,13 @@ public struct ParticleEmitterEditor: View {
                         }
                     }
                     
-                    InspectorRow(label: "Attraction Strength") {
-                        TextField("", value: emitterFloatBinding(for: "radialGravityStrength", fallback: 0.0), format: .number.precision(.fractionLength(0...2)))
+                    PEInspectorRow(label: "Attraction Strength") {
+                        TextField("", value: emitterDoubleBinding(for: "radialGravityStrength", fallback: 0.0), format: .number.precision(.fractionLength(0...2)))
                             .textFieldStyle(.roundedBorder)
                             .frame(width: 80)
                     }
                     
-                    InspectorRow(label: "Vortex Direction") {
+                    PEInspectorRow(label: "Vortex Direction") {
                         HStack(spacing: 4) {
                             TextField("X", text: emitterVectorComponentBinding(for: "vortexDirection", index: 0, fallback: 0.0))
                                 .textFieldStyle(.roundedBorder)
@@ -727,26 +738,26 @@ public struct ParticleEmitterEditor: View {
                         }
                     }
                     
-                    InspectorRow(label: "Vortex Strength") {
-                        TextField("", value: emitterFloatBinding(for: "vortexStrength", fallback: 0.0), format: .number.precision(.fractionLength(0...2)))
+                    PEInspectorRow(label: "Vortex Strength") {
+                        TextField("", value: emitterDoubleBinding(for: "vortexStrength", fallback: 0.0), format: .number.precision(.fractionLength(0...2)))
                             .textFieldStyle(.roundedBorder)
                             .frame(width: 80)
                     }
                     
-                    InspectorRow(label: "Noise Strength") {
-                        TextField("", value: emitterFloatBinding(for: "noiseStrength", fallback: 0.0), format: .number.precision(.fractionLength(0...2)))
+                    PEInspectorRow(label: "Noise Strength") {
+                        TextField("", value: emitterDoubleBinding(for: "noiseStrength", fallback: 0.0), format: .number.precision(.fractionLength(0...2)))
                             .textFieldStyle(.roundedBorder)
                             .frame(width: 80)
                     }
                     
-                    InspectorRow(label: "Noise Scale") {
-                        TextField("", value: emitterFloatBinding(for: "noiseScale", fallback: 1.0), format: .number.precision(.fractionLength(0...2)))
+                    PEInspectorRow(label: "Noise Scale") {
+                        TextField("", value: emitterDoubleBinding(for: "noiseScale", fallback: 1.0), format: .number.precision(.fractionLength(0...2)))
                             .textFieldStyle(.roundedBorder)
                             .frame(width: 80)
                     }
                     
-                    InspectorRow(label: "Noise Speed") {
-                        TextField("", value: emitterFloatBinding(for: "noiseAnimationSpeed", fallback: 1.0), format: .number.precision(.fractionLength(0...2)))
+                    PEInspectorRow(label: "Noise Speed") {
+                        TextField("", value: emitterDoubleBinding(for: "noiseAnimationSpeed", fallback: 1.0), format: .number.precision(.fractionLength(0...2)))
                             .textFieldStyle(.roundedBorder)
                             .frame(width: 80)
                     }
@@ -782,26 +793,11 @@ public struct ParticleEmitterEditor: View {
         Binding(
             get: {
                 if case .double(let value) = currentStateValues[key] { return value }
-                if case .float(let value) = currentStateValues[key] { return Double(value) }
                 return fallback
             },
             set: { newValue in
                 currentStateValues[key] = .double(newValue)
                 onCurrentStateChanged(key, .double(newValue))
-            }
-        )
-    }
-    
-    private func currentStateFloatBinding(for key: String, fallback: Float) -> Binding<Float> {
-        Binding(
-            get: {
-                if case .float(let value) = currentStateValues[key] { return value }
-                if case .double(let value) = currentStateValues[key] { return Float(value) }
-                return fallback
-            },
-            set: { newValue in
-                currentStateValues[key] = .float(newValue)
-                onCurrentStateChanged(key, .float(newValue))
             }
         )
     }
@@ -819,32 +815,34 @@ public struct ParticleEmitterEditor: View {
         )
     }
     
-    private func vectorComponentBinding(for key: String, index: Int, fallback: Float) -> Binding<String> {
+    private func vectorComponentBinding(for key: String, index: Int, fallback: Double) -> Binding<String> {
         Binding(
             get: {
-                if case .vector3(let vec) = currentStateValues[key] {
-                    let components = [vec.x, vec.y, vec.z]
-                    if index < components.count {
-                        return String(format: "%.3f", components[index])
+                if case .string(let str) = currentStateValues[key] {
+                    let components = parseVector3(str)
+                    let values = [components.x, components.y, components.z]
+                    if index < values.count {
+                        return String(format: "%.3f", values[index])
                     }
                 }
                 return String(format: "%.3f", fallback)
             },
             set: { newValue in
-                guard let floatValue = Float(newValue) else { return }
-                var currentVec: (x: Float, y: Float, z: Float) = (fallback, fallback, fallback)
-                if case .vector3(let vec) = currentStateValues[key] {
-                    currentVec = vec
+                guard let doubleValue = Double(newValue) else { return }
+                var currentComponents = (x: fallback, y: fallback, z: fallback)
+                if case .string(let str) = currentStateValues[key] {
+                    currentComponents = parseVector3(str)
                 }
-                let newVec: (x: Float, y: Float, z: Float)
+                let newComponents: (x: Double, y: Double, z: Double)
                 switch index {
-                case 0: newVec = (floatValue, currentVec.y, currentVec.z)
-                case 1: newVec = (currentVec.x, floatValue, currentVec.z)
-                case 2: newVec = (currentVec.x, currentVec.y, floatValue)
-                default: newVec = currentVec
+                case 0: newComponents = (doubleValue, currentComponents.y, currentComponents.z)
+                case 1: newComponents = (currentComponents.x, doubleValue, currentComponents.z)
+                case 2: newComponents = (currentComponents.x, currentComponents.y, doubleValue)
+                default: newComponents = currentComponents
                 }
-                currentStateValues[key] = .vector3(newVec)
-                onCurrentStateChanged(key, .vector3(newVec))
+                let vectorString = String(format: "(%.3f, %.3f, %.3f)", newComponents.x, newComponents.y, newComponents.z)
+                currentStateValues[key] = .string(vectorString)
+                onCurrentStateChanged(key, .string(vectorString))
             }
         )
     }
@@ -873,7 +871,6 @@ public struct ParticleEmitterEditor: View {
             get: {
                 let values = selectedEmitter == .main ? mainEmitterValues : spawnedEmitterValues
                 if case .double(let value) = values[key] { return value }
-                if case .float(let value) = values[key] { return Double(value) }
                 return fallback
             },
             set: { newValue in
@@ -888,40 +885,23 @@ public struct ParticleEmitterEditor: View {
         )
     }
     
-    private func emitterFloatBinding(for key: String, fallback: Float) -> Binding<Float> {
+    private func emitterIntStringBinding(for key: String, fallback: Int) -> Binding<String> {
         Binding(
             get: {
                 let values = selectedEmitter == .main ? mainEmitterValues : spawnedEmitterValues
-                if case .float(let value) = values[key] { return value }
-                if case .double(let value) = values[key] { return Float(value) }
-                return fallback
-            },
-            set: { newValue in
-                if selectedEmitter == .main {
-                    mainEmitterValues[key] = .float(newValue)
-                    onMainEmitterChanged(key, .float(newValue))
-                } else {
-                    spawnedEmitterValues[key] = .float(newValue)
-                    onSpawnedEmitterChanged(key, .float(newValue))
+                if case .double(let value) = values[key] {
+                    return String(Int(value))
                 }
-            }
-        )
-    }
-    
-    private func emitterIntBinding(for key: String, fallback: Int) -> Binding<Int> {
-        Binding(
-            get: {
-                let values = selectedEmitter == .main ? mainEmitterValues : spawnedEmitterValues
-                if case .int(let value) = values[key] { return value }
-                return fallback
+                return String(fallback)
             },
             set: { newValue in
+                guard let intValue = Int(newValue) else { return }
                 if selectedEmitter == .main {
-                    mainEmitterValues[key] = .int(newValue)
-                    onMainEmitterChanged(key, .int(newValue))
+                    mainEmitterValues[key] = .double(Double(intValue))
+                    onMainEmitterChanged(key, .double(Double(intValue)))
                 } else {
-                    spawnedEmitterValues[key] = .int(newValue)
-                    onSpawnedEmitterChanged(key, .int(newValue))
+                    spawnedEmitterValues[key] = .double(Double(intValue))
+                    onSpawnedEmitterChanged(key, .double(Double(intValue)))
                 }
             }
         )
@@ -946,66 +926,59 @@ public struct ParticleEmitterEditor: View {
         )
     }
     
-    private func emitterVectorComponentBinding(for key: String, index: Int, fallback: Float) -> Binding<String> {
+    private func emitterVectorComponentBinding(for key: String, index: Int, fallback: Double) -> Binding<String> {
         Binding(
             get: {
                 let values = selectedEmitter == .main ? mainEmitterValues : spawnedEmitterValues
-                if case .vector3(let vec) = values[key] {
-                    let components = [vec.x, vec.y, vec.z]
-                    if index < components.count {
-                        return String(format: "%.3f", components[index])
+                if case .string(let str) = values[key] {
+                    let components = parseVector3(str)
+                    let values = [components.x, components.y, components.z]
+                    if index < values.count {
+                        return String(format: "%.3f", values[index])
                     }
                 }
                 return String(format: "%.3f", fallback)
             },
             set: { newValue in
-                guard let floatValue = Float(newValue) else { return }
+                guard let doubleValue = Double(newValue) else { return }
                 let values = selectedEmitter == .main ? mainEmitterValues : spawnedEmitterValues
-                var currentVec: (x: Float, y: Float, z: Float) = (fallback, fallback, fallback)
-                if case .vector3(let vec) = values[key] {
-                    currentVec = vec
+                var currentComponents = (x: fallback, y: fallback, z: fallback)
+                if case .string(let str) = values[key] {
+                    currentComponents = parseVector3(str)
                 }
-                let newVec: (x: Float, y: Float, z: Float)
+                let newComponents: (x: Double, y: Double, z: Double)
                 switch index {
-                case 0: newVec = (floatValue, currentVec.y, currentVec.z)
-                case 1: newVec = (currentVec.x, floatValue, currentVec.z)
-                case 2: newVec = (currentVec.x, currentVec.y, floatValue)
-                default: newVec = currentVec
+                case 0: newComponents = (doubleValue, currentComponents.y, currentComponents.z)
+                case 1: newComponents = (currentComponents.x, doubleValue, currentComponents.z)
+                case 2: newComponents = (currentComponents.x, currentComponents.y, doubleValue)
+                default: newComponents = currentComponents
                 }
+                let vectorString = String(format: "(%.3f, %.3f, %.3f)", newComponents.x, newComponents.y, newComponents.z)
                 if selectedEmitter == .main {
-                    mainEmitterValues[key] = .vector3(newVec)
-                    onMainEmitterChanged(key, .vector3(newVec))
+                    mainEmitterValues[key] = .string(vectorString)
+                    onMainEmitterChanged(key, .string(vectorString))
                 } else {
-                    spawnedEmitterValues[key] = .vector3(newVec)
-                    onSpawnedEmitterChanged(key, .vector3(newVec))
+                    spawnedEmitterValues[key] = .string(vectorString)
+                    onSpawnedEmitterChanged(key, .string(vectorString))
                 }
             }
         )
     }
     
-    private func colorBinding(for key: String) -> Binding<Color> {
+    private func emitterColorStringBinding(for key: String, fallback: String) -> Binding<String> {
         Binding(
             get: {
                 let values = selectedEmitter == .main ? mainEmitterValues : spawnedEmitterValues
-                if case .vector4(let vec) = values[key] {
-                    return Color(red: Double(vec.x), green: Double(vec.y), blue: Double(vec.z), opacity: Double(vec.w))
-                }
-                if case .vector3(let vec) = values[key] {
-                    return Color(red: Double(vec.x), green: Double(vec.y), blue: Double(vec.z))
-                }
-                return Color.white
+                if case .string(let value) = values[key] { return value }
+                return fallback
             },
             set: { newValue in
-                // Convert Color to vector4 - requires platform-specific implementation
-                // For now, this is a placeholder
-                let components = newValue.cgColor?.components ?? [1, 1, 1, 1]
-                let vec = (x: Float(components[0]), y: Float(components[1]), z: Float(components[2]), w: Float(components[3]))
                 if selectedEmitter == .main {
-                    mainEmitterValues[key] = .vector4(vec)
-                    onMainEmitterChanged(key, .vector4(vec))
+                    mainEmitterValues[key] = .string(newValue)
+                    onMainEmitterChanged(key, .string(newValue))
                 } else {
-                    spawnedEmitterValues[key] = .vector4(vec)
-                    onSpawnedEmitterChanged(key, .vector4(vec))
+                    spawnedEmitterValues[key] = .string(newValue)
+                    onSpawnedEmitterChanged(key, .string(newValue))
                 }
             }
         )
@@ -1024,9 +997,28 @@ enum EmitterSelection {
     case spawned
 }
 
-// MARK: - Inspector Row Helper
+// MARK: - Helper Functions
 
-struct InspectorRow<Content: View>: View {
+private func parseVector3(_ str: String) -> (x: Double, y: Double, z: Double) {
+    // Parse format: "(x, y, z)" or "(x,y,z)"
+    let trimmed = str.trimmingCharacters(in: .whitespaces)
+    let withoutParens = trimmed.trimmingCharacters(in: CharacterSet(charactersIn: "()"))
+    let components = withoutParens.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+    
+    guard components.count == 3 else {
+        return (0, 0, 0)
+    }
+    
+    return (
+        Double(components[0]) ?? 0,
+        Double(components[1]) ?? 0,
+        Double(components[2]) ?? 0
+    )
+}
+
+// MARK: - Inspector Row Helper (prefixed to avoid conflict)
+
+struct PEInspectorRow<Content: View>: View {
     let label: String
     @ViewBuilder let content: () -> Content
     
