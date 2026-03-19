@@ -1,0 +1,246 @@
+# Particle Emitter - Verified Field Matrix
+
+**Component ID:** `RealityKit.VFXEmitter`  
+**Source fixture set:** `/Volumes/Plutonian/_Developer/Deconstructed/source/RCPComponentDiffFixtures/Sources/RCPComponentDiffFixtures/RCPComponentDiffFixtures.rkassets/Particle Emitter/`  
+**Total fixtures:** 107 files  
+**Last updated:** 2025-03-19
+
+---
+
+## Schema Structure
+
+Particle Emitter uses a two-tier architecture:
+
+```
+def RealityKitComponent "VFXEmitter" {
+    uniform token info:id = "RealityKit.VFXEmitter"
+    
+    def RealityKitStruct "currentState" {
+        // Emitter Tab fields (direct on currentState)
+        
+        def RealityKitStruct "mainEmitter" {
+            // Particles Tab fields (primary emitter)
+        }
+        
+        def RealityKitStruct "spawnedEmitter" {
+            // Secondary emitter (same schema as mainEmitter)
+        }
+    }
+}
+```
+
+---
+
+## Emitter Tab Fields (currentState)
+
+### Timing Section
+
+| UI Label | Field Name | Type | Default | Notes |
+|----------|------------|------|---------|-------|
+| Loop | `loops` | `bool` | `1` (ON) | Toggle looping |
+| Emission Duration | `emissionDuration` | `double` | — | Seconds |
+| Emission Duration Variation | `emissionDurationVariation` | `double` | — | Always authored with duration |
+| Idle Duration | `idleDuration` | `double` | — | Seconds between loops |
+| Warmup Duration | `warmupDuration` | `double` | — | Pre-simulation time |
+| Speed | `simulationSpeed` | `double` | — | Playback speed multiplier |
+
+### Shape Section
+
+| UI Label | Field Name | Type | Default | Notes |
+|----------|------------|------|---------|-------|
+| Emitter Shape | `emitterShape` | `token` | `"Plane"` | See shape options below |
+| Radial Amount | `radialAmount` | `float` | — | Radians. Shape-specific |
+| Torus Inner Radius | `torusInnerRadius` | `float` | — | Only for Torus shape |
+| Birth Location | `birthLocation` | `token` | `"Surface"` | `"Surface"`, `"Volume"`, `"Vertices"` |
+| Birth Direction | `birthDirection` | `token` | `"Normal"` | `"Normal"`, `"World"`, `"Local"` |
+| Emitter Shape Size | `shapeSize` | `float3` | — | Vector (x, y, z) |
+| Particles in Local Space | `isLocal` | `bool` | `0` (OFF) | Toggle |
+| Fields in Local Space | `simulationInLocalSpace` | `bool` | `0` (OFF) | Toggle |
+
+**Emitter Shape Options:**
+- `"Box"`
+- `"Sphere"` (+ `radialAmount`)
+- `"Cone"` (+ `radialAmount`)
+- `"Cylinder"` (+ `radialAmount`)
+- `"Plane"`
+- `"Point"`
+- `"Torus"` (+ `torusInnerRadius`, + `radialAmount`)
+
+### Spawning Section
+
+| UI Label | Field Name | Type | Default | Notes |
+|----------|------------|------|---------|-------|
+| Spawn Occasion | `spawnOccasion` | `token` | `"OnDeath"` | `"OnBirth"`, `"OnDeath"`, `"OnUpdate"` |
+| Spawn Velocity Factor | `spawnVelocityFactor` | `float` | — | Multiplier |
+| Spawn Spread Factor | `spawnSpreadFactor` | `float` | — | Radians |
+| Spawn Spread Factor Variation | `spawnSpreadFactorVariation` | `float` | — | Radians |
+| Inherit Color | `spawnInheritParentColor` | `bool` | `0` (OFF) | Toggle |
+
+---
+
+## Particles Tab Fields (mainEmitter)
+
+### Main Section
+
+| UI Label | Field Name | Type | Default | Notes |
+|----------|------------|------|---------|-------|
+| Birth Rate | `birthRate` | `float` | — | Particles per second |
+| Birth Rate Variation | `birthRateVariation` | `float` | — | |
+| Burst Count | `burstCount` | `int` | — | For burst mode |
+| Burst Count Variation | `burstCountVariation` | `int` | — | |
+
+### Properties Section
+
+| UI Label | Field Name | Type | Default | Notes |
+|----------|------------|------|---------|-------|
+| Life Span | `particleLifeSpan` | `double` | — | Seconds |
+| Life Span Variation | `particleLifeSpanVariation` | `double` | — | |
+| Size | `particleSize` | `float` | — | Base size |
+| Size Variation | `particleSizeVariation` | `float` | — | |
+| Size Over Life | `sizeOverLife` | `float` | — | End of life multiplier |
+| Size Over Life Power | `sizeOverLifePower` | `float` | — | Curve power |
+| Mass | `particleMass` | `float` | — | Grams |
+| Mass Variation | `particleMassVariation` | `float` | — | |
+| Orientation Mode | `billboardMode` | `token` | `"Billboard"` | See orientation options |
+| Angle | `particleAngle` | `float` | — | Degrees (stored as radians) |
+| Angle Variation | `particleAngleVariation` | `float` | — | Degrees (stored as radians) |
+| Stretch Factor | `stretchFactor` | `float` | — | |
+
+**Orientation Mode Options:**
+- `"Billboard"` - Face camera
+- `"BillboardYAligned"` - Face camera, Y-axis aligned
+- `"Free"` - No billboard
+
+### Color Section
+
+| UI Label | Field Name | Type | Default | Notes |
+|----------|------------|------|---------|-------|
+| Start Color A | `startColorA` | `float4` | — | RGBA |
+| Start Color B | `startColorB` | `float4` | — | For range mode |
+| Use Start Color Range | `useStartColorRange` | `bool` | `0` | Toggle range mode |
+| End Color A | `endColorA` | `float4` | — | RGBA |
+| End Color B | `endColorB` | `float4` | — | For range mode |
+| Use End Color | `useEndColor` | `bool` | `0` | Enable end color |
+| Use End Color Range | `useEndColorRange` | `bool` | `0` | Toggle range mode |
+| Color Evolution Power | `colorEvolutionPower` | `float` | — | |
+| Opacity Over Life Mode | `opacityOverLife` | `token` | `"QuickFadeInOut"` | See opacity options |
+
+**Opacity Over Life Options:**
+- `"Constant"`
+- `"EaseFadeIn"`
+- `"EaseFadeOut"`
+- `"GradualFadeInOut"`
+- `"LinearFadeIn"`
+- `"LinearFadeOut"`
+- `"QuickFadeInOut"`
+
+### Textures Section
+
+| UI Label | Field Name | Type | Default | Notes |
+|----------|------------|------|---------|-------|
+| Particle Image | `particleImage` | `asset` | — | Path to texture |
+| Blend Mode | `blendMode` | `token` | `"Alpha"` | `"Alpha"`, `"Additive"`, `"Opaque"` |
+
+### Textures/Animation Section
+
+| UI Label | Field Name | Type | Default | Notes |
+|----------|------------|------|---------|-------|
+| Is Animated | `isAnimated` | `bool` | `0` | Enable sprite animation |
+| Frame Rate | `frameRate` | `float` | — | Frames per second |
+| Frame Rate Variation | `frameRateVariation` | `float` | — | |
+| Initial Frame | `initialFrame` | `int64` | — | Starting frame |
+| Initial Frame Variation | `initialFrameVariation` | `int64` | — | |
+| Row Count | `rowCount` | `int64` | — | Sprite sheet rows |
+| Column Count | `columnCount` | `int64` | — | Sprite sheet columns |
+| Animation Repeat Mode | `animationRepeatMode` | `token` | — | See animation options |
+
+**Animation Repeat Mode Options:**
+- `"Looping"`
+- `"AutoReverse"`
+- `"PlayOnce"`
+
+### Motion Section
+
+| UI Label | Field Name | Type | Default | Notes |
+|----------|------------|------|---------|-------|
+| Acceleration | `acceleration` | `float3` | — | Vector (x, y, z) |
+| Drag | `dampingFactor` | `float` | — | UI calls it "Drag" |
+| Spreading Angle | `spreadingAngle` | `float` | — | Radians |
+| Angular Velocity | `particleAngularVelocity` | `float` | — | Rad/s |
+| Angular Velocity Variation | `particleAngularVelocityVariation` | `float` | — | Rad/s |
+
+### Rendering Section
+
+| UI Label | Field Name | Type | Default | Notes |
+|----------|------------|------|---------|-------|
+| Lighting Enabled | `isLightingEnabled` | `bool` | `0` | Toggle lighting |
+| Sort Order | `sortOrder` | `token` | `"Unsorted"` | See sort options |
+
+**Sort Order Options:**
+- `"Unsorted"`
+- `"IncreasingID"`
+- `"DecreasingID"`
+- `"IncreasingAge"`
+- `"DecreasingAge"`
+- `"IncreasingDepth"`
+- `"DecreasingDepth"`
+
+### Force Fields Section
+
+| UI Label | Field Name | Type | Default | Notes |
+|----------|------------|------|---------|-------|
+| Attraction Center | `radialGravityCenter` | `float3` | — | Position vector |
+| Attraction Strength | `radialGravityStrength` | `float` | — | |
+| Vortex Direction | `vortexDirection` | `float3` | — | Vector (x, y, z) |
+| Vortex Strength | `vortexStrength` | `float` | — | |
+| Noise Strength | `noiseStrength` | `float` | — | |
+| Noise Scale | `noiseScale` | `float` | — | |
+| Noise Animation Speed | `noiseAnimationSpeed` | `float` | — | |
+
+---
+
+## Secondary Emitter (spawnedEmitter)
+
+The `spawnedEmitter` struct has the **same schema** as `mainEmitter`. When secondary emitter is enabled:
+
+| UI Control | Field Name | Type | Notes |
+|------------|------------|------|-------|
+| Secondary Emitter Enabled | `isSpawningEnabled` | `bool` | On `currentState`, not inside struct |
+
+All fields from the Particles Tab sections above can be authored inside `spawnedEmitter`.
+
+---
+
+## Sparse Authoring Notes
+
+1. **Defaults don't write:** If a field matches its default value, it's not authored in the USDA
+2. **Variation fields co-authored:** When you set a variation field, the base field is also authored
+3. **Shape-specific fields:** Fields like `torusInnerRadius` only appear with the matching shape
+4. **Animation requires image:** `isAnimated` only works when `particleImage` is set
+5. **Secondary emitter:** Must enable `isSpawningEnabled` before `spawnedEmitter` fields author
+
+---
+
+## Implementation Checklist
+
+- [ ] Emitter Tab inspector (currentState fields)
+- [ ] Particles Tab inspector (mainEmitter fields)
+- [ ] Emitter dropdown (switch between mainEmitter/spawnedEmitter)
+- [ ] Secondary emitter enable/disable
+- [ ] Shape-specific conditional fields
+- [ ] Color range mode toggles
+- [ ] Sprite animation conditional fields
+- [ ] All token enums mapped to UI options
+- [ ] Float3 fields use vector inputs
+- [ ] Float4 color fields use color pickers
+- [ ] Asset fields use file pickers
+- [ ] Angle fields convert degrees ↔ radians
+
+---
+
+## Related Files
+
+- **Fixtures:** `RCPComponentDiffFixtures/Sources/RCPComponentDiffFixtures/RCPComponentDiffFixtures.rkassets/Particle Emitter/`
+- **Secondary:** `Secondary Emitter All.usda` - Shows complete spawnedEmitter schema
+- **BASE:** `BASE.usda` - Default state
+- **Tab Particles:** `Tab Particles.usda` - Empty mainEmitter (default particles state)

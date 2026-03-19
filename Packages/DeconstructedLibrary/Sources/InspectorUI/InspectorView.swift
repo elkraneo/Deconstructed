@@ -1220,6 +1220,9 @@ private struct ComponentParametersSection: View {
 	@State private var isCenterOfMassExpanded: Bool
 	@State private var isMovementLockingExpanded: Bool
 	@State private var selectedAnimationResourcePrimPath: String?
+	@State private var particleEmitterCurrentStateValues: [String: InspectorComponentParameterValue] = [:]
+	@State private var particleEmitterMainEmitterValues: [String: InspectorComponentParameterValue] = [:]
+	@State private var particleEmitterSpawnedEmitterValues: [String: InspectorComponentParameterValue] = [:]
 
 	init(
 		componentPath: String,
@@ -1363,9 +1366,11 @@ private struct ComponentParametersSection: View {
 						customDockingRegionEditor
 					} else if componentIdentifier == "RCP.BehaviorsContainer" {
 						behaviorsEditor
-					} else if componentIdentifier == "RealityKit.RigidBody" {
-						physicsBodyEditor
-					} else if parameters.isEmpty {
+				} else if componentIdentifier == "RealityKit.RigidBody" {
+					physicsBodyEditor
+				} else if componentIdentifier == "RealityKit.VFXEmitter" {
+					particleEmitterEditor
+				} else if parameters.isEmpty {
 					let visibleAttributes = authoredAttributes.filter { $0.name != "info:id" }
 					if visibleAttributes.isEmpty {
 						Text("No editable parameters mapped yet.")
@@ -2551,6 +2556,41 @@ private struct ComponentParametersSection: View {
 				)
 			}
 		}
+	}
+
+	private var particleEmitterEditor: some View {
+		ParticleEmitterEditor(
+			currentStateValues: $particleEmitterCurrentStateValues,
+			mainEmitterValues: $particleEmitterMainEmitterValues,
+			spawnedEmitterValues: $particleEmitterSpawnedEmitterValues,
+			onCurrentStateChanged: { key, value in
+				onRawAttributeChanged(
+					componentPath,
+					componentPath,
+					Self.inferType(from: value),
+					key,
+					Self.formatValue(value)
+				)
+			},
+			onMainEmitterChanged: { key, value in
+				onRawAttributeChanged(
+					componentPath + "/currentState/mainEmitter",
+					componentPath,
+					Self.inferType(from: value),
+					key,
+					Self.formatValue(value)
+				)
+			},
+			onSpawnedEmitterChanged: { key, value in
+				onRawAttributeChanged(
+					componentPath + "/currentState/spawnedEmitter",
+					componentPath,
+					Self.inferType(from: value),
+					key,
+					Self.formatValue(value)
+				)
+			}
+		)
 	}
 
 	private func physicsSubsection<Content: View>(
@@ -3812,6 +3852,33 @@ private struct EditableAxisField: View {
 		}
 
 		return try? Self.numberFormat.parseStrategy.parse(trimmed)
+	}
+
+	private static func inferType(from value: InspectorComponentParameterValue) -> String {
+		switch value {
+		case .bool: return "bool"
+		case .int: return "int64"
+		case .float, .double: return "float"
+		case .string: return "token"
+		case .vector3: return "float3"
+		case .vector4: return "float4"
+		case .color: return "color3f"
+		default: return "string"
+		}
+	}
+
+	private static func formatValue(_ value: InspectorComponentParameterValue) -> String {
+		switch value {
+		case .bool(let v): return v ? "1" : "0"
+		case .int(let v): return String(v)
+		case .float(let v): return String(format: "%g", v)
+		case .double(let v): return String(format: "%g", v)
+		case .string(let v): return v
+		case .vector3(let v): return String(format: "(%g, %g, %g)", v.x, v.y, v.z)
+		case .vector4(let v): return String(format: "(%g, %g, %g, %g)", v.x, v.y, v.z, v.w)
+		case .color(let v): return String(format: "(%g, %g, %g)", v.red, v.green, v.blue)
+		default: return ""
+		}
 	}
 }
 
