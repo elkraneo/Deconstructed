@@ -7,13 +7,4 @@
    <FileRef
       location = "group:Packages/DeconstructedLibrary">
    </FileRef>
-   <FileRef
-      location = "absolute:/Volumes/Plutonian/_Developer/USDInteropAdvanced">
-   </FileRef>
-   <FileRef
-      location = "absolute:/Volumes/Plutonian/_Developer/USDInterop">
-   </FileRef>
-   <FileRef
-      location = "absolute:/Volumes/Plutonian/_Developer/StageView">
-   </FileRef>
 </Workspace>
