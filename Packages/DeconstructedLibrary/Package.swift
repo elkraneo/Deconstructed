@@ -83,10 +83,6 @@ let package = Package(
 			targets: ["DeconstructedUSDInterop"]
 		),
 		.library(
-			name: "DeconstructedUSDPipeline",
-			targets: ["DeconstructedUSDPipeline"]
-		),
-		.library(
 			name: "InspectorModels",
 			targets: ["InspectorModels"]
 		),
@@ -117,20 +113,7 @@ let package = Package(
 		// ),
 		.package(
 			url: "https://github.com/Reality2713/USDInterop",
-			from: "0.1.4"
-		),
-
-		// Private source is not accessible from this open-code repo. Use the public
-		// binary wrapper.
-		//
-		// .package(
-		//         name: "USDInteropAdvanced",
-		//         url: "https://github.com/Reality2713/USDInteropAdvanced-binaries",
-		//         from: "0.2.15"
-		//     ),
-		.package(
-			url: "https://github.com/Reality2713/USDInteropAdvanced",
-			from: "0.2.35"
+			from: "0.1.13"
 		),
 		.package(url: "https://github.com/reality2713/StageView.git", from: "0.1.4"),
 	],
@@ -285,16 +268,6 @@ let package = Package(
 					package: "swift-composable-architecture"
 				),
 				.product(name: "USDInterfaces", package: "USDInterop"),
-				.product(name: "USDInteropCxx", package: "USDInterop"),
-				.product(name: "USDInteropAdvancedCore", package: "USDInteropAdvanced"),
-				.product(
-					name: "USDInteropAdvancedUtils",
-					package: "USDInteropAdvanced"
-				),
-				.product(
-					name: "USDInteropAdvancedInspection",
-					package: "USDInteropAdvanced"
-				),
 			],
 			swiftSettings: [
 				.interoperabilityMode(.Cxx)
@@ -330,66 +303,9 @@ let package = Package(
 			name: "DeconstructedUSDInterop",
 			dependencies: [
 				.product(name: "USDInterfaces", package: "USDInterop"),
+				.product(name: "USDOperations", package: "USDInterop"),
 				.product(name: "USDInterop", package: "USDInterop"),
-				.product(name: "USDInteropAdvanced", package: "USDInteropAdvanced"),
 				.product(name: "USDInteropCxx", package: "USDInterop"),
-				.product(name: "USDInteropAdvancedCore", package: "USDInteropAdvanced"),
-				.product(
-					name: "USDInteropAdvancedUtils",
-					package: "USDInteropAdvanced"
-				),
-				.product(
-					name: "USDInteropAdvancedEditing",
-					package: "USDInteropAdvanced"
-				),
-				.product(
-					name: "USDInteropAdvancedInspection",
-					package: "USDInteropAdvanced"
-				),
-			],
-			swiftSettings: [
-				.interoperabilityMode(.Cxx),
-				.unsafeFlags(["-disable-cmo"], .when(configuration: .release)),
-			]
-		),
-		.target(
-			name: "DeconstructedUSDPipeline",
-			dependencies: [
-				.product(name: "USDInteropCxx", package: "USDInterop"),
-				.product(name: "USDInteropAdvanced", package: "USDInteropAdvanced"),
-				.product(
-					name: "USDInteropAdvancedAppleTools",
-					package: "USDInteropAdvanced"
-				),
-				.product(name: "USDInteropAdvancedCore", package: "USDInteropAdvanced"),
-				.product(
-					name: "USDInteropAdvancedEditing",
-					package: "USDInteropAdvanced"
-				),
-				.product(
-					name: "USDInteropAdvancedInspection",
-					package: "USDInteropAdvanced"
-				),
-				.product(
-					name: "USDInteropAdvancedPlugins",
-					package: "USDInteropAdvanced"
-				),
-				.product(
-					name: "USDInteropAdvancedSession",
-					package: "USDInteropAdvanced"
-				),
-				.product(
-					name: "USDInteropAdvancedSurgery",
-					package: "USDInteropAdvanced"
-				),
-				.product(
-					name: "USDInteropAdvancedUtils",
-					package: "USDInteropAdvanced"
-				),
-				.product(
-					name: "USDInteropAdvancedWorkflows",
-					package: "USDInteropAdvanced"
-				),
 			],
 			swiftSettings: [
 				.interoperabilityMode(.Cxx),
@@ -401,7 +317,6 @@ let package = Package(
 			dependencies: [
 				.product(name: "Sharing", package: "swift-sharing"),
 				.product(name: "USDInterfaces", package: "USDInterop"),
-				.product(name: "USDInteropAdvancedCore", package: "USDInteropAdvanced"),
 			]
 		),
 		.target(
@@ -415,16 +330,6 @@ let package = Package(
 					package: "swift-composable-architecture"
 				),
 				.product(name: "USDInterfaces", package: "USDInterop"),
-				.product(name: "USDInteropCxx", package: "USDInterop"),
-				.product(name: "USDInteropAdvancedCore", package: "USDInteropAdvanced"),
-				.product(
-					name: "USDInteropAdvancedUtils",
-					package: "USDInteropAdvanced"
-				),
-				.product(
-					name: "USDInteropAdvancedInspection",
-					package: "USDInteropAdvanced"
-				),
 			],
 			swiftSettings: [
 				.interoperabilityMode(.Cxx)
@@ -437,7 +342,6 @@ let package = Package(
 				"InspectorModels",
 				"SceneGraphModels",
 				.product(name: "Sharing", package: "swift-sharing"),
-				.product(name: "USDInteropAdvancedCore", package: "USDInteropAdvanced"),
 			],
 			swiftSettings: [
 				.interoperabilityMode(.Cxx)

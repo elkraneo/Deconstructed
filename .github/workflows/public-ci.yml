@@ -15,7 +15,7 @@ jobs:
   changes:
     runs-on: macos-26
     outputs:
-      usdinteropadvanced_related: ${{ steps.filter.outputs.usdinteropadvanced_related }}
+      usd_boundary_related: ${{ steps.filter.outputs.usd_boundary_related }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -27,10 +27,12 @@ jobs:
         uses: dorny/paths-filter@v3
         with:
           filters: |
-            usdinteropadvanced_related:
+            usd_boundary_related:
               - 'Packages/DeconstructedLibrary/Sources/DeconstructedUSDInterop/**'
               - 'Packages/DeconstructedLibrary/Package.swift'
+              - 'Package.swift'
               - 'Deconstructed.xcodeproj/project.pbxproj'
+              - '.github/scripts/check-usd-public-boundary.sh'
 
   guardrails:
     runs-on: macos-26
@@ -47,6 +49,9 @@ jobs:
       - name: Validate dependency sources in pushed commit range
         if: github.event_name == 'push'
         run: ./.github/scripts/verify-dependency-sources.sh . "${{ github.event.before }}..${{ github.sha }}"
+
+      - name: Validate public USD boundary
+        run: ./.github/scripts/check-usd-public-boundary.sh
 
   swift-package:
     runs-on: macos-26
@@ -72,10 +77,10 @@ jobs:
       - name: Test DeconstructedLibrary
         run: swift test --package-path Packages/DeconstructedLibrary
 
-  usdinteropadvanced-release-gate:
+  usd-boundary-release-gate:
     runs-on: macos-26
     needs: [changes, guardrails]
-    if: needs.changes.outputs.usdinteropadvanced_related == 'true'
+    if: needs.changes.outputs.usd_boundary_related == 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v4

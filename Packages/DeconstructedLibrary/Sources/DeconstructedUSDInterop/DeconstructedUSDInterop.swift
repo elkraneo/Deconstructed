@@ -3,10 +3,7 @@ import Foundation
 @_implementationOnly import OpenUSD
 import USDInterfaces
 import USDInterop
-import USDInteropAdvanced
-import USDInteropAdvancedCore
-import USDInteropAdvancedEditing
-import USDInteropAdvancedInspection
+import USDOperations
 
 // Local aliases for OpenUSD imported C++ symbols.
 // Keep these fileprivate so OpenUSD internals never leak into the module API.
@@ -162,31 +159,17 @@ public struct RealityKitComponentPrimInfo: Sendable, Hashable {
 	}
 }
 
-public struct USDSceneBounds: Sendable, Equatable {
-	public var min: SIMD3<Float>
-	public var max: SIMD3<Float>
-	public var center: SIMD3<Float>
-	public var maxExtent: Float
-
-	public init(min: SIMD3<Float>, max: SIMD3<Float>, center: SIMD3<Float>, maxExtent: Float) {
-		self.min = min
-		self.max = max
-		self.center = center
-		self.maxExtent = maxExtent
-	}
-}
-
 public enum DeconstructedUSDInterop {
-	private static let advancedClient = USDInteropAdvancedCore.USDAdvancedClient()
+	private static let operationsClient = USDOperationsClient()
 
 	// MARK: - Materials
 
 	public static func allMaterials(url: URL) -> [USDMaterialInfo] {
-		advancedClient.allMaterials(url: url)
+		operationsClient.allMaterials(url: url)
 	}
 
 	public static func materialBinding(url: URL, primPath: String) -> String? {
-		advancedClient.materialBinding(url: url, path: primPath)
+		operationsClient.materialBinding(url: url, path: primPath)
 	}
 
 	public static func setMaterialBinding(
@@ -195,16 +178,12 @@ public enum DeconstructedUSDInterop {
 		materialPath: String,
 		editTarget: USDLayerEditTarget = .rootLayer
 	) throws {
-		do {
-			try advancedClient.setMaterialBinding(
-				url: url,
-				primPath: primPath,
-				materialPath: materialPath,
-				editTarget: editTarget
-			)
-		} catch {
-			throw mapAdvancedError(error, url: url, primPath: primPath, schema: nil)
-		}
+		try operationsClient.setMaterialBinding(
+			url: url,
+			primPath: primPath,
+			materialPath: materialPath,
+			editTarget: editTarget
+		)
 	}
 
 	public static func clearMaterialBinding(
@@ -212,19 +191,15 @@ public enum DeconstructedUSDInterop {
 		primPath: String,
 		editTarget: USDLayerEditTarget = .rootLayer
 	) throws {
-		do {
-			try advancedClient.clearMaterialBinding(
-				url: url,
-				primPath: primPath,
-				editTarget: editTarget
-			)
-		} catch {
-			throw mapAdvancedError(error, url: url, primPath: primPath, schema: nil)
-		}
+		try operationsClient.clearMaterialBinding(
+			url: url,
+			primPath: primPath,
+			editTarget: editTarget
+		)
 	}
 
 	public static func materialBindingStrength(url: URL, primPath: String) -> USDMaterialBindingStrength? {
-		advancedClient.materialBindingStrength(url: url, path: primPath)
+		operationsClient.materialBindingStrength(url: url, path: primPath)
 	}
 
 	public static func setMaterialBindingStrength(
@@ -233,33 +208,23 @@ public enum DeconstructedUSDInterop {
 		strength: USDMaterialBindingStrength,
 		editTarget: USDLayerEditTarget = .rootLayer
 	) throws {
-		do {
-			try advancedClient.setMaterialBindingStrength(
-				url: url,
-				primPath: primPath,
-				strength: strength,
-				editTarget: editTarget
-			)
-		} catch {
-			throw mapAdvancedError(error, url: url, primPath: primPath, schema: nil)
-		}
+		try operationsClient.setMaterialBindingStrength(
+			url: url,
+			primPath: primPath,
+			strength: strength,
+			editTarget: editTarget
+		)
 	}
 
 	public static func setDefaultPrim(url: URL, primPath: String) throws {
-		do {
-			try advancedClient.setDefaultPrim(url: url, primPath: primPath)
-		} catch {
-			throw mapAdvancedError(error, url: url, primPath: primPath, schema: nil)
-		}
+		try operationsClient.setDefaultPrim(url: url, primPath: primPath)
 	}
 
 	public static func applySchema(url: URL, primPath: String, schema: SchemaSpec) throws {
-		let spec = USDSchemaSpec(identifier: schema.identifier, kind: mapSchemaKind(schema.kind))
-		do {
-			try advancedClient.applySchema(url: url, primPath: primPath, schema: spec)
-		} catch {
-			throw mapAdvancedError(error, url: url, primPath: primPath, schema: schema.identifier)
-		}
+		_ = url
+		_ = primPath
+		_ = schema
+		throw DeconstructedUSDInteropError.notImplemented
 	}
 
 	public static func editHierarchy(url: URL, edits: [EditOp]) throws {
@@ -288,18 +253,12 @@ public enum DeconstructedUSDInterop {
 			parentPath: parentPath,
 			baseName: primitiveType.displayName
 		)
-		do {
-			let createdPath = try advancedClient.createPrim(
-				url: url,
-				parentPath: parentPath,
-				name: primName,
-				typeName: primitiveType.typeName
-			)
-			try advancedClient.applyPrimitiveDefaults(url: url, primPath: createdPath, preset: .rcp)
-			return createdPath
-		} catch {
-			throw mapAdvancedError(error, url: url, primPath: parentPath, schema: nil)
-		}
+		return try operationsClient.createPrim(
+			url: url,
+			parentPath: parentPath,
+			name: primName,
+			typeName: primitiveType.typeName
+		)
 	}
 
 	/// Creates a structural prim (Xform or Scope) in the USD scene.
@@ -321,16 +280,12 @@ public enum DeconstructedUSDInterop {
 			parentPath: parentPath,
 			baseName: structuralType.displayName
 		)
-		do {
-			return try advancedClient.createPrim(
-				url: url,
-				parentPath: parentPath,
-				name: primName,
-				typeName: structuralType.typeName
-			)
-		} catch {
-			throw mapAdvancedError(error, url: url, primPath: parentPath, schema: nil)
-		}
+		return try operationsClient.createPrim(
+			url: url,
+			parentPath: parentPath,
+			name: primName,
+			typeName: structuralType.typeName
+		)
 	}
 
 	/// Generates a unique name for a new prim by appending a numeric suffix if needed.
@@ -341,7 +296,7 @@ public enum DeconstructedUSDInterop {
 	) throws -> String {
 		let existingNames: Set<String>
 		do {
-			existingNames = Set(try advancedClient.existingPrimNames(url: url, parentPath: parentPath))
+			existingNames = Set(try operationsClient.existingPrimNames(url: url, parentPath: parentPath))
 		} catch {
 			// If we can't get existing names (e.g., parent doesn't exist), use base name
 			return baseName
@@ -362,15 +317,8 @@ public enum DeconstructedUSDInterop {
 	/// Compute scene bounds by iterating mesh points.
 	/// Returns scene bounds for camera framing.
 	public static func getSceneBounds(url: URL) throws -> USDSceneBounds {
-		if let bounds = USDInteropStage.sceneBounds(url: url) {
-			return USDSceneBounds(
-				min: bounds.min,
-				max: bounds.max,
-				center: bounds.center,
-				maxExtent: bounds.maxExtent
-			)
-		}
-		return USDSceneBounds(min: .zero, max: .zero, center: .zero, maxExtent: 0)
+		operationsClient.sceneBounds(url: url)
+			?? USDSceneBounds(min: .zero, max: .zero, center: .zero, maxExtent: 0)
 	}
 
 	/// Returns the scene graph JSON produced by the low-level interop layer.
@@ -386,7 +334,7 @@ public enum DeconstructedUSDInterop {
 	/// Retrieves stage metadata including layer data properties.
 	/// Returns USDStageMetadata containing defaultPrim, metersPerUnit, upAxis, etc.
 	public static func getStageMetadata(url: URL) -> USDStageMetadata {
-		return advancedClient.stageMetadata(url: url)
+		return operationsClient.stageMetadata(url: url)
 	}
 
 	/// Retrieves key prim attributes for inspection.
@@ -394,35 +342,28 @@ public enum DeconstructedUSDInterop {
 		url: URL,
 		primPath: String
 	) -> USDPrimAttributes? {
-		advancedClient.primAttributes(url: url, path: primPath)
+		operationsClient.primAttributes(url: url, path: primPath)
 	}
 
 	public static func getPrimTransform(
 		url: URL,
 		primPath: String
 	) -> USDTransformData? {
-		advancedClient.primTransform(url: url, path: primPath)
+		operationsClient.primTransform(url: url, path: primPath)
 	}
 
 	public static func getPrimReferences(
 		url: URL,
 		primPath: String
 	) -> [USDReference] {
-		advancedClient.primReferences(url: url, path: primPath)
+		operationsClient.primReferences(url: url, path: primPath)
 	}
 
 	public static func listPrimVariantSets(
 		url: URL,
 		primPath: String
 	) throws -> [USDVariantSetDescriptor] {
-		do {
-			return try advancedClient.listVariantSets(
-				url: url,
-				scope: .prim(path: primPath)
-			)
-		} catch {
-			throw mapAdvancedError(error, url: url, primPath: primPath, schema: nil)
-		}
+		try operationsClient.listVariantSets(url: url, scope: .prim(path: primPath))
 	}
 
 	public static func setPrimVariantSelection(
@@ -438,24 +379,14 @@ public enum DeconstructedUSDInterop {
 			setName: setName,
 			selectionId: selectionId
 		)
-		let variantTarget: USDVariantEditTarget = switch editTarget {
-		case .sessionLayer:
-			.sessionLayer
-		case .rootLayer:
-			.rootLayer
-		@unknown default:
-			.rootLayer
-		}
-		do {
-			try advancedClient.applyVariantSelection(
-				url: url,
-				request: request,
-				editTarget: variantTarget,
-				persist: persist
-			)
-		} catch {
-			throw mapAdvancedError(error, url: url, primPath: primPath, schema: nil)
-		}
+		let variantTarget: USDVariantEditTarget =
+			editTarget == .sessionLayer ? .sessionLayer : .rootLayer
+		try operationsClient.applyVariantSelection(
+			url: url,
+			request: request,
+			editTarget: variantTarget,
+			persist: persist
+		)
 	}
 
 	public static func addPrimReference(
@@ -464,16 +395,12 @@ public enum DeconstructedUSDInterop {
 		reference: USDReference,
 		editTarget: USDLayerEditTarget = .rootLayer
 	) throws {
-		do {
-			try advancedClient.addReference(
-				url: url,
-				primPath: primPath,
-				reference: reference,
-				editTarget: editTarget
-			)
-		} catch {
-			throw mapAdvancedError(error, url: url, primPath: primPath, schema: nil)
-		}
+		try operationsClient.addReference(
+			url: url,
+			primPath: primPath,
+			reference: reference,
+			editTarget: editTarget
+		)
 	}
 
 	public static func removePrimReference(
@@ -482,16 +409,12 @@ public enum DeconstructedUSDInterop {
 		reference: USDReference,
 		editTarget: USDLayerEditTarget = .rootLayer
 	) throws {
-		do {
-			try advancedClient.removeReference(
-				url: url,
-				primPath: primPath,
-				reference: reference,
-				editTarget: editTarget
-			)
-		} catch {
-			throw mapAdvancedError(error, url: url, primPath: primPath, schema: nil)
-		}
+		try operationsClient.removeReference(
+			url: url,
+			primPath: primPath,
+			reference: reference,
+			editTarget: editTarget
+		)
 	}
 
 	public static func setPrimTransform(
@@ -499,28 +422,20 @@ public enum DeconstructedUSDInterop {
 		primPath: String,
 		transform: USDTransformData
 	) throws {
-		do {
-			try advancedClient.setPrimTransform(url: url, path: primPath, transform: transform)
-		} catch {
-			throw mapAdvancedError(error, url: url, primPath: primPath, schema: nil)
-		}
+		try operationsClient.setPrimTransform(url: url, path: primPath, transform: transform)
 	}
 	/// Sets the metersPerUnit metadata for the stage.
 	public static func setMetersPerUnit(url: URL, value: Double) throws {
-		do {
-			try advancedClient.setMetersPerUnit(url: url, value: value)
-		} catch {
-			throw mapAdvancedError(error, url: url, primPath: "/", schema: nil)
-		}
+		try operationsClient.setMetersPerUnit(url: url, value: value)
 	}
 	/// Sets the upAxis metadata for the stage.
 	public static func setUpAxis(url: URL, axis: String) throws {
-		do {
-			try advancedClient.setUpAxis(url: url, axis: axis)
-		} catch {
-			throw mapAdvancedError(error, url: url, primPath: "/", schema: nil)
-		}
+		try operationsClient.setUpAxis(url: url, axis: axis)
 	}
+
+	// These RealityKit/component authoring APIs are intentionally app-local.
+	// They support Deconstructed's open inspector/editor surface, but they are
+	// not part of the shared public USDOperations boundary.
 
 	/// Adds a RealityKitComponent prim under the specified prim and authors its `info:id`.
 	///
@@ -874,7 +789,7 @@ public enum DeconstructedUSDInterop {
 		url: URL,
 		primPath: String
 	) throws {
-		try deletePrim(url: url, primPath: primPath)
+		try operationsClient.deletePrim(url: url, primPath: primPath)
 	}
 
 	public static func setRealityKitComponentActive(
@@ -1053,46 +968,6 @@ public enum DeconstructedUSDInterop {
 			relationshipName: relationshipName
 		)
 	}
-
-	private static func mapSchemaKind(_ kind: SchemaSpec.Kind) -> USDSchemaSpec.Kind {
-		switch kind {
-		case .api:
-			return .api
-		case let .multipleApplyAPI(instanceName):
-			return .multipleApplyAPI(instanceName: instanceName)
-		case .typed:
-			return .typed
-		}
-	}
-
-	private static func mapAdvancedError(
-		_ error: Error,
-		url: URL,
-		primPath: String,
-		schema: String?
-	) -> Error {
-		if let advancedError = error as? USDInteropAdvancedCore.USDAdvancedError {
-			switch advancedError {
-			case .stageOpenFailed:
-				return DeconstructedUSDInteropError.stageOpenFailed(url)
-			case .primNotFound:
-				return DeconstructedUSDInteropError.primNotFound(primPath)
-			case .rootLayerMissing:
-				return DeconstructedUSDInteropError.rootLayerMissing(url)
-			case .saveFailed:
-				return DeconstructedUSDInteropError.saveFailed(url)
-			case .applySchemaFailed:
-				return DeconstructedUSDInteropError.applySchemaFailed(
-					schema: schema ?? "Unknown",
-					primPath: primPath
-				)
-			default:
-				return error
-			}
-		}
-		return error
-	}
-
 }
 
 private func formatUSDStringArray(_ values: [String]) -> String {

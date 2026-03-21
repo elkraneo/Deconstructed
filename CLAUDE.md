@@ -47,6 +47,25 @@ Base/                              <- SPM package (created by RCP for integratio
 - On "New Project": create document + generate surrounding SPM package
 - Asset paths in `main.json` are relative to SPM package root (sibling navigation)
 
+## USD Boundary
+
+The open/private USD split is intentional:
+
+- public package family: `USDInterop`, `USDInterfaces`, `USDInteropCxx`, `USDOperations`
+- private workflow layer: `USDTools`
+- app-local open logic may still live in `DeconstructedUSDInterop`
+
+For the rationale and current release evaluation, see:
+
+- `Docs/USDOperations-Refactor-Evaluation.md`
+- `Docs/USDOperations-Release-Checklist.md`
+
+Rule of thumb:
+
+- generic scene operations belong in `USDOperations`
+- workflows, heuristics, packaging, conversion, and repair do not
+- avoid reintroducing dependencies on `USDTools` or legacy advanced modules into the public build path
+
 ## Key Files
 
 - `DeconstructedApp.swift` - App entry, scenes

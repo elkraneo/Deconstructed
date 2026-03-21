@@ -5,7 +5,6 @@ import InspectorModels
 import SceneGraphModels
 import simd
 import USDInterfaces
-import USDInteropAdvancedCore
 
 @Reducer
 public struct InspectorFeature {

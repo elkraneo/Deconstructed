@@ -3,6 +3,7 @@ import ComposableArchitecture
 import CryptoKit
 import DeconstructedUSDInterop
 import Foundation
+import USDInterfaces
 
 @DependencyClient
 public struct ThumbnailClient: Sendable {

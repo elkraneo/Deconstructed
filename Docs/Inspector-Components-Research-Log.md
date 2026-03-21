@@ -435,7 +435,7 @@ These notes were recovered from the full collaboration thread to avoid losing hi
 
 1. Do not assert custom component field support as "any Codable" without fixture proof; maintain explicit type matrix research as open work.
 2. Template-based USDA insertion was chosen pragmatically for current phase; AST/semantic writer remains future work when maintenance cost justifies.
-3. For this workspace, dependency resolution must follow workspace-local overrides (local USDInterop/USDInteropAdvanced), not inner package-only `swift build` assumptions.
+3. Historical note: earlier workspace-local dependency resolution used local `USDInterop` plus the older advanced layer. The current public Deconstructed path should be evaluated against `USDInterop`/`USDOperations`, not the retired advanced dependency shape.
 4. Known build noise/blocker remains external to inspector changes in this branch: local `USDReference` / `USDAdvancedClient` API mismatch.
 
 ### Stability observations

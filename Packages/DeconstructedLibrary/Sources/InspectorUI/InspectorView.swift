@@ -8,7 +8,6 @@ import Sharing
 import SwiftUI
 import UniformTypeIdentifiers
 import USDInterfaces
-import USDInteropAdvancedCore
 
 public struct InspectorView: View {
 	@Bindable public var store: StoreOf<InspectorFeature>
@@ -4032,7 +4031,7 @@ struct LayerDataSection: View {
 				.buttonStyle(.borderless)
 				.disabled(true)
 				.foregroundStyle(.secondary)
-				.help("Deferred: will use USDInteropAdvanced combineVariants in a later pass.")
+				.help("Deferred: variant-to-configuration conversion is not implemented in the public editor path yet.")
 			}
 		}
 	}

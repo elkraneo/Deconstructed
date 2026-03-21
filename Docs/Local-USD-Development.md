@@ -3,8 +3,8 @@
 ## How It Works
 
 The `Deconstructed.xcworkspace` includes local checkouts of:
-- `/Volumes/Plutonian/_Developer/USDInteropAdvanced`
 - `/Volumes/Plutonian/_Developer/USDInterop`
+- `/Volumes/Plutonian/_Developer/USDTools` (optional for internal/private workflows, not required for the public editor path)
 
 **Xcode automatically prefers local packages over remote dependencies with the same name.**
 
@@ -15,7 +15,8 @@ This means:
 
 ## Requirements
 
-- Local checkouts must exist at the paths above
+- A local `USDInterop` checkout must exist at the path above if you want workspace-local package overrides
+- `USDTools` is only needed for private/internal work and should not be required to build the public Deconstructed path
 - Open `Deconstructed.xcworkspace` (not `.xcodeproj`)
 
 ## Archived Scripts

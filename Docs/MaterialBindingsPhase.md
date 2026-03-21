@@ -2,6 +2,10 @@
 
 This document captures what we learned about Reality Composer Pro (RCP) material bindings and what we implemented in this phase across the USD interop stack.
 
+> Historical note:
+> This document predates the `USDOperations` split. References to `USDInteropAdvanced`
+> describe the earlier private advanced layer, not the current public boundary.
+
 ## Observations
 
 - RCP's viewport behavior suggests it is backed by RealityKit rendering (not Hydra):
@@ -28,19 +32,23 @@ In RCP UI this shows up as the "Strength" picker under *Material Bindings* for s
 
 ## Implementation (Local-Dev First)
 
-Deconstructed is not allowed to do low-level OpenUSD plumbing for this kind of feature. The integration boundary is:
+Deconstructed is not allowed to do low-level OpenUSD plumbing for this kind of feature. At the time, the integration boundary was:
 
 `Deconstructed -> USDInteropAdvanced -> USDInterop/SwiftUsd`
+
+Current framing:
+
+`Deconstructed -> USDOperations (generic scene ops) / app-local DeconstructedUSDInterop -> USDInterop/SwiftUsd`
 
 So we implemented:
 
 1. A typed DTO in `USDInterfaces`:
    - `USDMaterialBindingStrength`
-2. Typed endpoints in `USDInteropAdvanced`:
+2. Typed endpoints in the advanced USD layer:
    - inspection: read binding strength from the direct binding relationship
    - editing: author binding strength on the direct binding relationship
 
-This allows Deconstructed (and other apps, e.g. Preflight) to consume a stable API without re-implementing OpenUSD interop.
+This allows Deconstructed (and other apps, e.g. Preflight) to consume a stable API without re-implementing OpenUSD interop. In the current split, generic binding operations belong in `USDOperations`; higher-level workflows remain private in `USDTools`.
 
 ## Local Development Without Breaking CI
 
@@ -59,15 +67,14 @@ These configure per-user mirrors (stored under `~/.swiftpm`) so local builds use
 
 without committing any `.package(path: ...)` or `XCLocalSwiftPackageReference` artifacts.
 
-Note:
+Historical note:
 
 - Mirrors are appropriate for `USDInterop` and `AppleUSDSchemas` (same repo content, different location).
-- To develop against local `USDInteropAdvanced` source (instead of the public `USDInteropAdvanced-binaries` wrapper), use `Scripts/usdinteropadvanced-local/enable.sh` and switch back with `Scripts/usdinteropadvanced-local/disable.sh` before pushing.
+- Older local-development flows also referenced `USDInteropAdvanced`. That is no longer the current public build path for Deconstructed.
 
-## Known Limitations / Next Steps
+## Known Limitations / Next Steps At The Time
 
-- **Deconstructed UI wiring for Strength** depends on an updated `USDInteropAdvanced-binaries` release.
-  - Until the binaries wrapper is bumped, Strength is available locally via `Scripts/usdinteropadvanced-local/enable.sh` but cannot ship in CI off `0.2.15`.
+- **Deconstructed UI wiring for Strength** depended on an updated advanced-layer release.
 - **Viewport updates**:
   - Current approach uses "reload the scene asset" semantics to pick up USD edits.
   - To match RCP's smooth experience, we likely need a prim-path-to-entity mapping and apply changes directly to RealityKit entities (best-effort), while authoring USD on commit.

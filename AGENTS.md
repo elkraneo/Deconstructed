@@ -38,7 +38,7 @@ Reverse-engineer and clone Reality Composer Pro's functionality:
 
 This project has a split identity:
 - **Public open-source repo** (`Deconstructed`) — anyone should be able to clone and build
-- **Private dependencies** (`USDInteropAdvanced` source) — only available locally
+- **Separate private workflow repo** (`USDTools`) — may exist locally for internal work, but is not required for the public Deconstructed build path
 
 The root `Package.swift` and inner `Packages/DeconstructedLibrary/Package.swift` declare remote URLs for CI/public consumption. But locally, Xcode resolves dependencies at the **workspace level**, overriding what `Package.swift` says.
 
@@ -49,7 +49,7 @@ The root `Package.swift` and inner `Packages/DeconstructedLibrary/Package.swift`
 This means:
 - `Package.swift` remote URLs are **fallbacks for CI / clean clones only**
 - The inner `DeconstructedLibrary/Package.swift` may reference `branch: "main"` or pinned revisions — **it doesn't matter locally** because the workspace overrides them
-- Editing `/Volumes/Plutonian/_Developer/USDInteropAdvanced` compiles immediately
+- Editing local first-party package checkouts such as `/Volumes/Plutonian/_Developer/USDInterop` compiles immediately when the workspace is configured to use them
 - **You must open `Deconstructed.xcworkspace`**, not the `.xcodeproj`
 
 ### Do NOT Try to Build via `swift build` in Inner Package
@@ -71,6 +71,19 @@ swift build --target ViewportUI
 - It pins stable versions of remote deps (revisions or semver)
 - Local packages (`SelectionOutline`, etc.) use relative paths that work from root
 - Never edit the inner `DeconstructedLibrary/Package.swift` dependency URLs to match root — they serve different purposes
+
+## USD Boundary
+
+The current split is:
+
+- public package family: `USDInterop`, `USDInterfaces`, `USDInteropCxx`, `USDOperations`
+- private workflow/value layer: `USDTools`
+
+Rules:
+
+- generic scene operations belong in `USDOperations`
+- workflows, diagnostics, repair, packaging, conversion, and heuristics do not
+- do not reintroduce dependencies on `USDTools` or legacy advanced modules into the public Deconstructed build path
 
 ## Reference Implementation
 

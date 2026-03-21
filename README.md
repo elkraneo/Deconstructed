@@ -35,8 +35,7 @@ A macOS document-based application that reverse-engineers [Reality Composer Pro]
 ### External Dependencies
 
 - **[swift-composable-architecture](https://github.com/pointfreeco/swift-composable-architecture)** - App architecture and reducer composition
-- **[USDInterop](https://github.com/Reality2713/USDInterop)** - Swift bindings for OpenUSD
-- **[USDInteropAdvanced](https://github.com/Reality2713/USDInteropAdvanced)** - Higher-level USD operations (private)
+- **[USDInterop](https://github.com/Reality2713/USDInterop)** - Public OpenUSD package family (`USDInterfaces`, `USDInterop`, `USDInteropCxx`, `USDOperations`)
 - **[StageView](https://github.com/reality2713/StageView)** - RealityKit-backed viewport component
 
 ## Project Structure
@@ -61,8 +60,7 @@ Deconstructed/
 │       │   ├── Inspector*          # Inspector models, feature, UI
 │       │   ├── ViewportModels/     # Viewport state models
 │       │   ├── ViewportUI/         # 3D viewport (RealityKitStageView-based)
-│       │   ├── DeconstructedUSDInterop/   # USD bridge surfaces
-│       │   ├── DeconstructedUSDPipeline/  # USD data/operation pipeline
+│       │   ├── DeconstructedUSDInterop/   # USD bridge surfaces and app-local USD authoring
 │       │   └── ProjectScaffolding/ # New project template/scaffolding
 │       └── Tests/
 ├── Deconstructed.xcodeproj/

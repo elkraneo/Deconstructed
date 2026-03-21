@@ -4,6 +4,12 @@ Date: 2026-02-06
 
 This document captures what we learned and implemented in the "Transform inspector + live viewport updates" phase, with an emphasis on Reality Composer Pro (RCP) parity and CI safety.
 
+> Historical note:
+> This document predates the `USDOperations` split. References to `USDInteropAdvanced`
+> should now be read as the earlier private advanced layer that has since been narrowed
+> into the current `USDTools` private workflow layer plus the public `USDOperations`
+> generic scene-operations layer.
+
 ## Goals For This Phase
 
 - Make the Transform inspector writable (not read-only).
@@ -12,7 +18,7 @@ This document captures what we learned and implemented in the "Transform inspect
 - Keep Deconstructed CI-safe and consistent with our dependency policy:
   - No `.package(path:)` committed.
   - No `XCLocalSwiftPackageReference` committed in `.pbxproj`.
-  - Advanced USD operations must go through `USDInteropAdvanced` with typed DTOs in `USDInterfaces`.
+  - Shared generic USD scene operations now go through `USDOperations`, while private workflow/value logic stays in `USDTools`.
 
 ## Key Confirmation: Where RCP Stores Transforms
 
@@ -61,12 +67,18 @@ Important:
 
 ## USD Editing Architecture Policy (Integration Boundary)
 
-We enforce the following policy:
+At the time of this phase we enforced the following policy:
 
-- `USDInteropAdvanced` is the integration boundary for advanced USD operations.
+- `USDInteropAdvanced` was the integration boundary for advanced USD operations.
 - Deconstructed features must not do raw OpenUSD/SwiftUsd “VtValue plumbing”.
 - Shared DTOs used across repos live in `USDInterfaces` (in `USDInterop`), e.g. `USDTransformData`.
 - Deconstructed calls typed APIs on `USDAdvancedClient` (e.g. `setPrimTransform`) instead of duplicating low-level logic.
+
+Current equivalent rule:
+
+- generic scene operations belong in `USDOperations`
+- app-local authoring logic remains in `DeconstructedUSDInterop`
+- private workflow/value logic belongs in `USDTools`
 
 This keeps the app code stable and testable while allowing the USD layer to evolve without rewriting UI/features.
 
@@ -75,13 +87,13 @@ This keeps the app code stable and testable while allowing the USD layer to evol
 We wired Transform edits end-to-end:
 
 1. Inspector edits produce a typed value (`USDTransformData`).
-2. Deconstructed calls `USDAdvancedClient.setPrimTransform(url:path:transform:)` (from `USDInteropAdvanced`).
-3. `USDInteropAdvanced` authors the transform via `UsdGeomXformCommonAPI` and saves the root layer.
+2. Deconstructed calls a typed transform-editing API.
+3. The USD layer authors the transform via `UsdGeomXformCommonAPI` and saves the root layer.
 
-Key types:
+Key types used at the time:
 
 - `USDTransformData` (DTO, lives in `USDInterfaces`).
-- `USDAdvancedClient.setPrimTransform` (typed editing API, lives in `USDInteropAdvancedEditing`).
+- `USDAdvancedClient.setPrimTransform` (typed editing API, then in `USDInteropAdvancedEditing`).
 
 ## Viewport Refresh: Why Full Reload Felt Wrong
 
@@ -104,7 +116,7 @@ Conclusion:
 We now do both:
 
 - Apply transform immediately to the currently rendered `Entity` (best-effort mapping).
-- Persist the transform to USD using `USDInteropAdvanced`.
+- Persist the transform to USD through the typed USD boundary.
 
 This yields:
 
@@ -214,7 +226,7 @@ What we can say defensibly:
   - Drive scene graph selection + inspector state from that prim path.
 - Expand inspector beyond Transform:
   - References, material bindings, primitive parameters.
-  - This likely requires adding new typed DTOs to `USDInterfaces` and implementing typed endpoints in `USDInteropAdvanced` (schemas, authored attributes, relationships).
+  - This likely requires adding new typed DTOs to `USDInterfaces` and implementing typed endpoints in the shared/public or private USD layers as appropriate (schemas, authored attributes, relationships).
 
 ## Numeric Input Localization Policy (Transform Fields)
 

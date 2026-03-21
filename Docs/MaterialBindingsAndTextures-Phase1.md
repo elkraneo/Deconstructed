@@ -3,7 +3,12 @@
 This phase adds a minimal, RCP-aligned foundation for **material binding inspection and editing** in Deconstructed, while keeping strict dependency boundaries:
 
 - Deconstructed UI/features do not touch low-level OpenUSD interop.
-- All typed USD operations flow through `USDInteropAdvanced` and DTOs live in `USDInterfaces`.
+- Typed USD operations flow through the shared USD boundary and DTOs live in `USDInterfaces`.
+
+> Historical note:
+> This note was written before the `USDOperations` split. Where it previously said
+> `USDInteropAdvanced`, the current public/private split is:
+> generic scene operations in `USDOperations`, private workflow/value logic in `USDTools`.
 
 ## What We Implemented
 
@@ -39,7 +44,7 @@ This is intentionally **not** a shader editor yet. It is an inspection surface w
 - Shader graph editing (MaterialX / PreviewSurface graphs).
 - Robust texture resolving for packaged formats (e.g. USDZ internal textures).
 
-Those are later steps, but the current structure keeps the architecture clean and allows us to add typed endpoints in `USDInteropAdvanced` as we need more operations.
+Those are later steps, but the current structure keeps the architecture clean and allows us to add typed endpoints in the appropriate USD layer as we need more operations.
 
 ## Interchange Note
 
