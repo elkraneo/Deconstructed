@@ -175,6 +175,7 @@ This project is documented in a series of articles exploring the reverse-enginee
 ### In Progress
 
 - 🚧 **Material Editor**: Shader graph integration
+- 🚧 **Particles / VFX Emitter**: Inspector coverage, authoring workflows, and fixture-driven validation
 
 ## License
 
