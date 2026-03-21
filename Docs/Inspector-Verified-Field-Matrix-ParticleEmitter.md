@@ -3,13 +3,19 @@
 **Component ID:** `RealityKit.VFXEmitter`  
 **Source fixture set:** `/Volumes/Plutonian/_Developer/Deconstructed/source/RCPComponentDiffFixtures/Sources/RCPComponentDiffFixtures/RCPComponentDiffFixtures.rkassets/Particle Emitter/`  
 **Total fixtures:** 107 files  
-**Last updated:** 2025-03-19
+**Last updated:** 2026-03-19
 
 ---
 
 ## Schema Structure
 
-Particle Emitter uses a two-tier architecture:
+Particle Emitter authoring is split across two nested struct levels inside the `RealityKit.VFXEmitter` component prim:
+
+- `currentState` stores the controls shown in the **Emitter** tab.
+- `mainEmitter` stores the primary particle stream shown in the **Particles** tab.
+- `spawnedEmitter` stores the secondary particle stream. It mirrors `mainEmitter` and is only relevant when secondary spawning is enabled.
+
+This is the authored USD layout observed in the fixtures:
 
 ```
 def RealityKitComponent "VFXEmitter" {
@@ -28,6 +34,12 @@ def RealityKitComponent "VFXEmitter" {
     }
 }
 ```
+
+Practical implications:
+
+- Do not expect particle fields like `birthRate` or `startColorA` directly on `VFXEmitter`; they live under `currentState.mainEmitter` or `currentState.spawnedEmitter`.
+- Do not expect emitter-wide controls like `loops` or `emitterShape` inside `mainEmitter`; they stay on `currentState`.
+- `spawnedEmitter` is not a different schema. It is the same particle-field schema applied to the secondary stream.
 
 ---
 
@@ -201,23 +213,23 @@ def RealityKitComponent "VFXEmitter" {
 
 ## Secondary Emitter (spawnedEmitter)
 
-The `spawnedEmitter` struct has the **same schema** as `mainEmitter`. When secondary emitter is enabled:
+`spawnedEmitter` uses the same authored field set as `mainEmitter`. The only extra control required to activate it is the toggle on `currentState`:
 
 | UI Control | Field Name | Type | Notes |
 |------------|------------|------|-------|
 | Secondary Emitter Enabled | `isSpawningEnabled` | `bool` | On `currentState`, not inside struct |
 
-All fields from the Particles Tab sections above can be authored inside `spawnedEmitter`.
+Once `isSpawningEnabled` is authored, any field from the **Particles Tab Fields** sections above can also appear inside `spawnedEmitter`.
 
 ---
 
-## Sparse Authoring Notes
+## Authoring Notes
 
-1. **Defaults don't write:** If a field matches its default value, it's not authored in the USDA
-2. **Variation fields co-authored:** When you set a variation field, the base field is also authored
-3. **Shape-specific fields:** Fields like `torusInnerRadius` only appear with the matching shape
-4. **Animation requires image:** `isAnimated` only works when `particleImage` is set
-5. **Secondary emitter:** Must enable `isSpawningEnabled` before `spawnedEmitter` fields author
+1. Default-state controls are often omitted. Many fixtures only author a field after the user changes it away from the baseline value.
+2. Variation controls are usually not standalone. When RCP writes a variation field, it typically writes the corresponding base field in the same edit.
+3. Shape-specific fields are conditional. `torusInnerRadius` only appears for `Torus`, and `radialAmount` only appears for shapes that expose a radial control.
+4. Animation fields depend on texture setup. The animation block is only meaningful once `particleImage` is present and sprite animation is enabled.
+5. Secondary particle data is gated by `isSpawningEnabled`. Without that toggle, `spawnedEmitter` may be absent or remain effectively unused even though it shares the primary emitter schema.
 
 ---
 
