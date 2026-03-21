@@ -4,8 +4,8 @@
 A macOS document-based application that reverse-engineers [Reality Composer Pro](https://developer.apple.com/augmented-reality/reality-composer/) functionality including support for editing `.realitycomposerpro` native files.
 
 > [!IMPORTANT]
-> **Open development status:** Deconstructed is developed in the open, and this repository contains the active source code.
-> The public build path depends on the public `USDInterop` package family (`USDInterfaces`, `USDInterop`, `USDInteropCxx`, `USDOperations`) and does not require any private or binary-only USD package.
+> Deconstructed is developed in the open, and this repository contains the active source code.
+> The public build path uses the public `USDInterop` package family (`USDInterfaces`, `USDInterop`, `USDInteropCxx`, `USDOperations`) and does not require any private or binary-only USD dependencies.
 > Download the latest packaged macOS app from [Latest Release](https://github.com/elkraneo/Deconstructed/releases/latest), or build from source using the workspace and setup notes below.
 
 ![Deconstructed app interface with multiple scene tabs open. A Bunsen burner model is selected in the scene hierarchy and displayed in the 3D viewport alongside a gray sphere with transform gizmos visible. The right inspector panel shows Transform properties (Position, Rotation, Scale), Material Bindings, Variants, and References sections. The bottom Project Browser displays asset thumbnails including the BunsenBurner.usdz file, scenes, and primitive shapes.](./assets/preview.png)
@@ -23,9 +23,9 @@ A macOS document-based application that reverse-engineers [Reality Composer Pro]
 
 | Component | Technology |
 |-----------|------------|
-| Platform | macOS 26 (Tahoe) only |
+| Platform | macOS 26.2+ (current project setting) |
 | UI Framework | SwiftUI |
-| Architecture | The Composable Architecture (TCA) 1.23.1 |
+| Architecture | The Composable Architecture (TCA) |
 | Document Model | SwiftUI `DocumentGroup` + `FileDocument` (`FileWrapper`-backed `RCPPackage`) |
 | File Watching | FSEvents (macOS native API) |
 | 3D Viewport | `RealityKitStageView` (StageView) + USD (Swift/C++ interop) |
@@ -52,8 +52,8 @@ Notes:
 
 Further reading:
 
-- [Local Development (CI-Safe)](/Volumes/Plutonian/_Developer/Deconstructed/source/Deconstructed/Docs/Local-USD-Development.md)
-- [USDOperations Refactor Evaluation](/Volumes/Plutonian/_Developer/Deconstructed/source/Deconstructed/Docs/USDOperations-Refactor-Evaluation.md)
+- [Local Development (CI-Safe)](./Docs/Local-USD-Development.md)
+- [USDOperations Refactor Evaluation](./Docs/USDOperations-Refactor-Evaluation.md)
 
 ## Project Structure
 
@@ -153,9 +153,14 @@ This project is documented in a series of articles exploring the reverse-enginee
    - Modeling component data/state in TCA-friendly feature boundaries
    - Keeping inspector interactions synchronized with stage updates
 
+9. **[Deconstructing Reality Composer Pro: Inspector Components Continued](https://elkraneo.com/deconstructing-reality-composer-pro-inspector-components-continued/)**
+   - Continuing the RealityKit component authoring work
+   - Expanding inspector coverage for more component surfaces
+   - Refining component editing behavior and data modeling
+
 ## Notes
 
-- `/Volumes/Plutonian/_Developer/Deconstructed/source/Deconstructed/Docs/MaterialX-Interchange.md` (MaterialX vs UsdPreviewSurface portability through RealityKit/RCP)
+- [MaterialX Interchange](./Docs/MaterialX-Interchange.md) - MaterialX vs UsdPreviewSurface portability through RealityKit/RCP
 
 ## Current Status
 
@@ -173,7 +178,7 @@ This project is documented in a series of articles exploring the reverse-enginee
 
 ## License
 
-TBD
+Apache-2.0. See [LICENSE](./LICENSE).
 
 ## Acknowledgments
 
