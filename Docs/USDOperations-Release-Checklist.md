@@ -27,7 +27,7 @@ As of 2026-03-21:
 - still blocking a clean release:
   - no known blocker remains in the published `USDInterop` release for this split
 - not a blocker, but still cleanup debt:
-  - older historical documents still mention `USDInteropAdvanced`, but they are now marked as historical rather than current architecture
+  - older historical documents may still describe a retired private advanced layer, but they are marked as historical rather than current architecture
 
 ## 1. Package and Version Integrity
 
@@ -70,7 +70,7 @@ Current status:
 Pass:
   - main package graph for `Deconstructed` resolves using only `USDInterop` family public products
 Fail:
-  - any open target directly imports or depends on `USDTools`, `USDTools*`, `USDInteropAdvanced*`, or equivalent private products
+  - any open target directly imports or depends on `USDTools`, `USDTools*`, or equivalent private products
 
 Current status:
   - passes
@@ -137,7 +137,7 @@ Pass:
 
 - [ ] Boundary guard exists for open `Deconstructed` targets
 Pass:
-  - CI or pre-push fails on imports/dependencies of `USDTools`, `USDTools*`, `USDInteropAdvanced*`, or other private modules from open targets
+  - CI or pre-push fails on imports/dependencies of `USDTools`, `USDTools*`, or other private modules from open targets
 Fail:
   - boundary relies on memory and code review only
 

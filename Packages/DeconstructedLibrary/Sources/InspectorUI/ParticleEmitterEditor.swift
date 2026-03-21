@@ -308,13 +308,13 @@ public struct ParticleEmitterEditor: View {
                     }
                     
                     PEInspectorRow(label: "Burst Count") {
-                        TextField("", value: emitterIntStringBinding(for: "burstCount", fallback: 100))
+                        TextField("", text: emitterIntStringBinding(for: "burstCount", fallback: 100))
                             .textFieldStyle(.roundedBorder)
                             .frame(width: 80)
                     }
                     
                     PEInspectorRow(label: "Burst Count Variation") {
-                        TextField("", value: emitterIntStringBinding(for: "burstCountVariation", fallback: 0))
+                        TextField("", text: emitterIntStringBinding(for: "burstCountVariation", fallback: 0))
                             .textFieldStyle(.roundedBorder)
                             .frame(width: 80)
                     }
@@ -578,25 +578,25 @@ public struct ParticleEmitterEditor: View {
                         }
                         
                         PEInspectorRow(label: "Initial Frame") {
-                            TextField("", value: emitterIntStringBinding(for: "initialFrame", fallback: 0))
+                            TextField("", text: emitterIntStringBinding(for: "initialFrame", fallback: 0))
                                 .textFieldStyle(.roundedBorder)
                                 .frame(width: 80)
                         }
                         
                         PEInspectorRow(label: "Initial Frame Variation") {
-                            TextField("", value: emitterIntStringBinding(for: "initialFrameVariation", fallback: 0))
+                            TextField("", text: emitterIntStringBinding(for: "initialFrameVariation", fallback: 0))
                                 .textFieldStyle(.roundedBorder)
                                 .frame(width: 80)
                         }
                         
                         PEInspectorRow(label: "Row Count") {
-                            TextField("", value: emitterIntStringBinding(for: "rowCount", fallback: 1))
+                            TextField("", text: emitterIntStringBinding(for: "rowCount", fallback: 1))
                                 .textFieldStyle(.roundedBorder)
                                 .frame(width: 80)
                         }
                         
                         PEInspectorRow(label: "Column Count") {
-                            TextField("", value: emitterIntStringBinding(for: "columnCount", fallback: 1))
+                            TextField("", text: emitterIntStringBinding(for: "columnCount", fallback: 1))
                                 .textFieldStyle(.roundedBorder)
                                 .frame(width: 80)
                         }

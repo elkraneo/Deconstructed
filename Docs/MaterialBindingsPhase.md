@@ -3,8 +3,8 @@
 This document captures what we learned about Reality Composer Pro (RCP) material bindings and what we implemented in this phase across the USD interop stack.
 
 > Historical note:
-> This document predates the `USDOperations` split. References to `USDInteropAdvanced`
-> describe the earlier private advanced layer, not the current public boundary.
+> This document predates the `USDOperations` split. References to the earlier private
+> advanced USD layer describe a superseded dependency shape, not the current public boundary.
 
 ## Observations
 
@@ -34,7 +34,7 @@ In RCP UI this shows up as the "Strength" picker under *Material Bindings* for s
 
 Deconstructed is not allowed to do low-level OpenUSD plumbing for this kind of feature. At the time, the integration boundary was:
 
-`Deconstructed -> USDInteropAdvanced -> USDInterop/SwiftUsd`
+`Deconstructed -> legacy private advanced USD layer -> USDInterop/SwiftUsd`
 
 Current framing:
 
@@ -70,7 +70,7 @@ without committing any `.package(path: ...)` or `XCLocalSwiftPackageReference` a
 Historical note:
 
 - Mirrors are appropriate for `USDInterop` and `AppleUSDSchemas` (same repo content, different location).
-- Older local-development flows also referenced `USDInteropAdvanced`. That is no longer the current public build path for Deconstructed.
+- Older local-development flows also referenced a retired private advanced package. That is no longer the current public build path for Deconstructed.
 
 ## Known Limitations / Next Steps At The Time
 

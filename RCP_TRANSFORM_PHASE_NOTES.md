@@ -5,8 +5,8 @@ Date: 2026-02-06
 This document captures what we learned and implemented in the "Transform inspector + live viewport updates" phase, with an emphasis on Reality Composer Pro (RCP) parity and CI safety.
 
 > Historical note:
-> This document predates the `USDOperations` split. References to `USDInteropAdvanced`
-> should now be read as the earlier private advanced layer that has since been narrowed
+> This document predates the `USDOperations` split. References to the earlier private
+> advanced USD layer should now be read as a superseded dependency shape that has since been narrowed
 > into the current `USDTools` private workflow layer plus the public `USDOperations`
 > generic scene-operations layer.
 
@@ -69,7 +69,7 @@ Important:
 
 At the time of this phase we enforced the following policy:
 
-- `USDInteropAdvanced` was the integration boundary for advanced USD operations.
+- A private advanced USD layer was the integration boundary for advanced USD operations.
 - Deconstructed features must not do raw OpenUSD/SwiftUsd “VtValue plumbing”.
 - Shared DTOs used across repos live in `USDInterfaces` (in `USDInterop`), e.g. `USDTransformData`.
 - Deconstructed calls typed APIs on `USDAdvancedClient` (e.g. `setPrimTransform`) instead of duplicating low-level logic.
@@ -93,7 +93,7 @@ We wired Transform edits end-to-end:
 Key types used at the time:
 
 - `USDTransformData` (DTO, lives in `USDInterfaces`).
-- `USDAdvancedClient.setPrimTransform` (typed editing API, then in `USDInteropAdvancedEditing`).
+- a typed transform-editing client API in the advanced USD layer.
 
 ## Viewport Refresh: Why Full Reload Felt Wrong
 

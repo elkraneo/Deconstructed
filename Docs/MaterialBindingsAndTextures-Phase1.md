@@ -6,8 +6,8 @@ This phase adds a minimal, RCP-aligned foundation for **material binding inspect
 - Typed USD operations flow through the shared USD boundary and DTOs live in `USDInterfaces`.
 
 > Historical note:
-> This note was written before the `USDOperations` split. Where it previously said
-> `USDInteropAdvanced`, the current public/private split is:
+> This note was written before the `USDOperations` split. Where it previously referred
+> to a retired private advanced layer, the current public/private split is:
 > generic scene operations in `USDOperations`, private workflow/value logic in `USDTools`.
 
 ## What We Implemented
@@ -16,11 +16,11 @@ This phase adds a minimal, RCP-aligned foundation for **material binding inspect
 
 When a prim is selected, the Inspector now:
 
-- Reads the authored `material:binding` relationship (`USDAdvancedClient.materialBinding`).
-- Lists all discoverable materials in the stage (`USDAdvancedClient.allMaterials`).
+- Reads the authored `material:binding` relationship through the typed USD boundary.
+- Lists all discoverable materials in the stage through the typed USD boundary.
 - Allows setting and clearing the binding using typed editing endpoints:
-  - `USDAdvancedClient.setMaterialBinding(url:primPath:materialPath:editTarget:)`
-  - `USDAdvancedClient.clearMaterialBinding(url:primPath:editTarget:)`
+  - `setMaterialBinding(url:primPath:materialPath:editTarget:)`
+  - `clearMaterialBinding(url:primPath:editTarget:)`
 
 Implementation notes:
 

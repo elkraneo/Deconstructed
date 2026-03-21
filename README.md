@@ -5,9 +5,8 @@ A macOS document-based application that reverse-engineers [Reality Composer Pro]
 
 > [!IMPORTANT]
 > **Open development status:** Deconstructed is developed in the open, and this repository contains the active source code.
-> We are still finishing fully reproducible fresh-clone builds while parts of the lower-level USD/C++ interop toolchain are being stabilized.
-> In the meantime, download the latest packaged macOS app from [Latest Release](https://github.com/elkraneo/Deconstructed/releases/latest).
-> For source builds, follow the setup notes in [Local Development (CI-Safe)](#local-development-ci-safe).
+> The public build path depends on the public `USDInterop` package family (`USDInterfaces`, `USDInterop`, `USDInteropCxx`, `USDOperations`) and does not require any private or binary-only USD package.
+> Download the latest packaged macOS app from [Latest Release](https://github.com/elkraneo/Deconstructed/releases/latest), or build from source using the workspace and setup notes below.
 
 ![Deconstructed app interface with multiple scene tabs open. A Bunsen burner model is selected in the scene hierarchy and displayed in the 3D viewport alongside a gray sphere with transform gizmos visible. The right inspector panel shows Transform properties (Position, Rotation, Scale), Material Bindings, Variants, and References sections. The bottom Project Browser displays asset thumbnails including the BunsenBurner.usdz file, scenes, and primitive shapes.](./assets/preview.png)
 
@@ -37,6 +36,24 @@ A macOS document-based application that reverse-engineers [Reality Composer Pro]
 - **[swift-composable-architecture](https://github.com/pointfreeco/swift-composable-architecture)** - App architecture and reducer composition
 - **[USDInterop](https://github.com/Reality2713/USDInterop)** - Public OpenUSD package family (`USDInterfaces`, `USDInterop`, `USDInteropCxx`, `USDOperations`)
 - **[StageView](https://github.com/reality2713/StageView)** - RealityKit-backed viewport component
+
+## Build From Source
+
+Use:
+
+- Xcode 26.3 or newer
+- `Deconstructed.xcworkspace`
+
+Notes:
+
+- the committed manifests use remote package URLs for CI and fresh clones
+- local first-party package overrides are optional and should be configured in the workspace, not by editing committed manifests
+- package macros may require local approval in Xcode the first time you build on a machine
+
+Further reading:
+
+- [Local Development (CI-Safe)](/Volumes/Plutonian/_Developer/Deconstructed/source/Deconstructed/Docs/Local-USD-Development.md)
+- [USDOperations Refactor Evaluation](/Volumes/Plutonian/_Developer/Deconstructed/source/Deconstructed/Docs/USDOperations-Refactor-Evaluation.md)
 
 ## Project Structure
 
