@@ -116,6 +116,7 @@ let package = Package(
 			from: "0.1.13"
 		),
 		.package(url: "https://github.com/reality2713/StageView.git", from: "0.1.4"),
+		.package(url: "https://github.com/Reality2713/SwiftUsdShell.git", exact: "0.1.1"),
 	],
 	targets: [
 		// Targets are the basic building blocks of a package, defining a module or a test suite.
@@ -312,6 +313,18 @@ let package = Package(
 				.unsafeFlags(["-disable-cmo"], .when(configuration: .release)),
 			]
 		),
+			.target(
+				name: "DeconstructedShellRuntime",
+				dependencies: [
+					"DeconstructedUSDInterop",
+					.product(name: "SwiftUsdShell", package: "SwiftUsdShell"),
+					.product(name: "USDOperations", package: "USDInterop"),
+					.product(name: "USDInterfaces", package: "USDInterop"),
+				],
+				swiftSettings: [
+					.interoperabilityMode(.Cxx),
+				]
+			),
 		.target(
 			name: "InspectorModels",
 			dependencies: [
@@ -378,6 +391,17 @@ let package = Package(
 			],
 			swiftSettings: [
 				.interoperabilityMode(.Cxx)
+			]
+		),
+		.testTarget(
+			name: "DeconstructedShellRuntimeTests",
+			dependencies: [
+				"DeconstructedShellRuntime",
+				.product(name: "SwiftUsdShell", package: "SwiftUsdShell"),
+				.product(name: "USDInterfaces", package: "USDInterop"),
+			],
+			swiftSettings: [
+				.interoperabilityMode(.Cxx),
 			]
 		),
 	],
