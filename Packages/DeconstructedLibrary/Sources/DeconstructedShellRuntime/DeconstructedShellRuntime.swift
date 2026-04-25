@@ -70,7 +70,7 @@ public enum DeconstructedShellRuntime {
 				typeName: inferTypeName(from: attr.value),
 				value: value,
 				isAuthored: true,
-				hasValue: !attr.value.isEmpty || attr.value != "(authored)",
+				hasValue: !attr.value.isEmpty && attr.value != "(authored)",
 				timeSampleCount: 0,
 				timeSamples: [.default]
 			)
@@ -201,10 +201,10 @@ public enum DeconstructedShellRuntime {
 			return .int(intValue)
 		} else if let doubleValue = parseDouble(from: value) {
 			return .double(doubleValue)
-		} else if let vector3 = parseVector3(from: value) {
-			return .vector3(SwiftUsdShell.USDVector3(x: vector3.x, y: vector3.y, z: vector3.z))
 		} else if let arrayValues = parseArray(from: value) {
 			return .array(arrayValues)
+		} else if let vector3 = parseVector3(from: value) {
+			return .vector3(SwiftUsdShell.USDVector3(x: vector3.x, y: vector3.y, z: vector3.z))
 		} else if value.contains("@") && value.count > 2 {
 			// Asset path: @path@
 			let inner = value.dropFirst().dropLast()
@@ -240,9 +240,9 @@ public enum DeconstructedShellRuntime {
 
 	private static func parseBool(from value: String) -> Bool? {
 		let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-		if trimmed == "true" || trimmed == "1" || trimmed.contains("true") {
+		if trimmed == "true" || trimmed == "1" {
 			return true
-		} else if trimmed == "false" || trimmed == "0" || trimmed.contains("false") {
+		} else if trimmed == "false" || trimmed == "0" {
 			return false
 		}
 		return nil
