@@ -11,3 +11,4 @@
 .swiftpm/
 .build/
 **/.build/
+.context/
