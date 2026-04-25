@@ -33,6 +33,7 @@ let package = Package(
 		.library(name: "SceneGraphFeature", targets: ["SceneGraphFeature"]),
 		.library(name: "SceneGraphUI", targets: ["SceneGraphUI"]),
 		.library(name: "DeconstructedUSDInterop", targets: ["DeconstructedUSDInterop"]),
+		.library(name: "DeconstructedShellRuntime", targets: ["DeconstructedShellRuntime"]),
 		.library(name: "InspectorModels", targets: ["InspectorModels"]),
 		.library(name: "InspectorFeature", targets: ["InspectorFeature"]),
 		.library(name: "InspectorUI", targets: ["InspectorUI"]),
@@ -42,6 +43,7 @@ let package = Package(
 		.package(url: "https://github.com/pointfreeco/swift-sharing", from: "2.3.0"),
 		.package(url: "https://github.com/Reality2713/USDInterop", from: "0.1.13"),
 		.package(url: "https://github.com/reality2713/StageView.git", from: "0.1.4"),
+		.package(url: "https://github.com/Reality2713/SwiftUsdShell.git", exact: "0.1.1"),
 	],
 	targets: [
 		.target(
@@ -197,6 +199,17 @@ let package = Package(
 			],
 			path: "Packages/DeconstructedLibrary/Sources/DeconstructedUSDInterop",
 			swiftSettings: [.interoperabilityMode(.Cxx)]
+		),
+			.target(
+				name: "DeconstructedShellRuntime",
+				dependencies: [
+					"DeconstructedUSDInterop",
+					.product(name: "SwiftUsdShell", package: "SwiftUsdShell"),
+					.product(name: "USDOperations", package: "USDInterop"),
+					.product(name: "USDInterfaces", package: "USDInterop"),
+				],
+				path: "Packages/DeconstructedLibrary/Sources/DeconstructedShellRuntime",
+				swiftSettings: [.interoperabilityMode(.Cxx)]
 		),
 		.target(
 			name: "InspectorModels",
