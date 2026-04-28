@@ -207,8 +207,7 @@ func materialEditRequestIsCodable() throws {
 		operation: .setTexture(
 			sourceURL: USDStageURL(URL(fileURLWithPath: "/tmp/texture.png")),
 			authoredAssetPath: "../textures/texture.png"
-		),
-		policy: .preserveAuthoredMode
+		)
 	)
 
 	let encoded = try JSONEncoder().encode(request)
@@ -216,26 +215,37 @@ func materialEditRequestIsCodable() throws {
 
 	#expect(decoded == request)
 	#expect(decoded.channel == .diffuseColor)
-	#expect(decoded.policy == .preserveAuthoredMode)
 }
 
 @Test
-func preparedMaterialEditAnalyzesBranchPlan() throws {
+func materialEditResultIsCodable() throws {
+	let result = USDMaterialEditResult(
+		resultingMode: .usdPreviewSurface,
+		changedPrimPaths: ["/Root/Looks/Material1"],
+		changedAssetPaths: ["../textures/texture.png"],
+		warnings: ["runtime-specific planning belongs above SwiftUsdShell"],
+		convertedTo: nil
+	)
+
+	let encoded = try JSONEncoder().encode(result)
+	let decoded = try JSONDecoder().decode(USDMaterialEditResult.self, from: encoded)
+
+	#expect(decoded == result)
+	#expect(decoded.resultingMode == .usdPreviewSurface)
+}
+
+@Test
+func materialEditRuntimeReportsUnsupportedExecution() throws {
 	let request = USDMaterialEditRequest(
 		stageURL: USDStageURL(URL(fileURLWithPath: "/tmp/test.usda")),
 		materialPath: "/Root/Looks/Material1",
 		channel: .diffuseColor,
-		operation: .setValue(.scalar(1.0)),
-		policy: .preserveAuthoredMode
+		operation: .setValue(.scalar(1.0))
 	)
 
-	let prepared = DeconstructedShellRuntime.prepareMaterialEdit(request: request)
-
-	#expect(prepared.readiness == .fullySupported)
-	#expect(prepared.requiresUserAttention == false)
-	#expect(prepared.branchPlan.requiresConversion == false)
-	#expect(prepared.branchPlan.preservesAuthoredMode == true)
-	#expect(prepared.supportedOutputs.contains(.usdPreviewSurface))
+	#expect(throws: ShellRuntimeError.self) {
+		try DeconstructedShellRuntime.executeMaterialEdit(request: request)
+	}
 }
 
 @Test
@@ -249,34 +259,14 @@ func materialEditContractsSupportAllChannels() throws {
 		stageURL: USDStageURL(URL(fileURLWithPath: "/tmp/test.usda")),
 		materialPath: "/Root/Looks/Material1",
 		channel: .diffuseColor,
-		operation: .setValue(.scalar(0.5)),
-		policy: .canonicalizeToPreviewSurface
+		operation: .setValue(.scalar(0.5))
 	)
-
-	let prepared = DeconstructedShellRuntime.prepareMaterialEdit(request: request)
 
 	for channel in channels {
 		var channelRequest = request
 		channelRequest.channel = channel
-		let channelPrepared = DeconstructedShellRuntime.prepareMaterialEdit(request: channelRequest)
-		#expect(channelPrepared.branchPlan.branchTargets.isEmpty == false)
+		#expect(channelRequest.channel == channel)
 	}
-}
-
-@Test
-func materialEditRequestWithConversionPolicy() throws {
-	let request = USDMaterialEditRequest(
-		stageURL: USDStageURL(URL(fileURLWithPath: "/tmp/test.usda")),
-		materialPath: "/Root/Looks/Material1",
-		channel: .roughness,
-		operation: .setValue(.scalar(0.3)),
-		policy: .convert(to: .materialXPreviewSurface)
-	)
-
-	let prepared = DeconstructedShellRuntime.prepareMaterialEdit(request: request)
-
-	#expect(prepared.branchPlan.requiresConversion == false) // Our simple implementation doesn't detect conversion need yet
-	#expect(prepared.branchPlan.preservesAuthoredMode == false)
 }
 
 // MARK: - Value Conversion Tests
@@ -486,15 +476,13 @@ func productivityBenefitsAreRealized() throws {
 	// 2. Type-safe enums prevent typos and provide autocomplete
 	let channel: USDMaterialEditableChannelID = .diffuseColor
 	let operation = USDMaterialEditOperation.setValue(.scalar(0.5))
-	let policy = USDMaterialEditPolicy.preserveAuthoredMode
 
 	// 3. Structured request types are self-documenting
 	let request = USDMaterialEditRequest(
 		stageURL: stageURL,
 		materialPath: materialPath,
 		channel: channel,
-		operation: operation,
-		policy: policy
+		operation: operation
 	)
 
 	// 4. Codable for persistence/transmission
@@ -506,18 +494,8 @@ func productivityBenefitsAreRealized() throws {
 	#expect(requests.contains(request))
 
 	// 6. Sendable for cross-actor concurrency
-	let prepared = USDPreparedMaterialEdit(
-		request: request,
-		branchPlan: USDMaterialEditBranchPlan(
-			branchTargets: [],
-			targetOutputs: [.usdPreviewSurface],
-			requiresConversion: false,
-			preservesAuthoredMode: true
-		)
-	)
-
 	Task.detached {
 		// Can be sent across actor boundaries without @unchecked Sendable
-		_ = prepared.readiness
+		_ = request.channel
 	}
 }

@@ -1,5 +1,4 @@
 import ComposableArchitecture
-import DeconstructedUSDInterop
 import Foundation
 import SceneGraphModels
 
@@ -38,40 +37,12 @@ private func loadSceneGraphFromUSD(url: URL) throws -> [SceneNode] {
 		return []
 	}
 
-	if let json = DeconstructedUSDInterop.sceneGraphJSON(url: url),
-	   let data = json.data(using: .utf8),
-	   let decoded = try? JSONDecoder().decode([CxxSceneNode].self, from: data) {
-		return decoded.map { $0.toSceneNode() }
-	}
-
-	if let usda = DeconstructedUSDInterop.exportUSDA(url: url) {
-		return parseSceneNodes(usda)
-	}
-
 	if let data = try? Data(contentsOf: url),
 	   let text = String(data: data, encoding: .utf8) {
 		return parseSceneNodes(text)
 	}
 
 	return []
-}
-
-private struct CxxSceneNode: Decodable {
-	let name: String
-	let path: String
-	let type: String?
-	let children: [CxxSceneNode]
-
-	func toSceneNode() -> SceneNode {
-		SceneNode(
-			id: path,
-			name: name,
-			typeName: type,
-			specifier: .def,
-			path: path,
-			children: children.map { $0.toSceneNode() }
-		)
-	}
 }
 
 private final class SceneNodeBuilder {

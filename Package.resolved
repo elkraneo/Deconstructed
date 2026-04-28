@@ -1,5 +1,5 @@
 {
-  "originHash" : "58117482e81cbab29ac8f922843ee556cfb53e12a1468937254a2dab2c1ce8b3",
+  "originHash" : "73694b0a2095800ddfde2a8f4d9614e0a17ddb5713c28cbba5804c47f1d85b22",
   "pins" : [
     {
       "identity" : "combine-schedulers",
@@ -141,8 +141,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Reality2713/SwiftUsdShell.git",
       "state" : {
-        "revision" : "f8344a95eb833bb70759518c7e9af544459658e7",
-        "version" : "0.1.1"
+        "revision" : "dad26bbc0ab71997ec5a7856b379ea989bca3974",
+        "version" : "0.3.2"
       }
     },
     {

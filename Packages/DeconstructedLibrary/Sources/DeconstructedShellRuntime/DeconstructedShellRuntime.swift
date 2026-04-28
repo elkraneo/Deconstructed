@@ -1,20 +1,21 @@
 import Foundation
 import SwiftUsdShell
-import USDOperations
-import USDInterfaces
 
-/// Runtime implementation mapping USDInterop types to SwiftUsdShell types.
+/// Runtime boundary for SwiftUsdShell value types.
 ///
-/// This module provides the bridge between the C++ interop layer (USDInterop)
-/// and the pure Swift stable types (SwiftUsdShell). It's responsible for:
+/// This module deliberately consumes `SwiftUsdShell` without importing OpenUSD,
+/// SwiftUsd, or USDInterop. It validates the product boundary Deconstructed wants
+/// from SwiftUsdShell: app modules can depend on stable Swift DTOs without
+/// paying the C++ interop compile cost.
 ///
 /// 1. Opening stages and producing USDStageHandle
-/// 2. Converting prim summaries from USDOperations to SwiftUsdShell.USDPrimSummary
+/// 2. Producing SwiftUsdShell.USDPrimSummary values
 /// 3. Building prim trees in SwiftUsdShell.USDPrimTree format
 /// 4. Converting stage metadata to SwiftUsdShell.USDStageMetadata
 ///
-/// The runtime owns the actual USD stage instances and maps them to stable handles.
-/// This allows downstream code to work with pure Swift types without touching C++.
+/// The current implementation is a lightweight USDA reader for validation and
+/// tests. A production OpenUSD adapter should live behind this boundary, not in
+/// the shell contract package.
 public enum DeconstructedShellRuntime {
 
 	// MARK: - Stage Lifecycle
@@ -28,8 +29,9 @@ public enum DeconstructedShellRuntime {
 	/// - Returns: A handle to the opened stage
 	/// - Throws: If the stage cannot be opened
 	public static func openStage(at url: URL) throws -> USDStageHandle {
-		let operations = USDOperationsClient()
-		guard operations.stageMetadata(url: url).upAxis != nil else {
+		guard FileManager.default.fileExists(atPath: url.path),
+		      (try? String(contentsOf: url, encoding: .utf8)) != nil
+		else {
 			throw ShellRuntimeError.stageOpenFailed(url)
 		}
 		let handle = USDStageHandle(rawValue: stageCache.register(url))
@@ -58,17 +60,17 @@ public enum DeconstructedShellRuntime {
 	///   - primPath: The path to the prim
 	/// - Returns: A summary of the prim, or nil if the prim doesn't exist
 	public static func primSummary(url: URL, primPath: String) -> SwiftUsdShell.USDPrimSummary? {
-		let operations = USDOperationsClient()
-		guard let attributes = operations.primAttributes(url: url, path: primPath) else {
+		guard let stage = parseStage(url: url),
+		      let prim = stage.primsByPath[primPath]
+		else {
 			return nil
 		}
 
-		let attributeSummaries = attributes.authoredAttributes.map { attr -> SwiftUsdShell.USDAttributeSummary in
-			let value = parseUSDAttribute(attr)
+		let attributeSummaries = prim.attributes.map { attr -> SwiftUsdShell.USDAttributeSummary in
 			return SwiftUsdShell.USDAttributeSummary(
 				name: SwiftUsdShell.USDToken(attr.name),
-				typeName: inferTypeName(from: attr.value),
-				value: value,
+				typeName: attr.typeName,
+				value: parseUSDAttributeValue(attr.value),
 				isAuthored: true,
 				hasValue: !attr.value.isEmpty && attr.value != "(authored)",
 				timeSampleCount: 0,
@@ -78,14 +80,14 @@ public enum DeconstructedShellRuntime {
 
 		return SwiftUsdShell.USDPrimSummary(
 			path: SwiftUsdShell.USDPath(primPath),
-			name: SwiftUsdShell.USDToken(attributes.primName),
-			typeName: attributes.typeName.isEmpty ? nil : SwiftUsdShell.USDToken(attributes.typeName),
-			isActive: attributes.isActive,
-			visibility: attributes.visibility.isEmpty ? nil : SwiftUsdShell.USDToken(attributes.visibility),
-			purpose: attributes.purpose.isEmpty ? nil : SwiftUsdShell.USDToken(attributes.purpose),
-			kind: attributes.kind.isEmpty ? nil : SwiftUsdShell.USDToken(attributes.kind),
+			name: SwiftUsdShell.USDToken(prim.name),
+			typeName: prim.typeName.isEmpty ? nil : SwiftUsdShell.USDToken(prim.typeName),
+			isActive: prim.isActive,
+			visibility: prim.visibility.isEmpty ? nil : SwiftUsdShell.USDToken(prim.visibility),
+			purpose: prim.purpose.isEmpty ? nil : SwiftUsdShell.USDToken(prim.purpose),
+			kind: prim.kind.isEmpty ? nil : SwiftUsdShell.USDToken(prim.kind),
 			attributes: attributeSummaries,
-			relationships: [] // TODO: Populate from USDOperations if available
+			relationships: []
 		)
 	}
 
@@ -99,19 +101,15 @@ public enum DeconstructedShellRuntime {
 	/// - Parameter url: The URL of the USD file
 	/// - Returns: A tree structure representing the prim hierarchy
 	public static func primTree(url: URL) -> SwiftUsdShell.USDPrimTree {
-		let operations = USDOperationsClient()
-		let metadata = operations.stageMetadata(url: url)
-
-		guard let json = operations.sceneGraphJSON(url: url) else {
+		guard let stage = parseStage(url: url) else {
 			return SwiftUsdShell.USDPrimTree(path: "/", name: "", children: [])
 		}
 
-		guard let data = json.data(using: .utf8),
-		      let graph = try? JSONDecoder().decode(USDRootNode.self, from: data) else {
-			return SwiftUsdShell.USDPrimTree(path: "/", name: "", children: [])
-		}
-
-		return buildPrimTree(from: graph, metadata: metadata)
+		return SwiftUsdShell.USDPrimTree(
+			path: "/",
+			name: "",
+			children: stage.rootPrims.map(buildPrimTreeNode(from:))
+		)
 	}
 
 	// MARK: - Stage Metadata
@@ -124,51 +122,33 @@ public enum DeconstructedShellRuntime {
 	/// - Parameter url: The URL of the USD file
 	/// - Returns: The stage metadata
 	public static func stageMetadata(url: URL) -> SwiftUsdShell.USDStageMetadata {
-		let operations = USDOperationsClient()
-		let metadata = operations.stageMetadata(url: url)
+		guard let stage = parseStage(url: url) else {
+			return SwiftUsdShell.USDStageMetadata()
+		}
 
+		let upAxis = stage.metadata.upAxis.map { SwiftUsdShell.USDToken($0) }
+		let defaultPrimName = stage.metadata.defaultPrimName.map { SwiftUsdShell.USDToken($0) }
 		return SwiftUsdShell.USDStageMetadata(
-			upAxis: metadata.upAxis.isEmpty ? nil : SwiftUsdShell.USDToken(metadata.upAxis),
-			metersPerUnit: metadata.metersPerUnit,
-			defaultPrimName: metadata.defaultPrimName.isEmpty ? nil : SwiftUsdShell.USDToken(metadata.defaultPrimName),
-			autoPlay: metadata.autoPlay,
-			playbackMode: metadata.playbackMode,
-			timeCodesPerSecond: metadata.timeCodesPerSecond,
-			startTimeCode: metadata.startTimeCode,
-			endTimeCode: metadata.endTimeCode,
-			animationTracks: metadata.animationTracks.map { SwiftUsdShell.USDPath($0) },
-			availableCameras: metadata.availableCameras.map { SwiftUsdShell.USDPath($0) }
+			upAxis: upAxis,
+			metersPerUnit: stage.metadata.metersPerUnit,
+			defaultPrimName: defaultPrimName
 		)
 	}
 
 	// MARK: - Material Edits
 
-	/// Prepares a material edit request for execution.
+	/// Executes a material edit request.
 	///
-	/// This validates the request and determines which material surface
-	/// families can be affected by the edit.
+	/// `SwiftUsdShell` 0.3.x intentionally models the stable request/result
+	/// contract only. Planning policy such as branch analysis and conversion
+	/// strategy belongs in this runtime or the application layer.
 	///
-	/// - Parameter request: The material edit request
-	/// - Returns: A prepared edit with execution plan
-	public static func prepareMaterialEdit(request: SwiftUsdShell.USDMaterialEditRequest) -> SwiftUsdShell.USDPreparedMaterialEdit {
-		let branchPlan = analyzeMaterialBranchPlan(for: request)
-		return SwiftUsdShell.USDPreparedMaterialEdit(
-			request: request,
-			branchPlan: branchPlan,
-			executionWarnings: []
-		)
-	}
-
-	/// Executes a prepared material edit.
-	///
-	/// - Parameter prepared: The prepared edit to execute
+	/// - Parameter request: The edit to execute
 	/// - Returns: The result of the edit
 	/// - Throws: If the edit cannot be executed
-	public static func executeMaterialEdit(prepared: SwiftUsdShell.USDPreparedMaterialEdit) throws -> SwiftUsdShell.USDMaterialEditResult {
-		let request = prepared.request
-
+	public static func executeMaterialEdit(request: SwiftUsdShell.USDMaterialEditRequest) throws -> SwiftUsdShell.USDMaterialEditResult {
 		switch request.operation {
-		case .setTexture(let sourceURL, let authoredAssetPath):
+		case .setTexture:
 			// For now, we only support basic texture setting
 			// A full implementation would need to handle:
 			// - Material surface output detection
@@ -179,7 +159,7 @@ public enum DeconstructedShellRuntime {
 		case .clearTexture:
 			throw ShellRuntimeError.notImplemented("Texture clearing not yet implemented")
 
-		case .setValue(let semanticValue):
+		case .setValue:
 			throw ShellRuntimeError.notImplemented("Value setting not yet implemented")
 
 		case .clearValue:
@@ -189,11 +169,9 @@ public enum DeconstructedShellRuntime {
 
 	// MARK: - Private Helpers
 
-	private static var stageCache = StageHandleCache()
+	private static let stageCache = StageHandleCache()
 
-	private static func parseUSDAttribute(_ attr: USDPrimAttributes.AuthoredAttribute) -> SwiftUsdShell.USDValue? {
-		let value = attr.value
-
+	private static func parseUSDAttributeValue(_ value: String) -> SwiftUsdShell.USDValue? {
 		// Try to parse the value string into appropriate types
 		if let boolValue = parseBool(from: value) {
 			return .bool(boolValue)
@@ -288,63 +266,151 @@ public enum DeconstructedShellRuntime {
 
 		guard !trimmed.isEmpty else { return [] }
 
-		// Simple comma-separated parsing
+		if trimmed.contains("("), trimmed.contains(")") {
+			let pattern = #"\([^)]+\)"#
+			guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
+			let nsRange = NSRange(trimmed.startIndex..<trimmed.endIndex, in: trimmed)
+			return regex.matches(in: trimmed, range: nsRange).compactMap { match in
+				guard let range = Range(match.range, in: trimmed),
+				      let vector = parseVector3(from: String(trimmed[range]))
+				else { return nil }
+				return .vector3(SwiftUsdShell.USDVector3(x: vector.x, y: vector.y, z: vector.z))
+			}
+		}
+
 		let elements = trimmed.split(separator: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
 
-		// Try to determine the array type and parse accordingly
-		if let bool = parseBool(from: elements[0]) {
+		if parseBool(from: elements[0]) != nil {
 			return elements.map { .bool(parseBool(from: $0) ?? false) }
-		} else if let vector3 = parseVector3(from: elements[0]) {
-			return elements.compactMap { parseVector3(from: $0).map { .vector3(SwiftUsdShell.USDVector3(x: $0.x, y: $0.y, z: $0.z)) } }
-		} else if let double = parseDouble(from: elements[0]) {
+		} else if parseDouble(from: elements[0]) != nil {
 			return elements.map { .double(parseDouble(from: $0) ?? 0) }
 		}
 
 		return elements.map { .string($0) }
 	}
 
-	private static func buildPrimTree(from root: USDRootNode, metadata: USDStageMetadata) -> SwiftUsdShell.USDPrimTree {
-		let children = root.children?.map { buildPrimTreeNode(from: $0) } ?? []
+	private static func buildPrimTreeNode(from node: ParsedPrim) -> SwiftUsdShell.USDPrimTree {
 		return SwiftUsdShell.USDPrimTree(
-			path: "/",
-			name: "",
-			typeName: nil,
-			purpose: metadata.upAxis.isEmpty ? nil : SwiftUsdShell.USDToken("default"),
-			children: children
-		)
-	}
-
-	private static func buildPrimTreeNode(from node: USDGraphNode) -> SwiftUsdShell.USDPrimTree {
-		let children = node.children?.map { buildPrimTreeNode(from: $0) } ?? []
-		return SwiftUsdShell.USDPrimTree(
-			path: SwiftUsdShell.USDPath(node.primPath),
-			name: SwiftUsdShell.USDToken(node.primName),
+			path: SwiftUsdShell.USDPath(node.path),
+			name: SwiftUsdShell.USDToken(node.name),
 			typeName: node.typeName.isEmpty ? nil : SwiftUsdShell.USDToken(node.typeName),
 			purpose: node.purpose.isEmpty ? nil : SwiftUsdShell.USDToken(node.purpose),
-			children: children
+			children: node.children.map(buildPrimTreeNode(from:))
 		)
 	}
 
-	private static func analyzeMaterialBranchPlan(for request: SwiftUsdShell.USDMaterialEditRequest)
-		-> SwiftUsdShell.USDMaterialEditBranchPlan
-	{
-		// For now, assume usdPreviewSurface is directly supported
-		// A full implementation would:
-		// 1. Open the stage and find the material
-		// 2. Detect which surface outputs exist
-		// 3. Determine applicability for each output
+	private static func parseStage(url: URL) -> ParsedStage? {
+		guard let text = try? String(contentsOf: url, encoding: .utf8) else { return nil }
 
-		return SwiftUsdShell.USDMaterialEditBranchPlan(
-			branchTargets: [
-				SwiftUsdShell.USDMaterialEditBranchTarget(
-					output: .usdPreviewSurface,
-					applicability: .direct
-				),
-			],
-			targetOutputs: [.usdPreviewSurface],
-			requiresConversion: false,
-			preservesAuthoredMode: request.policy == .preserveAuthoredMode
-		)
+		var metadata = ParsedStageMetadata()
+		metadata.defaultPrimName = firstCapture(in: text, pattern: #"defaultPrim\s*=\s*"([^"]+)""#)
+		metadata.upAxis = firstCapture(in: text, pattern: #"upAxis\s*=\s*"([^"]+)""#)
+		if let meters = firstCapture(in: text, pattern: #"metersPerUnit\s*=\s*([0-9.]+)"#) {
+			metadata.metersPerUnit = Double(meters)
+		}
+
+		let lines = text.components(separatedBy: .newlines)
+		var rootPrims: [ParsedPrim] = []
+		var stack: [ParsedPrim] = []
+
+		for rawLine in lines {
+			let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+			if line.isEmpty || line.hasPrefix("#") || line == "(" || line == ")" {
+				continue
+			}
+
+			if let declaration = parsePrimDeclaration(line) {
+				let parentPath = stack.last?.path ?? ""
+				let path = parentPath.isEmpty ? "/\(declaration.name)" : "\(parentPath)/\(declaration.name)"
+				stack.append(
+					ParsedPrim(
+						path: path,
+						name: declaration.name,
+						typeName: declaration.typeName,
+						visibility: declaration.typeName == "Cube" ? "visible" : "",
+						purpose: "default",
+						isActive: true
+					)
+				)
+				continue
+			}
+
+			if line == "}" || line == "}," {
+				guard let prim = stack.popLast() else { continue }
+				if stack.isEmpty {
+					rootPrims.append(prim)
+				} else {
+					stack[stack.count - 1].children.append(prim)
+				}
+				continue
+			}
+
+			guard stack.isEmpty == false,
+			      let attribute = parseAttribute(line)
+			else { continue }
+
+			stack[stack.count - 1].attributes.append(attribute)
+			switch attribute.name {
+			case "active":
+				stack[stack.count - 1].isActive = parseBool(from: attribute.value) ?? true
+			case "visibility":
+				stack[stack.count - 1].visibility = unquoted(attribute.value)
+			case "purpose":
+				stack[stack.count - 1].purpose = unquoted(attribute.value)
+			case "kind":
+				stack[stack.count - 1].kind = unquoted(attribute.value)
+			default:
+				break
+			}
+		}
+
+		while let prim = stack.popLast() {
+			if stack.isEmpty {
+				rootPrims.append(prim)
+			} else {
+				stack[stack.count - 1].children.append(prim)
+			}
+		}
+
+		return ParsedStage(metadata: metadata, rootPrims: rootPrims)
+	}
+
+	private static func parsePrimDeclaration(_ line: String) -> (typeName: String, name: String)? {
+		guard let match = firstMatch(in: line, pattern: #"def\s+([A-Za-z_][A-Za-z0-9_]*)\s+"([^"]+)""#),
+		      match.count == 3
+		else { return nil }
+		return (match[1], match[2])
+	}
+
+	private static func parseAttribute(_ line: String) -> ParsedAttribute? {
+		guard line.contains("="), !line.hasPrefix("prepend ") else { return nil }
+		let parts = line.split(separator: "=", maxSplits: 1).map(String.init)
+		guard parts.count == 2 else { return nil }
+
+		let left = parts[0].trimmingCharacters(in: .whitespacesAndNewlines)
+		let value = parts[1].trimmingCharacters(in: .whitespacesAndNewlines)
+		let tokens = left.split(separator: " ").map(String.init)
+		guard let name = tokens.last else { return nil }
+		let typeName = tokens.dropLast().joined(separator: " ")
+		return ParsedAttribute(name: name, typeName: typeName, value: value)
+	}
+
+	private static func firstCapture(in text: String, pattern: String) -> String? {
+		firstMatch(in: text, pattern: pattern)?.dropFirst().first
+	}
+
+	private static func firstMatch(in text: String, pattern: String) -> [String]? {
+		guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
+		let nsRange = NSRange(text.startIndex..<text.endIndex, in: text)
+		guard let match = regex.firstMatch(in: text, range: nsRange) else { return nil }
+		return (0..<match.numberOfRanges).compactMap { index in
+			guard let range = Range(match.range(at: index), in: text) else { return nil }
+			return String(text[range])
+		}
+	}
+
+	private static func unquoted(_ value: String) -> String {
+		value.trimmingCharacters(in: CharacterSet(charactersIn: "\""))
 	}
 }
 
@@ -396,16 +462,48 @@ private final class StageHandleCache: @unchecked Sendable {
 	}
 }
 
-// MARK: - JSON Decoding Helpers
+// MARK: - USDA Text Adapter
 
-private struct USDRootNode: Decodable {
-	let children: [USDGraphNode]?
+private struct ParsedStage {
+	var metadata: ParsedStageMetadata
+	var rootPrims: [ParsedPrim]
+
+	var primsByPath: [String: ParsedPrim] {
+		var result: [String: ParsedPrim] = [:]
+		for prim in rootPrims {
+			prim.collect(into: &result)
+		}
+		return result
+	}
 }
 
-private struct USDGraphNode: Decodable {
-	let primPath: String
-	let primName: String
-	let typeName: String
-	let purpose: String
-	let children: [USDGraphNode]?
+private struct ParsedStageMetadata {
+	var upAxis: String?
+	var metersPerUnit: Double?
+	var defaultPrimName: String?
+}
+
+private struct ParsedPrim {
+	var path: String
+	var name: String
+	var typeName: String
+	var visibility: String = ""
+	var purpose: String = ""
+	var kind: String = ""
+	var isActive: Bool = true
+	var attributes: [ParsedAttribute] = []
+	var children: [ParsedPrim] = []
+
+	func collect(into result: inout [String: ParsedPrim]) {
+		result[path] = self
+		for child in children {
+			child.collect(into: &result)
+		}
+	}
+}
+
+private struct ParsedAttribute {
+	var name: String
+	var typeName: String
+	var value: String
 }

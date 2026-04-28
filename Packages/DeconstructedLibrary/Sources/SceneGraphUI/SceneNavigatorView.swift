@@ -1,5 +1,5 @@
 import ComposableArchitecture
-import DeconstructedUSDInterop
+import DeconstructedModels
 import SceneGraphFeature
 import SceneGraphModels
 import SwiftUI

@@ -43,7 +43,7 @@ let package = Package(
 		.package(url: "https://github.com/pointfreeco/swift-sharing", from: "2.3.0"),
 		.package(url: "https://github.com/Reality2713/USDInterop", from: "0.1.13"),
 		.package(url: "https://github.com/reality2713/StageView.git", from: "0.1.4"),
-		.package(url: "https://github.com/Reality2713/SwiftUsdShell.git", exact: "0.1.1"),
+		.package(url: "https://github.com/Reality2713/SwiftUsdShell.git", exact: "0.3.2"),
 	],
 	targets: [
 		.target(
@@ -82,7 +82,7 @@ let package = Package(
 				"ProjectBrowserFeature",
 				"SceneGraphUI",
 				"DeconstructedFeatures",
-				"DeconstructedUSDInterop",
+				"DeconstructedModels",
 				"ViewportUI",
 				"ViewportModels",
 				"InspectorUI",
@@ -117,11 +117,9 @@ let package = Package(
 			dependencies: [
 				"ProjectBrowserModels",
 				"DeconstructedModels",
-				"DeconstructedUSDInterop",
 				.product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
 			],
-			path: "Packages/DeconstructedLibrary/Sources/ProjectBrowserClients",
-			swiftSettings: [.interoperabilityMode(.Cxx)]
+			path: "Packages/DeconstructedLibrary/Sources/ProjectBrowserClients"
 		),
 		.target(
 			name: "ProjectBrowserFeature",
@@ -131,8 +129,7 @@ let package = Package(
 				.product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
 				.product(name: "Sharing", package: "swift-sharing"),
 			],
-			path: "Packages/DeconstructedLibrary/Sources/ProjectBrowserFeature",
-			swiftSettings: [.interoperabilityMode(.Cxx)]
+			path: "Packages/DeconstructedLibrary/Sources/ProjectBrowserFeature"
 		),
 		.target(
 			name: "ProjectBrowserUI",
@@ -140,8 +137,7 @@ let package = Package(
 				"ProjectBrowserFeature",
 				.product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
 			],
-			path: "Packages/DeconstructedLibrary/Sources/ProjectBrowserUI",
-			swiftSettings: [.interoperabilityMode(.Cxx)]
+			path: "Packages/DeconstructedLibrary/Sources/ProjectBrowserUI"
 		),
 		.target(
 			name: "ViewportModels",
@@ -149,9 +145,8 @@ let package = Package(
 		),
 		.target(
 			name: "ViewportUI",
-			dependencies: ["ViewportModels", .product(name: "RealityKitStageView", package: "StageView"), .product(name: "USDInterfaces", package: "USDInterop")],
-			path: "Packages/DeconstructedLibrary/Sources/ViewportUI",
-			swiftSettings: [.interoperabilityMode(.Cxx)]
+			dependencies: ["ViewportModels", .product(name: "RealityKitStageView", package: "StageView")],
+			path: "Packages/DeconstructedLibrary/Sources/ViewportUI"
 		),
 		.target(
 			name: "SceneGraphModels",
@@ -162,17 +157,15 @@ let package = Package(
 			dependencies: [
 				"SceneGraphModels",
 				"DeconstructedModels",
-				"DeconstructedUSDInterop",
 				.product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
-				.product(name: "USDInterfaces", package: "USDInterop"),
 			],
 			path: "Packages/DeconstructedLibrary/Sources/SceneGraphClients",
-			swiftSettings: [.interoperabilityMode(.Cxx)]
+			swiftSettings: []
 		),
 		.target(
 			name: "SceneGraphFeature",
 			dependencies: [
-				"DeconstructedUSDInterop",
+				"DeconstructedModels",
 				"SceneGraphClients",
 				.product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
 			],
@@ -182,7 +175,7 @@ let package = Package(
 		.target(
 			name: "SceneGraphUI",
 			dependencies: [
-				"DeconstructedUSDInterop",
+				"DeconstructedModels",
 				"SceneGraphFeature",
 				.product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
 			],
@@ -192,6 +185,7 @@ let package = Package(
 		.target(
 			name: "DeconstructedUSDInterop",
 			dependencies: [
+				"DeconstructedModels",
 				.product(name: "USDInterop", package: "USDInterop"),
 				.product(name: "USDOperations", package: "USDInterop"),
 				.product(name: "USDInterfaces", package: "USDInterop"),
@@ -203,13 +197,10 @@ let package = Package(
 			.target(
 				name: "DeconstructedShellRuntime",
 				dependencies: [
-					"DeconstructedUSDInterop",
 					.product(name: "SwiftUsdShell", package: "SwiftUsdShell"),
-					.product(name: "USDOperations", package: "USDInterop"),
-					.product(name: "USDInterfaces", package: "USDInterop"),
 				],
 				path: "Packages/DeconstructedLibrary/Sources/DeconstructedShellRuntime",
-				swiftSettings: [.interoperabilityMode(.Cxx)]
+				swiftSettings: []
 		),
 		.target(
 			name: "InspectorModels",
@@ -222,23 +213,18 @@ let package = Package(
 		.target(
 			name: "InspectorFeature",
 			dependencies: [
-				"InspectorModels",
-				"DeconstructedUSDInterop",
+				"SceneGraphModels",
 				.product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
-				.product(name: "USDInterfaces", package: "USDInterop"),
 			],
-			path: "Packages/DeconstructedLibrary/Sources/InspectorFeature",
-			swiftSettings: [.interoperabilityMode(.Cxx)]
+			path: "Packages/DeconstructedLibrary/Sources/InspectorShellFeature"
 		),
 		.target(
 			name: "InspectorUI",
 			dependencies: [
 				"InspectorFeature",
 				.product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
-				.product(name: "USDInterfaces", package: "USDInterop"),
 			],
-			path: "Packages/DeconstructedLibrary/Sources/InspectorUI",
-			swiftSettings: [.interoperabilityMode(.Cxx)]
+			path: "Packages/DeconstructedLibrary/Sources/InspectorShellUI"
 		),
 	]
 )

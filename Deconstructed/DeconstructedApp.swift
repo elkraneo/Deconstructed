@@ -10,7 +10,6 @@ import ComposableArchitecture
 import DeconstructedClients
 import DeconstructedFeatures
 import DeconstructedUI
-import DeconstructedUSDInterop
 import RCPDocument
 import SwiftUI
 

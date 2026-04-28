@@ -1,9 +1,7 @@
 import AppKit
 import ComposableArchitecture
 import CryptoKit
-import DeconstructedUSDInterop
 import Foundation
-import USDInterfaces
 
 @DependencyClient
 public struct ThumbnailClient: Sendable {
@@ -57,7 +55,7 @@ public actor ThumbnailGenerator {
 	}
 
 	private func generateThumbnail(url: URL, output: URL, size: CGFloat) async -> NSImage? {
-		let bounds = try? DeconstructedUSDInterop.getSceneBounds(url: url)
+		let bounds = Self.approximateSceneBounds(from: url)
 		if let bounds, bounds.maxExtent > 0 {
 			print("[ThumbnailGenerator] Using bounds-based camera for: \(url.lastPathComponent)")
 			return await generateThumbnailWithBounds(url: url, output: output, size: size, bounds: bounds)
@@ -71,7 +69,7 @@ public actor ThumbnailGenerator {
 		url: URL,
 		output: URL,
 		size: CGFloat,
-		bounds: USDSceneBounds
+		bounds: ThumbnailSceneBounds
 	) async -> NSImage? {
 		// Default camera is at (0, 0, 10) looking at origin
 		// We want to position camera based on scene bounds
@@ -238,5 +236,40 @@ public actor ThumbnailGenerator {
 
 	private func hashInput(for url: URL) -> String {
 		url.standardizedFileURL.absoluteString
+	}
+
+	private static func approximateSceneBounds(from url: URL) -> ThumbnailSceneBounds? {
+		guard
+			let text = try? String(contentsOf: url, encoding: .utf8),
+			let range = text.range(of: #"extent\s*=\s*\[\s*\(([^)]*)\)\s*,\s*\(([^)]*)\)\s*\]"#, options: .regularExpression)
+		else {
+			return nil
+		}
+
+		let extent = String(text[range])
+		let values = extent
+			.split { character in
+				character == "(" || character == ")" || character == "," || character == "[" || character == "]" || character == " " || character == "\n" || character == "\t"
+			}
+			.compactMap { Float($0) }
+
+		guard values.count >= 6 else { return nil }
+		let min = SIMD3<Float>(values[0], values[1], values[2])
+		let max = SIMD3<Float>(values[3], values[4], values[5])
+		return ThumbnailSceneBounds(min: min, max: max)
+	}
+}
+
+private struct ThumbnailSceneBounds: Sendable {
+	let min: SIMD3<Float>
+	let max: SIMD3<Float>
+
+	var center: SIMD3<Float> {
+		(min + max) / 2
+	}
+
+	var maxExtent: Float {
+		let extent = max - min
+		return Swift.max(extent.x, extent.y, extent.z)
 	}
 }

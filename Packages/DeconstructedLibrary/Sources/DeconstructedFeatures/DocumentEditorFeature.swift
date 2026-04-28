@@ -6,7 +6,6 @@ import ProjectBrowserFeature
 import RealityKitStageView
 import SceneGraphFeature
 import SceneGraphModels
-import USDInterfaces
 import ViewportModels
 
 /// Represents an open scene tab with its viewport state

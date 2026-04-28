@@ -1,5 +1,5 @@
 {
-  "originHash" : "18c382d9ce8d26717d3c0bebd0a2c188219dd414b4d23d2d131e471e6b775957",
+  "originHash" : "af0e2754c11f048b466c1aa3c05c3df110c91aee71990cdadf953b1e2aa6b729",
   "pins" : [
     {
       "identity" : "combine-schedulers",
@@ -132,8 +132,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Reality2713/SwiftUsd.git",
       "state" : {
-        "revision" : "155d52c1071e6b3735ac17b720c265e8472f8d85",
-        "version" : "6.1.0-preflight.1"
+        "revision" : "30d1fb30f0c63f3f720c4388da43dc0ca749505c",
+        "version" : "6.1.0-preflight.3"
       }
     },
     {
@@ -141,8 +141,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Reality2713/SwiftUsdShell.git",
       "state" : {
-        "revision" : "f8344a95eb833bb70759518c7e9af544459658e7",
-        "version" : "0.1.1"
+        "revision" : "dad26bbc0ab71997ec5a7856b379ea989bca3974",
+        "version" : "0.3.2"
       }
     },
     {
@@ -150,8 +150,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Reality2713/USDInterop",
       "state" : {
-        "revision" : "6e27d50e19d5c16832b5043bbcca3253b7393c61",
-        "version" : "0.1.13"
+        "revision" : "c50696ba0f5ec18c8cd9850b3bde1fc3d4388fce",
+        "version" : "0.1.17"
       }
     },
     {

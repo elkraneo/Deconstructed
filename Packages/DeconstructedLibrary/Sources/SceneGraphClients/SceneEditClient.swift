@@ -1,5 +1,5 @@
 import ComposableArchitecture
-import DeconstructedUSDInterop
+import DeconstructedModels
 import Foundation
 
 /// Client for editing USD scene content (creating prims, etc.).
@@ -44,21 +44,11 @@ public struct SceneEditClient: Sendable {
 private enum SceneEditClientKey: DependencyKey {
 	static var liveValue: SceneEditClient {
 		SceneEditClient(
-			createPrimitive: { url, parentPath, primitiveType, name in
-				try DeconstructedUSDInterop.createPrimitive(
-					url: url,
-					parentPath: parentPath,
-					primitiveType: primitiveType,
-					name: name
-				)
+			createPrimitive: { _, _, _, _ in
+				throw SceneEditClientError.runtimeUnavailable
 			},
-			createStructural: { url, parentPath, structuralType, name in
-				try DeconstructedUSDInterop.createStructural(
-					url: url,
-					parentPath: parentPath,
-					structuralType: structuralType,
-					name: name
-				)
+			createStructural: { _, _, _, _ in
+				throw SceneEditClientError.runtimeUnavailable
 			}
 		)
 	}
@@ -68,6 +58,17 @@ private enum SceneEditClientKey: DependencyKey {
 			createPrimitive: { _, _, _, _ in "/" },
 			createStructural: { _, _, _, _ in "/" }
 		)
+	}
+}
+
+public enum SceneEditClientError: Error, LocalizedError, Sendable {
+	case runtimeUnavailable
+
+	public var errorDescription: String? {
+		switch self {
+		case .runtimeUnavailable:
+			return "OpenUSD scene editing runtime is not available."
+		}
 	}
 }
 

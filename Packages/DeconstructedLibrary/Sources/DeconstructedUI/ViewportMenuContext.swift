@@ -1,5 +1,5 @@
 import DeconstructedFeatures
-import DeconstructedUSDInterop
+import DeconstructedModels
 import SwiftUI
 import ViewportModels
 
