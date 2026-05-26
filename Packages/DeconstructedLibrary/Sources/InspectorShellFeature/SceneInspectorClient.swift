@@ -15,6 +15,11 @@ public struct SceneInspectorClient: Sendable {
 	public var materialBinding: @Sendable (_ url: URL, _ primPath: String) async -> SwiftUsdShell.USDMaterialBindingInfo?
 	public var primReferences: @Sendable (_ url: URL, _ primPath: String) async -> [SwiftUsdShell.USDReference]
 	public var primVariantSets: @Sendable (_ url: URL, _ primPath: String) async -> [SwiftUsdShell.USDVariantSetSummary]
+	public var primSummary: @Sendable (_ url: URL, _ primPath: String) async -> SwiftUsdShell.USDPrimSummary?
+	public var allMaterials: @Sendable (_ url: URL) async -> [SwiftUsdShell.USDMaterialSummary]
+	public var materialProperties: @Sendable (_ url: URL, _ materialPath: String) async -> [SwiftUsdShell.USDMaterialPropertySummary]
+	public var primCompositionArcs: @Sendable (_ url: URL, _ primPath: String) async -> [SwiftUsdShell.USDCompositionArcSummary]
+	public var primComponents: @Sendable (_ url: URL, _ primPath: String) async -> [InspectorComponentSummary]
 
 	public init(
 		stageMetadata: @escaping @Sendable (_ url: URL) async -> SwiftUsdShell.USDStageMetadata = { _ in
@@ -31,6 +36,21 @@ public struct SceneInspectorClient: Sendable {
 		},
 		primVariantSets: @escaping @Sendable (_ url: URL, _ primPath: String) async -> [SwiftUsdShell.USDVariantSetSummary] = { _, _ in
 			[]
+		},
+		primSummary: @escaping @Sendable (_ url: URL, _ primPath: String) async -> SwiftUsdShell.USDPrimSummary? = { _, _ in
+			nil
+		},
+		allMaterials: @escaping @Sendable (_ url: URL) async -> [SwiftUsdShell.USDMaterialSummary] = { _ in
+			[]
+		},
+		materialProperties: @escaping @Sendable (_ url: URL, _ materialPath: String) async -> [SwiftUsdShell.USDMaterialPropertySummary] = { _, _ in
+			[]
+		},
+		primCompositionArcs: @escaping @Sendable (_ url: URL, _ primPath: String) async -> [SwiftUsdShell.USDCompositionArcSummary] = { _, _ in
+			[]
+		},
+		primComponents: @escaping @Sendable (_ url: URL, _ primPath: String) async -> [InspectorComponentSummary] = { _, _ in
+			[]
 		}
 	) {
 		self.stageMetadata = stageMetadata
@@ -38,6 +58,11 @@ public struct SceneInspectorClient: Sendable {
 		self.materialBinding = materialBinding
 		self.primReferences = primReferences
 		self.primVariantSets = primVariantSets
+		self.primSummary = primSummary
+		self.allMaterials = allMaterials
+		self.materialProperties = materialProperties
+		self.primCompositionArcs = primCompositionArcs
+		self.primComponents = primComponents
 	}
 }
 

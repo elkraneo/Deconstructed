@@ -1,4 +1,6 @@
+import DeconstructedUSDInterop
 import Foundation
+import InspectorFeature
 import SwiftUsdShell
 import USDInterfaces
 import USDOperations
@@ -62,16 +64,14 @@ public enum DeconstructedShellRuntime {
 	///   - primPath: The path to the prim
 	/// - Returns: A summary of the prim, or nil if the prim doesn't exist
 	public static func primSummary(url: URL, primPath: String) -> SwiftUsdShell.USDPrimSummary? {
-		guard let stage = parseStage(url: url),
-		      let prim = stage.primsByPath[primPath]
-		else {
+		guard let raw = USDOperationsClient().primAttributes(url: url, path: primPath) else {
 			return nil
 		}
 
-		let attributeSummaries = prim.attributes.map { attr -> SwiftUsdShell.USDAttributeSummary in
-			return SwiftUsdShell.USDAttributeSummary(
+		let attributeSummaries = raw.authoredAttributes.map { attr -> SwiftUsdShell.USDAttributeSummary in
+			SwiftUsdShell.USDAttributeSummary(
 				name: SwiftUsdShell.USDToken(attr.name),
-				typeName: attr.typeName,
+				typeName: "",
 				value: parseUSDAttributeValue(attr.value),
 				isAuthored: true,
 				hasValue: !attr.value.isEmpty && attr.value != "(authored)",
@@ -81,13 +81,13 @@ public enum DeconstructedShellRuntime {
 		}
 
 		return SwiftUsdShell.USDPrimSummary(
-			path: SwiftUsdShell.USDPath(primPath),
-			name: SwiftUsdShell.USDToken(prim.name),
-			typeName: prim.typeName.isEmpty ? nil : SwiftUsdShell.USDToken(prim.typeName),
-			isActive: prim.isActive,
-			visibility: prim.visibility.isEmpty ? nil : SwiftUsdShell.USDToken(prim.visibility),
-			purpose: prim.purpose.isEmpty ? nil : SwiftUsdShell.USDToken(prim.purpose),
-			kind: prim.kind.isEmpty ? nil : SwiftUsdShell.USDToken(prim.kind),
+			path: SwiftUsdShell.USDPath(raw.primPath),
+			name: SwiftUsdShell.USDToken(raw.primName),
+			typeName: raw.typeName.isEmpty ? nil : SwiftUsdShell.USDToken(raw.typeName),
+			isActive: raw.isActive,
+			visibility: raw.visibility.isEmpty ? nil : SwiftUsdShell.USDToken(raw.visibility),
+			purpose: raw.purpose.isEmpty ? nil : SwiftUsdShell.USDToken(raw.purpose),
+			kind: raw.kind.isEmpty ? nil : SwiftUsdShell.USDToken(raw.kind),
 			attributes: attributeSummaries,
 			relationships: []
 		)
@@ -165,6 +165,52 @@ public enum DeconstructedShellRuntime {
 		)
 	}
 
+	// MARK: - Scene Materials
+
+	/// Returns the list of `Material` prims authored on the stage, mapped to
+	/// the pure-Swift `SwiftUsdShell.USDMaterialSummary` DTO.
+	public static func allMaterials(url: URL) -> [SwiftUsdShell.USDMaterialSummary] {
+		USDOperationsClient().allMaterials(url: url).map { info in
+			SwiftUsdShell.USDMaterialSummary(
+				path: SwiftUsdShell.USDPath(info.path),
+				name: info.name,
+				materialType: bridgeMaterialSummaryType(info.materialType)
+			)
+		}
+	}
+
+	private static func bridgeMaterialSummaryType(
+		_ raw: USDInterfaces.USDMaterialInfo.MaterialType
+	) -> SwiftUsdShell.USDMaterialSummaryType {
+		switch raw {
+		case .previewSurface: return .usdPreviewSurface
+		case .materialX: return .materialX
+		case .unknown: return .unknown
+		@unknown default: return .unknown
+		}
+	}
+
+	// MARK: - Material Properties
+
+	/// Returns the authored attributes on a Material prim, surfaced as a
+	/// best-effort property list until shader-network walking lands.
+	/// Each authored attribute is mapped to an `unsupported` property whose
+	/// `valueDescription` carries the rendered string from OpenUSD.
+	public static func materialProperties(
+		url: URL, materialPath: String
+	) -> [SwiftUsdShell.USDMaterialPropertySummary] {
+		guard let raw = USDOperationsClient().primAttributes(url: url, path: materialPath) else {
+			return []
+		}
+		return raw.authoredAttributes.map { attr in
+			SwiftUsdShell.USDMaterialPropertySummary(
+				name: attr.name,
+				propertyType: .unsupported,
+				value: .unsupported(typeName: "", valueDescription: attr.value)
+			)
+		}
+	}
+
 	// MARK: - Material Binding
 
 	/// Returns the effective material binding for a prim, including
@@ -204,6 +250,61 @@ public enum DeconstructedShellRuntime {
 				choices: descriptor.options.map { SwiftUsdShell.USDToken($0.id) },
 				selection: descriptor.selectedOptionId.map { SwiftUsdShell.USDToken($0) },
 				hasAuthoredSelection: descriptor.selectedOptionId != nil
+			)
+		}
+	}
+
+	// MARK: - Composition Arcs
+
+	/// Returns the composition arcs that contributed opinions to a prim,
+	/// derived from `USDOperationsClient.primProvenance` and mapped onto the
+	/// pure-Swift `SwiftUsdShell.USDCompositionArcSummary`. The shell DTO
+	/// only models reference vs payload; inherits/specializes/variant/local
+	/// arcs collapse onto `.reference` with `isInternal = true` (lossy by
+	/// design — refine when shell models the full enum).
+	public static func primCompositionArcs(url: URL, primPath: String) -> [SwiftUsdShell.USDCompositionArcSummary] {
+		guard let provenance = USDOperationsClient().primProvenance(url: url, path: primPath) else {
+			return []
+		}
+		return provenance.sites.map { site -> SwiftUsdShell.USDCompositionArcSummary in
+			let kind: SwiftUsdShell.USDCompositionArcKind = site.kind == .payload ? .payload : .reference
+			let isInternal: Bool
+			switch site.kind {
+			case .reference, .payload: isInternal = false
+			case .localLayer, .sublayer, .inherits, .specializes, .variant, .unknown: isInternal = true
+			@unknown default: isInternal = true
+			}
+			let assetPath = site.layerRealPath ?? site.layerIdentifier
+			return SwiftUsdShell.USDCompositionArcSummary(
+				kind: kind,
+				assetPath: SwiftUsdShell.USDAssetPath(assetPath),
+				primPath: site.specPath.map { SwiftUsdShell.USDPath($0) },
+				layerOffset: nil,
+				isInternal: isInternal
+			)
+		}
+	}
+
+	// MARK: - Prim Components
+
+	/// Returns the RealityKit component prims authored as children of the
+	/// selected prim, each annotated with its authored attributes.
+	///
+	/// Rescued from the orphan inspector: delegates to
+	/// `DeconstructedUSDInterop.listRealityKitComponentPrims` for the child
+	/// listing and `getPrimAttributes` for each component's authored values.
+	/// Results are pure-Swift `InspectorComponentSummary` values so consumers
+	/// never see the USDInterfaces types.
+	public static func primComponents(url: URL, primPath: String) -> [InspectorComponentSummary] {
+		let infos = DeconstructedUSDInterop.listRealityKitComponentPrims(url: url, parentPrimPath: primPath)
+		return infos.map { info -> InspectorComponentSummary in
+			let attrs = DeconstructedUSDInterop.getPrimAttributes(url: url, primPath: info.path)?.authoredAttributes ?? []
+			return InspectorComponentSummary(
+				path: info.path,
+				name: info.primName,
+				typeName: info.typeName,
+				isActive: info.isActive,
+				authoredAttributes: attrs.map { InspectorAuthoredAttribute(name: $0.name, value: $0.value) }
 			)
 		}
 	}

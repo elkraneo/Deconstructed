@@ -1,10 +1,24 @@
 import ComposableArchitecture
 import InspectorFeature
 import SwiftUI
+import SwiftUsdShell
 import simd
 
 private func format(_ vector: SIMD3<Double>) -> String {
 	String(format: "%.3g, %.3g, %.3g", vector.x, vector.y, vector.z)
+}
+
+private func describe(_ value: SwiftUsdShell.USDMaterialPropertyInfo) -> String {
+	switch value {
+	case .bool(let v): return v ? "true" : "false"
+	case .color(let r, let g, let b): return String(format: "%.3g, %.3g, %.3g", r, g, b)
+	case .float(let v): return String(format: "%g", v)
+	case .int(let v): return String(v)
+	case .string(let v): return v
+	case .texture(let url, let resolved): return resolved ?? url
+	case .token(let v): return v
+	case .unsupported(_, let description): return description
+	}
 }
 
 public struct AudioMixerComponentEntry: Identifiable, Equatable, Sendable {
@@ -45,6 +59,27 @@ public struct InspectorView: View {
 				LabeledContent("Selection", value: selected.name)
 				LabeledContent("Path", value: selected.path)
 
+				if let summary = store.primSummary {
+					Section("Prim") {
+						LabeledContent("Type", value: summary.typeName?.rawValue ?? "—")
+						LabeledContent("Active", value: summary.isActive ? "Yes" : "No")
+						LabeledContent("Visibility", value: summary.visibility?.rawValue ?? "—")
+						LabeledContent("Purpose", value: summary.purpose?.rawValue ?? "—")
+						LabeledContent("Kind", value: summary.kind?.rawValue ?? "—")
+					}
+
+					if !summary.attributes.isEmpty {
+						Section("Authored Attributes") {
+							ForEach(summary.attributes, id: \.name) { attribute in
+								LabeledContent(
+									attribute.name.rawValue,
+									value: attribute.value?.displayDescription ?? "—"
+								)
+							}
+						}
+					}
+				}
+
 				if let transform = store.primTransform {
 					Section("Transform") {
 						LabeledContent("Position", value: format(transform.position))
@@ -62,6 +97,14 @@ public struct InspectorView: View {
 						}
 						if let strength = binding.bindingStrength {
 							LabeledContent("Strength", value: strength.displayName)
+						}
+					}
+
+					if !store.materialProperties.isEmpty {
+						Section("Material Properties") {
+							ForEach(store.materialProperties, id: \.name) { property in
+								LabeledContent(property.name, value: describe(property.value))
+							}
 						}
 					}
 				}
@@ -84,6 +127,43 @@ public struct InspectorView: View {
 						}
 					}
 				}
+
+				if !store.primCompositionArcs.isEmpty {
+					Section("Composition") {
+						ForEach(Array(store.primCompositionArcs.enumerated()), id: \.offset) { _, arc in
+							LabeledContent(
+								arc.kind.rawValue.capitalized,
+								value: arc.assetPath?.rawValue ?? arc.primPath?.rawValue ?? "—"
+							)
+						}
+					}
+				}
+
+				if !store.primComponents.isEmpty {
+					Section("Components") {
+						ForEach(store.primComponents) { component in
+							DisclosureGroup {
+								LabeledContent("Type", value: component.typeName)
+								LabeledContent("Active", value: component.isActive ? "Yes" : "No")
+								LabeledContent("Path", value: component.path)
+								ForEach(component.authoredAttributes) { attribute in
+									LabeledContent(attribute.name, value: attribute.value)
+								}
+							} label: {
+								LabeledContent(component.name, value: component.typeName)
+							}
+						}
+					}
+				}
+
+				let audioMixComponents = store.primComponents.filter { $0.typeName == "RealityKit.AudioMixGroups" }
+				if !audioMixComponents.isEmpty {
+					Section("Audio Mix Groups") {
+						ForEach(audioMixComponents) { component in
+							LabeledContent(component.name, value: component.path)
+						}
+					}
+				}
 			} else {
 				Text("No selection")
 					.foregroundStyle(.secondary)
@@ -93,6 +173,14 @@ public struct InspectorView: View {
 						LabeledContent("Up Axis", value: layer.upAxis.rawValue)
 						LabeledContent("Meters Per Unit", value: String(format: "%g", layer.metersPerUnit))
 						LabeledContent("Default Prim", value: layer.defaultPrim ?? "—")
+					}
+				}
+
+				if !store.availableMaterials.isEmpty {
+					Section("Materials") {
+						ForEach(store.availableMaterials) { material in
+							LabeledContent(material.name, value: material.path.rawValue)
+						}
 					}
 				}
 			}

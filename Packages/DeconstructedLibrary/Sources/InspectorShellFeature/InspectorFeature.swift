@@ -44,6 +44,29 @@ public struct InspectorAuthoredAttribute: Equatable, Sendable, Identifiable {
 	}
 }
 
+public struct InspectorComponentSummary: Equatable, Sendable, Identifiable {
+	public var id: String { path }
+	public var path: String
+	public var name: String
+	public var typeName: String
+	public var isActive: Bool
+	public var authoredAttributes: [InspectorAuthoredAttribute]
+
+	public init(
+		path: String,
+		name: String,
+		typeName: String,
+		isActive: Bool,
+		authoredAttributes: [InspectorAuthoredAttribute] = []
+	) {
+		self.path = path
+		self.name = name
+		self.typeName = typeName
+		self.isActive = isActive
+		self.authoredAttributes = authoredAttributes
+	}
+}
+
 public struct ComponentDescendantAttributes: Equatable, Sendable, Identifiable {
 	public var id: String { path }
 	public var path: String
@@ -70,9 +93,14 @@ public struct InspectorFeature {
 		public var layerData: SceneLayerData?
 		public var sceneNodes: [SceneNode]
 		public var primTransform: SwiftUsdShell.USDTransformData?
+		public var primSummary: SwiftUsdShell.USDPrimSummary?
 		public var materialBinding: SwiftUsdShell.USDMaterialBindingInfo?
 		public var primReferences: [SwiftUsdShell.USDReference]
 		public var primVariantSets: [SwiftUsdShell.USDVariantSetSummary]
+		public var availableMaterials: [SwiftUsdShell.USDMaterialSummary]
+		public var materialProperties: [SwiftUsdShell.USDMaterialPropertySummary]
+		public var primCompositionArcs: [SwiftUsdShell.USDCompositionArcSummary]
+		public var primComponents: [InspectorComponentSummary]
 		public var componentAuthoredAttributesByPath: [String: [InspectorAuthoredAttribute]]
 		public var componentDescendantAttributesByPath: [String: [ComponentDescendantAttributes]]
 		public var errorMessage: String?
@@ -83,9 +111,14 @@ public struct InspectorFeature {
 			layerData: SceneLayerData? = nil,
 			sceneNodes: [SceneNode] = [],
 			primTransform: SwiftUsdShell.USDTransformData? = nil,
+			primSummary: SwiftUsdShell.USDPrimSummary? = nil,
 			materialBinding: SwiftUsdShell.USDMaterialBindingInfo? = nil,
 			primReferences: [SwiftUsdShell.USDReference] = [],
 			primVariantSets: [SwiftUsdShell.USDVariantSetSummary] = [],
+			availableMaterials: [SwiftUsdShell.USDMaterialSummary] = [],
+			materialProperties: [SwiftUsdShell.USDMaterialPropertySummary] = [],
+			primCompositionArcs: [SwiftUsdShell.USDCompositionArcSummary] = [],
+			primComponents: [InspectorComponentSummary] = [],
 			componentAuthoredAttributesByPath: [String: [InspectorAuthoredAttribute]] = [:],
 			componentDescendantAttributesByPath: [String: [ComponentDescendantAttributes]] = [:],
 			errorMessage: String? = nil
@@ -95,9 +128,14 @@ public struct InspectorFeature {
 			self.layerData = layerData
 			self.sceneNodes = sceneNodes
 			self.primTransform = primTransform
+			self.primSummary = primSummary
 			self.materialBinding = materialBinding
 			self.primReferences = primReferences
 			self.primVariantSets = primVariantSets
+			self.availableMaterials = availableMaterials
+			self.materialProperties = materialProperties
+			self.primCompositionArcs = primCompositionArcs
+			self.primComponents = primComponents
 			self.componentAuthoredAttributesByPath = componentAuthoredAttributesByPath
 			self.componentDescendantAttributesByPath = componentDescendantAttributesByPath
 			self.errorMessage = errorMessage
@@ -127,6 +165,16 @@ public struct InspectorFeature {
 		case primReferencesLoaded([SwiftUsdShell.USDReference])
 		case loadPrimVariantSetsRequested(URL, primPath: String)
 		case primVariantSetsLoaded([SwiftUsdShell.USDVariantSetSummary])
+		case loadPrimSummaryRequested(URL, primPath: String)
+		case primSummaryLoaded(SwiftUsdShell.USDPrimSummary?)
+		case loadAvailableMaterialsRequested(URL)
+		case availableMaterialsLoaded([SwiftUsdShell.USDMaterialSummary])
+		case loadMaterialPropertiesRequested(URL, materialPath: String)
+		case materialPropertiesLoaded([SwiftUsdShell.USDMaterialPropertySummary])
+		case loadPrimCompositionArcsRequested(URL, primPath: String)
+		case primCompositionArcsLoaded([SwiftUsdShell.USDCompositionArcSummary])
+		case loadPrimComponentsRequested(URL, primPath: String)
+		case primComponentsLoaded([InspectorComponentSummary])
 		case setMaterialBindingSucceeded
 		case setMaterialBindingStrengthSucceeded
 		case primReferencesEditSucceeded
@@ -160,23 +208,35 @@ public struct InspectorFeature {
 			case .sceneURLChanged(let url):
 				state.sceneURL = url
 				if let url {
-					return .send(.loadSceneMetadataRequested(url))
+					return .merge(
+						.send(.loadSceneMetadataRequested(url)),
+						.send(.loadAvailableMaterialsRequested(url))
+					)
 				}
 				state.selectedNodeID = nil
 				state.sceneNodes = []
 				state.layerData = nil
 				state.primTransform = nil
+				state.primSummary = nil
 				state.materialBinding = nil
+				state.materialProperties = []
 				state.primReferences = []
 				state.primVariantSets = []
+				state.primCompositionArcs = []
+				state.primComponents = []
+				state.availableMaterials = []
 				return .none
 
 			case .selectionChanged(let id):
 				state.selectedNodeID = id
 				state.primTransform = nil
+				state.primSummary = nil
 				state.materialBinding = nil
+				state.materialProperties = []
 				state.primReferences = []
 				state.primVariantSets = []
+				state.primCompositionArcs = []
+				state.primComponents = []
 				guard let id, let url = state.sceneURL else {
 					return .none
 				}
@@ -184,7 +244,10 @@ public struct InspectorFeature {
 					.send(.loadPrimTransformRequested(url, primPath: id)),
 					.send(.loadMaterialBindingRequested(url, primPath: id)),
 					.send(.loadPrimReferencesRequested(url, primPath: id)),
-					.send(.loadPrimVariantSetsRequested(url, primPath: id))
+					.send(.loadPrimVariantSetsRequested(url, primPath: id)),
+					.send(.loadPrimSummaryRequested(url, primPath: id)),
+					.send(.loadPrimCompositionArcsRequested(url, primPath: id)),
+					.send(.loadPrimComponentsRequested(url, primPath: id))
 				)
 
 			case .loadPrimTransformRequested(let url, let primPath):
@@ -205,6 +268,42 @@ public struct InspectorFeature {
 
 			case .materialBindingLoaded(let info):
 				state.materialBinding = info
+				guard let url = state.sceneURL,
+				      let materialPath = info?.effectiveMaterialPath?.rawValue
+				else {
+					state.materialProperties = []
+					return .none
+				}
+				return .send(.loadMaterialPropertiesRequested(url, materialPath: materialPath))
+
+			case .loadMaterialPropertiesRequested(let url, let materialPath):
+				return .run { [sceneInspector] send in
+					let properties = await sceneInspector.materialProperties(url, materialPath)
+					await send(.materialPropertiesLoaded(properties))
+				}
+
+			case .materialPropertiesLoaded(let properties):
+				state.materialProperties = properties
+				return .none
+
+			case .loadPrimCompositionArcsRequested(let url, let primPath):
+				return .run { [sceneInspector] send in
+					let arcs = await sceneInspector.primCompositionArcs(url, primPath)
+					await send(.primCompositionArcsLoaded(arcs))
+				}
+
+			case .primCompositionArcsLoaded(let arcs):
+				state.primCompositionArcs = arcs
+				return .none
+
+			case .loadPrimComponentsRequested(let url, let primPath):
+				return .run { [sceneInspector] send in
+					let components = await sceneInspector.primComponents(url, primPath)
+					await send(.primComponentsLoaded(components))
+				}
+
+			case .primComponentsLoaded(let components):
+				state.primComponents = components
 				return .none
 
 			case .loadPrimReferencesRequested(let url, let primPath):
@@ -225,6 +324,26 @@ public struct InspectorFeature {
 
 			case .primVariantSetsLoaded(let sets):
 				state.primVariantSets = sets
+				return .none
+
+			case .loadPrimSummaryRequested(let url, let primPath):
+				return .run { [sceneInspector] send in
+					let summary = await sceneInspector.primSummary(url, primPath)
+					await send(.primSummaryLoaded(summary))
+				}
+
+			case .primSummaryLoaded(let summary):
+				state.primSummary = summary
+				return .none
+
+			case .loadAvailableMaterialsRequested(let url):
+				return .run { [sceneInspector] send in
+					let materials = await sceneInspector.allMaterials(url)
+					await send(.availableMaterialsLoaded(materials))
+				}
+
+			case .availableMaterialsLoaded(let materials):
+				state.availableMaterials = materials
 				return .none
 
 			case .sceneGraphUpdated(let nodes):

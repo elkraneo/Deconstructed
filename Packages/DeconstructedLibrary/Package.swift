@@ -306,6 +306,7 @@ let package = Package(
 				name: "DeconstructedShellRuntime",
 				dependencies: [
 					"InspectorFeature",
+					"DeconstructedUSDInterop",
 					.product(name: "SwiftUsdShell", package: "SwiftUsdShell"),
 					.product(name: "USDOperations", package: "USDInterop"),
 					.product(name: "USDInterfaces", package: "USDInterop"),

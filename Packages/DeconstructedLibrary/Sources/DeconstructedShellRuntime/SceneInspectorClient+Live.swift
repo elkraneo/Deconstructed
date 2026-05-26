@@ -23,6 +23,21 @@ extension SceneInspectorClient {
 		},
 		primVariantSets: { url, primPath in
 			DeconstructedShellRuntime.primVariantSets(url: url, primPath: primPath)
+		},
+		primSummary: { url, primPath in
+			DeconstructedShellRuntime.primSummary(url: url, primPath: primPath)
+		},
+		allMaterials: { url in
+			DeconstructedShellRuntime.allMaterials(url: url)
+		},
+		materialProperties: { url, materialPath in
+			DeconstructedShellRuntime.materialProperties(url: url, materialPath: materialPath)
+		},
+		primCompositionArcs: { url, primPath in
+			DeconstructedShellRuntime.primCompositionArcs(url: url, primPath: primPath)
+		},
+		primComponents: { url, primPath in
+			DeconstructedShellRuntime.primComponents(url: url, primPath: primPath)
 		}
 	)
 }
