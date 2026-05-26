@@ -338,10 +338,6 @@ let package = Package(
 					name: "ComposableArchitecture",
 					package: "swift-composable-architecture"
 				),
-				.product(name: "USDInterfaces", package: "USDInterop"),
-			],
-			swiftSettings: [
-				.interoperabilityMode(.Cxx)
 			]
 		),
 		.testTarget(
