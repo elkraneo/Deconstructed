@@ -125,7 +125,7 @@ public struct ContentView: View {
 											width: 0.15,
 											referenceDistance: 2.0
 										),
-										selectionHighlightStyle: .boundingBox
+										selectionHighlightStyle: .postProcessOutline
 									)
 								)
 
@@ -184,7 +184,7 @@ public struct ContentView: View {
 												width: 0.10,
 												referenceDistance: 2.0
 											),
-											selectionHighlightStyle: .boundingBox
+											selectionHighlightStyle: .postProcessOutline
 										)
 									)
 
