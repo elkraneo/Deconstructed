@@ -42,6 +42,14 @@ public struct InspectorView: View {
 			} else {
 				Text("No selection")
 					.foregroundStyle(.secondary)
+
+				if let layer = store.layerData {
+					Section("Stage") {
+						LabeledContent("Up Axis", value: layer.upAxis.rawValue)
+						LabeledContent("Meters Per Unit", value: String(format: "%g", layer.metersPerUnit))
+						LabeledContent("Default Prim", value: layer.defaultPrim ?? "—")
+					}
+				}
 			}
 
 			if let errorMessage = store.errorMessage {

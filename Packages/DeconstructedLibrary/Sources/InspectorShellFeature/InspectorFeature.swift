@@ -1,6 +1,7 @@
 import ComposableArchitecture
 import Foundation
 import SceneGraphModels
+import SwiftUsdShell
 import simd
 
 public enum InspectorTarget: Equatable, Sendable {
@@ -120,6 +121,8 @@ public struct InspectorFeature {
 		case sceneURLChanged(URL?)
 		case selectionChanged(SceneNode.ID?)
 		case sceneGraphUpdated([SceneNode])
+		case loadSceneMetadataRequested(URL)
+		case sceneMetadataLoaded(SwiftUsdShell.USDStageMetadata)
 		case primTransformChanged(USDTransformData)
 		case setMaterialBindingSucceeded
 		case setMaterialBindingStrengthSucceeded
@@ -146,16 +149,19 @@ public struct InspectorFeature {
 
 	public init() {}
 
+	@Dependency(\.sceneInspector) var sceneInspector
+
 	public var body: some ReducerOf<Self> {
 		Reduce { state, action in
 			switch action {
 			case .sceneURLChanged(let url):
 				state.sceneURL = url
-				if url == nil {
-					state.selectedNodeID = nil
-					state.sceneNodes = []
-					state.layerData = nil
+				if let url {
+					return .send(.loadSceneMetadataRequested(url))
 				}
+				state.selectedNodeID = nil
+				state.sceneNodes = []
+				state.layerData = nil
 				return .none
 
 			case .selectionChanged(let id):
@@ -164,7 +170,30 @@ public struct InspectorFeature {
 
 			case .sceneGraphUpdated(let nodes):
 				state.sceneNodes = nodes
-				state.layerData = SceneLayerData(availablePrims: flattenPrimPaths(nodes))
+				let existing = state.layerData ?? SceneLayerData()
+				state.layerData = SceneLayerData(
+					defaultPrim: existing.defaultPrim,
+					availablePrims: flattenPrimPaths(nodes),
+					metersPerUnit: existing.metersPerUnit,
+					upAxis: existing.upAxis
+				)
+				return .none
+
+			case .loadSceneMetadataRequested(let url):
+				return .run { [sceneInspector] send in
+					let metadata = await sceneInspector.stageMetadata(url)
+					await send(.sceneMetadataLoaded(metadata))
+				}
+
+			case .sceneMetadataLoaded(let metadata):
+				let previous = state.layerData ?? SceneLayerData()
+				let upAxis = SceneUpAxis(rawValue: metadata.upAxis?.rawValue ?? "Y") ?? .y
+				state.layerData = SceneLayerData(
+					defaultPrim: metadata.defaultPrimName?.rawValue,
+					availablePrims: previous.availablePrims,
+					metersPerUnit: metadata.metersPerUnit ?? 1,
+					upAxis: upAxis
+				)
 				return .none
 
 			case .addAudioMixGroupRequested,

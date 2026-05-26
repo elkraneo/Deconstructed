@@ -1,5 +1,5 @@
 {
-  "originHash" : "af0e2754c11f048b466c1aa3c05c3df110c91aee71990cdadf953b1e2aa6b729",
+  "originHash" : "65e4bd0ff5d865472586b6a36b427e4c6cf0b11e3bbe48ca8ec0053a5fb5811b",
   "pins" : [
     {
       "identity" : "combine-schedulers",
@@ -15,8 +15,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/reality2713/StageView.git",
       "state" : {
-        "revision" : "53647f3b8d8cf450a0eaeca9afced1d8fd6f6065",
-        "version" : "0.1.4"
+        "revision" : "67dc999f2ac0de92f1a35239c696fa4dcf7d4d61",
+        "version" : "0.3.24"
       }
     },
     {
@@ -51,8 +51,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/swift-composable-architecture",
       "state" : {
-        "revision" : "5b0890fabfd68a2d375d68502bc3f54a8548c494",
-        "version" : "1.23.1"
+        "revision" : "1eaa6fa2ee57ac42843283b9fd3457af408c858d",
+        "version" : "1.25.5"
       }
     },
     {
@@ -96,8 +96,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/swift-navigation",
       "state" : {
-        "revision" : "bf498690e1f6b4af790260f542e8428a4ba10d78",
-        "version" : "2.6.0"
+        "revision" : "32f35241b8be0719c4c7f00eb27713b1cadb6248",
+        "version" : "2.8.0"
       }
     },
     {
@@ -114,8 +114,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/swift-sharing",
       "state" : {
-        "revision" : "3bfc408cc2d0bee2287c174da6b1c76768377818",
-        "version" : "2.7.4"
+        "revision" : "bc27f8322bc30f6ce7d864d137dc77a6de8b57eb",
+        "version" : "2.8.0"
       }
     },
     {
@@ -132,8 +132,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Reality2713/SwiftUsd.git",
       "state" : {
-        "revision" : "30d1fb30f0c63f3f720c4388da43dc0ca749505c",
-        "version" : "6.1.0-preflight.3"
+        "revision" : "a1f0eb414c2af4da6229c6ef2f8ba4c2a3d64c76",
+        "version" : "6.1.0-preflight.6"
       }
     },
     {
@@ -141,8 +141,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Reality2713/SwiftUsdShell.git",
       "state" : {
-        "revision" : "dad26bbc0ab71997ec5a7856b379ea989bca3974",
-        "version" : "0.3.2"
+        "revision" : "e80d60b69ad33cb20bcd6f274ebb2b5b674ed8f2",
+        "version" : "0.3.72"
       }
     },
     {
@@ -150,8 +150,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Reality2713/USDInterop",
       "state" : {
-        "revision" : "c50696ba0f5ec18c8cd9850b3bde1fc3d4388fce",
-        "version" : "0.1.17"
+        "revision" : "580f90d0596a45be9ea5028b1b66447cba085a15",
+        "version" : "0.1.21"
       }
     },
     {

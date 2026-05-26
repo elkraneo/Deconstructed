@@ -1,21 +1,23 @@
 import Foundation
 import SwiftUsdShell
+import USDInterfaces
+import USDOperations
 
 /// Runtime boundary for SwiftUsdShell value types.
 ///
-/// This module deliberately consumes `SwiftUsdShell` without importing OpenUSD,
-/// SwiftUsd, or USDInterop. It validates the product boundary Deconstructed wants
-/// from SwiftUsdShell: app modules can depend on stable Swift DTOs without
-/// paying the C++ interop compile cost.
+/// Bridges the OpenUSD-backed `USDOperationsClient` to the pure-Swift
+/// `SwiftUsdShell` DTOs that downstream app/feature/UI targets consume. App
+/// modules depend on this target (or the protocols feature modules expose),
+/// not on `USDOperations` directly, so the OpenUSD compile cost is paid here
+/// once and not at every consumer.
 ///
 /// 1. Opening stages and producing USDStageHandle
 /// 2. Producing SwiftUsdShell.USDPrimSummary values
 /// 3. Building prim trees in SwiftUsdShell.USDPrimTree format
 /// 4. Converting stage metadata to SwiftUsdShell.USDStageMetadata
 ///
-/// The current implementation is a lightweight USDA reader for validation and
-/// tests. A production OpenUSD adapter should live behind this boundary, not in
-/// the shell contract package.
+/// Some operations still use a lightweight USDA text reader as a stopgap for
+/// validation tests; production paths should call into USDOperationsClient.
 public enum DeconstructedShellRuntime {
 
 	// MARK: - Stage Lifecycle
@@ -116,22 +118,26 @@ public enum DeconstructedShellRuntime {
 
 	/// Returns metadata about the stage.
 	///
-	/// This includes stage-level properties like upAxis, metersPerUnit,
-	/// animation data, and available cameras.
+	/// Reads `upAxis`, `metersPerUnit`, `defaultPrim`, playback/animation
+	/// fields, and the camera list via `USDOperationsClient` and maps the
+	/// USDInterfaces DTO onto the pure-Swift SwiftUsdShell shape so callers
+	/// never see the C++-backed types.
 	///
 	/// - Parameter url: The URL of the USD file
 	/// - Returns: The stage metadata
 	public static func stageMetadata(url: URL) -> SwiftUsdShell.USDStageMetadata {
-		guard let stage = parseStage(url: url) else {
-			return SwiftUsdShell.USDStageMetadata()
-		}
-
-		let upAxis = stage.metadata.upAxis.map { SwiftUsdShell.USDToken($0) }
-		let defaultPrimName = stage.metadata.defaultPrimName.map { SwiftUsdShell.USDToken($0) }
+		let raw = USDOperationsClient().stageMetadata(url: url)
 		return SwiftUsdShell.USDStageMetadata(
-			upAxis: upAxis,
-			metersPerUnit: stage.metadata.metersPerUnit,
-			defaultPrimName: defaultPrimName
+			upAxis: raw.upAxis.map { SwiftUsdShell.USDToken($0) },
+			metersPerUnit: raw.metersPerUnit,
+			defaultPrimName: raw.defaultPrimName.map { SwiftUsdShell.USDToken($0) },
+			autoPlay: raw.autoPlay,
+			playbackMode: raw.playbackMode,
+			timeCodesPerSecond: raw.timeCodesPerSecond,
+			startTimeCode: raw.startTimeCode,
+			endTimeCode: raw.endTimeCode,
+			animationTracks: raw.animationTracks.map { SwiftUsdShell.USDPath($0) },
+			availableCameras: raw.availableCameras.map { SwiftUsdShell.USDPath($0) }
 		)
 	}
 

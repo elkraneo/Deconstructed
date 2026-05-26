@@ -83,6 +83,10 @@ let package = Package(
 			targets: ["DeconstructedUSDInterop"]
 		),
 		.library(
+			name: "DeconstructedShellRuntime",
+			targets: ["DeconstructedShellRuntime"]
+		),
+		.library(
 			name: "InspectorModels",
 			targets: ["InspectorModels"]
 		),
@@ -98,11 +102,11 @@ let package = Package(
 	dependencies: [
 		.package(
 			url: "https://github.com/pointfreeco/swift-composable-architecture",
-			from: "1.23.1"
+			from: "1.25.5"
 		),
 		.package(
 			url: "https://github.com/pointfreeco/swift-sharing",
-			from: "2.3.0"
+			from: "2.8.0"
 		),
 		// Keep USDInterop pinned to avoid SwiftPM conflicts between transitive requirements.
 		//
@@ -113,10 +117,10 @@ let package = Package(
 		// ),
 		.package(
 			url: "https://github.com/Reality2713/USDInterop",
-			from: "0.1.13"
+			from: "0.1.21"
 		),
-		.package(url: "https://github.com/reality2713/StageView.git", from: "0.1.4"),
-		.package(url: "https://github.com/Reality2713/SwiftUsdShell.git", exact: "0.3.2"),
+		.package(url: "https://github.com/reality2713/StageView.git", exact: "0.3.24"),
+		.package(url: "https://github.com/Reality2713/SwiftUsdShell.git", exact: "0.3.72"),
 	],
 	targets: [
 		// Targets are the basic building blocks of a package, defining a module or a test suite.
@@ -180,6 +184,7 @@ let package = Package(
 			name: "DeconstructedFeatures",
 			dependencies: [
 				"DeconstructedClients",
+				"DeconstructedShellRuntime",
 				"RCPDocument",
 				"ProjectBrowserFeature",
 				"SceneGraphFeature",
@@ -300,9 +305,13 @@ let package = Package(
 			.target(
 				name: "DeconstructedShellRuntime",
 				dependencies: [
+					"InspectorFeature",
 					.product(name: "SwiftUsdShell", package: "SwiftUsdShell"),
+					.product(name: "USDOperations", package: "USDInterop"),
+					.product(name: "USDInterfaces", package: "USDInterop"),
 				],
 				swiftSettings: [
+					.interoperabilityMode(.Cxx)
 				]
 			),
 		.target(
@@ -319,6 +328,7 @@ let package = Package(
 					name: "ComposableArchitecture",
 					package: "swift-composable-architecture"
 				),
+				.product(name: "SwiftUsdShell", package: "SwiftUsdShell"),
 			],
 			path: "Sources/InspectorShellFeature"
 		),

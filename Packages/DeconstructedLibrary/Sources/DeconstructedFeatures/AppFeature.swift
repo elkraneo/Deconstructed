@@ -1,10 +1,27 @@
 import ComposableArchitecture
 import DeconstructedClients
+import DeconstructedShellRuntime
 import Foundation
+import InspectorFeature
 
 @Reducer
 public struct AppFeature {
-	public init() {}
+	public init() {
+		_ = Self.liveDependenciesInstalled
+	}
+
+	/// Installs OpenUSD-backed dependency implementations that live in
+	/// `DeconstructedShellRuntime`. Feature targets (e.g. `InspectorFeature`)
+	/// declare a safe default `liveValue`; this override swaps in the real
+	/// shell-runtime-backed value once the app launches. Computed exactly
+	/// once via a static `let` so multiple `AppFeature()` constructions stay
+	/// cheap.
+	private static let liveDependenciesInstalled: Bool = {
+		prepareDependencies {
+			$0.sceneInspector = .live
+		}
+		return true
+	}()
 
 	/// App-level responsibilities:
 	/// - Welcome window presentation and lifecycle
