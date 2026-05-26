@@ -51,19 +51,23 @@ Base/                              <- SPM package (created by RCP for integratio
 
 The open/private USD split is intentional:
 
-- public package family: `USDInterop`, `USDInterfaces`, `USDInteropCxx`, `USDOperations`
-- private workflow layer: `USDTools`
-- app-local open logic may still live in `DeconstructedUSDInterop`
+- `SwiftUsdShell` is the intended pure-Swift public contract boundary
+- `USDInterop`, `USDInterfaces`, `USDInteropCxx`, and `USDOperations` are the transitional public OpenUSD-backed runtime family currently used by Deconstructed
+- `DeconstructedUSDInterop` is the app-local adapter and open RCP authoring layer
+- `USDTools` is the private workflow/value layer and must not be required by the public build path
 
 For the rationale and current release evaluation, see:
 
+- `Docs/SwiftUsdShell-Boundary-Manifesto.md`
 - `Docs/USDOperations-Refactor-Evaluation.md`
 - `Docs/USDOperations-Release-Checklist.md`
 
 Rule of thumb:
 
-- generic scene operations belong in `USDOperations`
-- workflows, heuristics, packaging, conversion, and repair do not
+- feature-facing contracts should move toward `SwiftUsdShell` only with explicit semantic equivalence or converters
+- `SwiftUsdShell` is not a runtime and should not be documented as file loading, rendering, validation, or repair infrastructure
+- generic scene operations may remain in `USDOperations` during the transition
+- workflows, heuristics, packaging, conversion, and repair do not belong in `SwiftUsdShell` or `USDOperations`
 - avoid reintroducing dependencies on `USDTools` or legacy advanced modules into the public build path
 
 ## Key Files

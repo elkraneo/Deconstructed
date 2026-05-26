@@ -74,16 +74,23 @@ swift build --target ViewportUI
 
 ## USD Boundary
 
-The current split is:
+The target split is:
 
-- public package family: `USDInterop`, `USDInterfaces`, `USDInteropCxx`, `USDOperations`
-- private workflow/value layer: `USDTools`
+- pure-Swift public contract boundary: `SwiftUsdShell`
+- transitional public OpenUSD runtime family: `USDInterop`, `USDInterfaces`, `USDInteropCxx`, `USDOperations`
+- app-local runtime adapter and open RCP authoring: `DeconstructedUSDInterop`
+- private workflow/value layer, not required for public Deconstructed builds: `USDTools`
 
 Rules:
 
-- generic scene operations belong in `USDOperations`
-- workflows, diagnostics, repair, packaging, conversion, and heuristics do not
+- product-facing USD DTOs and generic edit contracts should move to `SwiftUsdShell` only when the shapes are equivalent or an explicit converter exists
+- `SwiftUsdShell` is not a runtime; do not use it to claim file loading, rendering, validation, or repair behavior
+- OpenUSD-backed implementation details belong behind `DeconstructedUSDInterop` or another runtime adapter
+- generic scene operations may remain in `USDOperations` during the transition
+- workflows, diagnostics, repair, packaging, conversion, and heuristics do not belong in `SwiftUsdShell` or `USDOperations`
 - do not reintroduce dependencies on `USDTools` or legacy advanced modules into the public Deconstructed build path
+
+See `Docs/SwiftUsdShell-Boundary-Manifesto.md` before changing USD package dependencies or migrating DTOs.
 
 ## Reference Implementation
 
