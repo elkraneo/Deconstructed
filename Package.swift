@@ -206,7 +206,6 @@ let package = Package(
 			name: "InspectorModels",
 			dependencies: [
 				.product(name: "Sharing", package: "swift-sharing"),
-				.product(name: "USDInterfaces", package: "USDInterop"),
 			],
 			path: "Packages/DeconstructedLibrary/Sources/InspectorModels"
 		),

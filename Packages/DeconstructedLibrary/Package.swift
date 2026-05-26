@@ -309,7 +309,6 @@ let package = Package(
 			name: "InspectorModels",
 			dependencies: [
 				.product(name: "Sharing", package: "swift-sharing"),
-				.product(name: "USDInterfaces", package: "USDInterop"),
 			]
 		),
 		.target(
