@@ -1,6 +1,11 @@
 import ComposableArchitecture
 import InspectorFeature
 import SwiftUI
+import simd
+
+private func format(_ vector: SIMD3<Double>) -> String {
+	String(format: "%.3g, %.3g, %.3g", vector.x, vector.y, vector.z)
+}
 
 public struct AudioMixerComponentEntry: Identifiable, Equatable, Sendable {
 	public var id: String { componentPath }
@@ -39,6 +44,46 @@ public struct InspectorView: View {
 			if let selected = store.selectedNode {
 				LabeledContent("Selection", value: selected.name)
 				LabeledContent("Path", value: selected.path)
+
+				if let transform = store.primTransform {
+					Section("Transform") {
+						LabeledContent("Position", value: format(transform.position))
+						LabeledContent("Rotation (deg)", value: format(transform.rotationDegrees))
+						LabeledContent("Scale", value: format(transform.scale))
+					}
+				}
+
+				if let binding = store.materialBinding {
+					Section("Material Binding") {
+						LabeledContent("Effective", value: binding.effectiveMaterialPath?.rawValue ?? "—")
+						LabeledContent("Authored", value: binding.authoredMaterialPath?.rawValue ?? "—")
+						if let source = binding.bindingSourcePrimPath {
+							LabeledContent("Inherited From", value: source.rawValue)
+						}
+						if let strength = binding.bindingStrength {
+							LabeledContent("Strength", value: strength.displayName)
+						}
+					}
+				}
+
+				if !store.primReferences.isEmpty {
+					Section("References") {
+						ForEach(store.primReferences, id: \.self) { reference in
+							LabeledContent(reference.assetPath, value: reference.primPath ?? "—")
+						}
+					}
+				}
+
+				if !store.primVariantSets.isEmpty {
+					Section("Variants") {
+						ForEach(store.primVariantSets) { variantSet in
+							LabeledContent(
+								variantSet.name.rawValue,
+								value: variantSet.selection?.rawValue ?? "—"
+							)
+						}
+					}
+				}
 			} else {
 				Text("No selection")
 					.foregroundStyle(.secondary)

@@ -33,22 +33,6 @@ public struct SceneLayerData: Equatable, Sendable {
 	}
 }
 
-public struct USDTransformData: Equatable, Sendable {
-	public var position: SIMD3<Double>
-	public var rotationDegrees: SIMD3<Double>
-	public var scale: SIMD3<Double>
-
-	public init(
-		position: SIMD3<Double> = .zero,
-		rotationDegrees: SIMD3<Double> = .zero,
-		scale: SIMD3<Double> = SIMD3<Double>(repeating: 1)
-	) {
-		self.position = position
-		self.rotationDegrees = rotationDegrees
-		self.scale = scale
-	}
-}
-
 public struct InspectorAuthoredAttribute: Equatable, Sendable, Identifiable {
 	public var id: String { name }
 	public var name: String
@@ -85,6 +69,10 @@ public struct InspectorFeature {
 		public var selectedNodeID: SceneNode.ID?
 		public var layerData: SceneLayerData?
 		public var sceneNodes: [SceneNode]
+		public var primTransform: SwiftUsdShell.USDTransformData?
+		public var materialBinding: SwiftUsdShell.USDMaterialBindingInfo?
+		public var primReferences: [SwiftUsdShell.USDReference]
+		public var primVariantSets: [SwiftUsdShell.USDVariantSetSummary]
 		public var componentAuthoredAttributesByPath: [String: [InspectorAuthoredAttribute]]
 		public var componentDescendantAttributesByPath: [String: [ComponentDescendantAttributes]]
 		public var errorMessage: String?
@@ -94,6 +82,10 @@ public struct InspectorFeature {
 			selectedNodeID: SceneNode.ID? = nil,
 			layerData: SceneLayerData? = nil,
 			sceneNodes: [SceneNode] = [],
+			primTransform: SwiftUsdShell.USDTransformData? = nil,
+			materialBinding: SwiftUsdShell.USDMaterialBindingInfo? = nil,
+			primReferences: [SwiftUsdShell.USDReference] = [],
+			primVariantSets: [SwiftUsdShell.USDVariantSetSummary] = [],
 			componentAuthoredAttributesByPath: [String: [InspectorAuthoredAttribute]] = [:],
 			componentDescendantAttributesByPath: [String: [ComponentDescendantAttributes]] = [:],
 			errorMessage: String? = nil
@@ -102,6 +94,10 @@ public struct InspectorFeature {
 			self.selectedNodeID = selectedNodeID
 			self.layerData = layerData
 			self.sceneNodes = sceneNodes
+			self.primTransform = primTransform
+			self.materialBinding = materialBinding
+			self.primReferences = primReferences
+			self.primVariantSets = primVariantSets
 			self.componentAuthoredAttributesByPath = componentAuthoredAttributesByPath
 			self.componentDescendantAttributesByPath = componentDescendantAttributesByPath
 			self.errorMessage = errorMessage
@@ -123,7 +119,14 @@ public struct InspectorFeature {
 		case sceneGraphUpdated([SceneNode])
 		case loadSceneMetadataRequested(URL)
 		case sceneMetadataLoaded(SwiftUsdShell.USDStageMetadata)
-		case primTransformChanged(USDTransformData)
+		case loadPrimTransformRequested(URL, primPath: String)
+		case primTransformLoaded(SwiftUsdShell.USDTransformData?)
+		case loadMaterialBindingRequested(URL, primPath: String)
+		case materialBindingLoaded(SwiftUsdShell.USDMaterialBindingInfo?)
+		case loadPrimReferencesRequested(URL, primPath: String)
+		case primReferencesLoaded([SwiftUsdShell.USDReference])
+		case loadPrimVariantSetsRequested(URL, primPath: String)
+		case primVariantSetsLoaded([SwiftUsdShell.USDVariantSetSummary])
 		case setMaterialBindingSucceeded
 		case setMaterialBindingStrengthSucceeded
 		case primReferencesEditSucceeded
@@ -162,10 +165,66 @@ public struct InspectorFeature {
 				state.selectedNodeID = nil
 				state.sceneNodes = []
 				state.layerData = nil
+				state.primTransform = nil
+				state.materialBinding = nil
+				state.primReferences = []
+				state.primVariantSets = []
 				return .none
 
 			case .selectionChanged(let id):
 				state.selectedNodeID = id
+				state.primTransform = nil
+				state.materialBinding = nil
+				state.primReferences = []
+				state.primVariantSets = []
+				guard let id, let url = state.sceneURL else {
+					return .none
+				}
+				return .merge(
+					.send(.loadPrimTransformRequested(url, primPath: id)),
+					.send(.loadMaterialBindingRequested(url, primPath: id)),
+					.send(.loadPrimReferencesRequested(url, primPath: id)),
+					.send(.loadPrimVariantSetsRequested(url, primPath: id))
+				)
+
+			case .loadPrimTransformRequested(let url, let primPath):
+				return .run { [sceneInspector] send in
+					let transform = await sceneInspector.primTransform(url, primPath)
+					await send(.primTransformLoaded(transform))
+				}
+
+			case .primTransformLoaded(let transform):
+				state.primTransform = transform
+				return .none
+
+			case .loadMaterialBindingRequested(let url, let primPath):
+				return .run { [sceneInspector] send in
+					let info = await sceneInspector.materialBinding(url, primPath)
+					await send(.materialBindingLoaded(info))
+				}
+
+			case .materialBindingLoaded(let info):
+				state.materialBinding = info
+				return .none
+
+			case .loadPrimReferencesRequested(let url, let primPath):
+				return .run { [sceneInspector] send in
+					let refs = await sceneInspector.primReferences(url, primPath)
+					await send(.primReferencesLoaded(refs))
+				}
+
+			case .primReferencesLoaded(let refs):
+				state.primReferences = refs
+				return .none
+
+			case .loadPrimVariantSetsRequested(let url, let primPath):
+				return .run { [sceneInspector] send in
+					let sets = await sceneInspector.primVariantSets(url, primPath)
+					await send(.primVariantSetsLoaded(sets))
+				}
+
+			case .primVariantSetsLoaded(let sets):
+				state.primVariantSets = sets
 				return .none
 
 			case .sceneGraphUpdated(let nodes):
@@ -202,8 +261,7 @@ public struct InspectorFeature {
 				state.errorMessage = "Inspector editing requires the SwiftUsdShell runtime adapter."
 				return .none
 
-			case .primTransformChanged,
-				.setMaterialBindingSucceeded,
+			case .setMaterialBindingSucceeded,
 				.setMaterialBindingStrengthSucceeded,
 				.primReferencesEditSucceeded,
 				.setVariantSelectionSucceeded,

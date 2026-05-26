@@ -141,6 +141,73 @@ public enum DeconstructedShellRuntime {
 		)
 	}
 
+	// MARK: - Prim Transform
+
+	/// Returns the local transform (position / Euler rotation in degrees /
+	/// scale) for a prim, bridged onto the SwiftUsdShell DTO so callers do
+	/// not see the C++-backed USDInterfaces type.
+	///
+	/// Returns `nil` when the prim is missing, the stage cannot be opened,
+	/// or the prim is not transformable.
+	///
+	/// - Parameters:
+	///   - url: The URL of the USD file
+	///   - primPath: The path to the prim
+	public static func primTransform(url: URL, primPath: String) -> SwiftUsdShell.USDTransformData? {
+		guard let raw = USDOperationsClient().primTransform(url: url, path: primPath) else {
+			return nil
+		}
+		return SwiftUsdShell.USDTransformData(
+			position: raw.position,
+			rotationDegrees: raw.rotationDegrees,
+			orientation: nil,
+			scale: raw.scale
+		)
+	}
+
+	// MARK: - Material Binding
+
+	/// Returns the effective material binding for a prim, including
+	/// authored / inherited paths and binding strength.
+	///
+	/// Returns `nil` when the stage cannot be opened.
+	public static func materialBinding(url: URL, primPath: String) -> SwiftUsdShell.USDMaterialBindingInfo? {
+		let raw = USDOperationsClient().materialBindingDetails(url: url, path: primPath)
+		return SwiftUsdShell.USDMaterialBindingInfo(
+			selectedPrimPath: SwiftUsdShell.USDPath(raw.selectedPrimPath),
+			effectiveMaterialPath: raw.effectiveMaterialPath.map { SwiftUsdShell.USDPath($0) },
+			authoredMaterialPath: raw.authoredMaterialPath.map { SwiftUsdShell.USDPath($0) },
+			bindingSourcePrimPath: raw.bindingSourcePrimPath.map { SwiftUsdShell.USDPath($0) },
+			bindingStrength: raw.bindingStrength.flatMap { SwiftUsdShell.USDMaterialBindingStrength(rawValue: $0.rawValue) }
+		)
+	}
+
+	// MARK: - Prim References
+
+	/// Returns the references composed onto a prim, mapped to the
+	/// pure-Swift SwiftUsdShell DTO.
+	public static func primReferences(url: URL, primPath: String) -> [SwiftUsdShell.USDReference] {
+		USDOperationsClient().primReferences(url: url, path: primPath).map { ref in
+			SwiftUsdShell.USDReference(assetPath: ref.assetPath, primPath: ref.primPath)
+		}
+	}
+
+	// MARK: - Variant Sets
+
+	/// Returns the variant sets authored on a prim, mapped to
+	/// `SwiftUsdShell.USDVariantSetSummary`.
+	public static func primVariantSets(url: URL, primPath: String) -> [SwiftUsdShell.USDVariantSetSummary] {
+		let descriptors = (try? USDOperationsClient().listVariantSets(url: url, scope: .prim(path: primPath))) ?? []
+		return descriptors.map { descriptor in
+			SwiftUsdShell.USDVariantSetSummary(
+				name: SwiftUsdShell.USDToken(descriptor.name),
+				choices: descriptor.options.map { SwiftUsdShell.USDToken($0.id) },
+				selection: descriptor.selectedOptionId.map { SwiftUsdShell.USDToken($0) },
+				hasAuthoredSelection: descriptor.selectedOptionId != nil
+			)
+		}
+	}
+
 	// MARK: - Material Edits
 
 	/// Executes a material edit request.
