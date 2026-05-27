@@ -31,6 +31,8 @@ public struct SceneInspectorClient: Sendable {
 	public var setDefaultPrim: @Sendable (_ url: URL, _ primPath: String) async throws -> Void
 	public var setMetersPerUnit: @Sendable (_ url: URL, _ value: Double) async throws -> Void
 	public var setUpAxis: @Sendable (_ url: URL, _ axis: String) async throws -> Void
+	public var setComponentParameter: @Sendable (_ url: URL, _ componentPath: String, _ attributeType: String, _ attributeName: String, _ valueLiteral: String) async throws -> Void
+	public var addComponent: @Sendable (_ url: URL, _ primPath: String, _ componentName: String, _ componentIdentifier: String) async throws -> String
 
 	public init(
 		stageMetadata: @escaping @Sendable (_ url: URL) async -> SwiftUsdShell.USDStageMetadata = { _ in
@@ -73,7 +75,9 @@ public struct SceneInspectorClient: Sendable {
 		removePrimReference: @escaping @Sendable (_ url: URL, _ primPath: String, _ reference: SwiftUsdShell.USDReference) async throws -> Void = { _, _, _ in },
 		setDefaultPrim: @escaping @Sendable (_ url: URL, _ primPath: String) async throws -> Void = { _, _ in },
 		setMetersPerUnit: @escaping @Sendable (_ url: URL, _ value: Double) async throws -> Void = { _, _ in },
-		setUpAxis: @escaping @Sendable (_ url: URL, _ axis: String) async throws -> Void = { _, _ in }
+		setUpAxis: @escaping @Sendable (_ url: URL, _ axis: String) async throws -> Void = { _, _ in },
+		setComponentParameter: @escaping @Sendable (_ url: URL, _ componentPath: String, _ attributeType: String, _ attributeName: String, _ valueLiteral: String) async throws -> Void = { _, _, _, _, _ in },
+		addComponent: @escaping @Sendable (_ url: URL, _ primPath: String, _ componentName: String, _ componentIdentifier: String) async throws -> String = { _, _, _, _ in "" }
 	) {
 		self.stageMetadata = stageMetadata
 		self.primTransform = primTransform
@@ -96,6 +100,8 @@ public struct SceneInspectorClient: Sendable {
 		self.setDefaultPrim = setDefaultPrim
 		self.setMetersPerUnit = setMetersPerUnit
 		self.setUpAxis = setUpAxis
+		self.setComponentParameter = setComponentParameter
+		self.addComponent = addComponent
 	}
 }
 

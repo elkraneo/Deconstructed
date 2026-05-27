@@ -692,6 +692,10 @@ public enum InspectorComponentCatalog {
 		identifier: "RealityKit.Accessibility"
 	)
 
+	public static func definition(forIdentifier identifier: String) -> InspectorComponentDefinition? {
+		all.first { $0.identifier == identifier }
+	}
+
 	// Catalog extracted from RCP UI + local USD fixtures.
 	public static let all: [InspectorComponentDefinition] = [
 		InspectorComponentDefinition(

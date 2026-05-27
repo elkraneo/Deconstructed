@@ -75,6 +75,23 @@ extension SceneInspectorClient {
 		},
 		setUpAxis: { url, axis in
 			try DeconstructedShellRuntime.setUpAxis(url: url, axis: axis)
+		},
+		setComponentParameter: { url, componentPath, attributeType, attributeName, valueLiteral in
+			try DeconstructedShellRuntime.setComponentParameter(
+				url: url,
+				componentPath: componentPath,
+				attributeType: attributeType,
+				attributeName: attributeName,
+				valueLiteral: valueLiteral
+			)
+		},
+		addComponent: { url, primPath, componentName, componentIdentifier in
+			try DeconstructedShellRuntime.addComponent(
+				url: url,
+				primPath: primPath,
+				componentName: componentName,
+				componentIdentifier: componentIdentifier
+			)
 		}
 	)
 }

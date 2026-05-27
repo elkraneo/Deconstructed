@@ -193,6 +193,15 @@ public struct InspectorFeature {
 		case setMetersPerUnitRequested(Double)
 		case setUpAxisRequested(String)
 		case stageMetadataWriteFailed(String)
+		case setComponentParameterRequested(
+			componentPath: String,
+			attributeType: String,
+			attributeName: String,
+			valueLiteral: String
+		)
+		case componentParameterWriteFailed(String)
+		case addComponentRequested(componentName: String, componentIdentifier: String)
+		case addComponentWriteFailed(String)
 		case setMaterialBindingSucceeded
 		case setMaterialBindingStrengthSucceeded
 		case primReferencesEditSucceeded
@@ -502,6 +511,41 @@ public struct InspectorFeature {
 				}
 
 			case .stageMetadataWriteFailed(let message):
+				state.errorMessage = message
+				return .none
+
+			case .setComponentParameterRequested(let componentPath, let attributeType, let attributeName, let valueLiteral):
+				guard let url = state.sceneURL, let primPath = state.selectedNodeID else {
+					return .none
+				}
+				return .run { [sceneInspector] send in
+					do {
+						try await sceneInspector.setComponentParameter(url, componentPath, attributeType, attributeName, valueLiteral)
+						await send(.loadPrimComponentsRequested(url, primPath: primPath))
+					} catch {
+						await send(.componentParameterWriteFailed(error.localizedDescription))
+					}
+				}
+
+			case .componentParameterWriteFailed(let message):
+				state.errorMessage = message
+				return .none
+
+			case .addComponentRequested(let componentName, let componentIdentifier):
+				guard let url = state.sceneURL, let primPath = state.selectedNodeID else {
+					return .none
+				}
+				return .run { [sceneInspector] send in
+					do {
+						let newPath = try await sceneInspector.addComponent(url, primPath, componentName, componentIdentifier)
+						await send(.addComponentSucceeded(newPath))
+						await send(.loadPrimComponentsRequested(url, primPath: primPath))
+					} catch {
+						await send(.addComponentWriteFailed(error.localizedDescription))
+					}
+				}
+
+			case .addComponentWriteFailed(let message):
 				state.errorMessage = message
 				return .none
 

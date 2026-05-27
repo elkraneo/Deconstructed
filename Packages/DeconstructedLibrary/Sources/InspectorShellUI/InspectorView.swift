@@ -24,6 +24,161 @@ private func updateTransform(
 	)
 }
 
+private struct ComponentEditorRow: View {
+	let component: InspectorComponentSummary
+	let onParameterChange: (_ attributeType: String, _ attributeName: String, _ valueLiteral: String) -> Void
+	let onActiveToggle: (Bool) -> Void
+	let onDelete: () -> Void
+
+	private var componentIdentifier: String? {
+		component.authoredAttributes
+			.first { $0.name == "info:id" }
+			.map { stripUSDQuotes($0.value) }
+	}
+
+	private var definition: InspectorComponentDefinition? {
+		guard let id = componentIdentifier else { return nil }
+		return InspectorComponentCatalog.definition(forIdentifier: id)
+	}
+
+	var body: some View {
+		DisclosureGroup {
+			LabeledContent("Type", value: component.typeName)
+			Toggle(
+				"Active",
+				isOn: Binding(get: { component.isActive }, set: onActiveToggle)
+			)
+
+			if let definition {
+				ForEach(definition.parameterLayout) { parameter in
+					ComponentParameterEditor(
+						parameter: parameter,
+						currentValue: lookup(parameter.key),
+						onChange: { attributeType, valueLiteral in
+							onParameterChange(attributeType, parameter.key, valueLiteral)
+						}
+					)
+				}
+			} else {
+				ForEach(component.authoredAttributes) { attribute in
+					LabeledContent(attribute.name, value: attribute.value)
+				}
+			}
+
+			Button("Delete Component", role: .destructive, action: onDelete)
+		} label: {
+			LabeledContent(component.name, value: definition?.name ?? component.typeName)
+		}
+	}
+
+	private func lookup(_ key: String) -> String? {
+		component.authoredAttributes.first { $0.name == key }?.value
+	}
+}
+
+private struct ComponentParameterEditor: View {
+	let parameter: InspectorComponentParameter
+	let currentValue: String?
+	let onChange: (_ attributeType: String, _ valueLiteral: String) -> Void
+
+	var body: some View {
+		switch parameter.kind {
+		case .toggle(let defaultValue):
+			let bool = currentValue.flatMap(parseBool) ?? defaultValue
+			Toggle(
+				parameter.label,
+				isOn: Binding(
+					get: { bool },
+					set: { onChange("bool", $0 ? "true" : "false") }
+				)
+			)
+
+		case .text(let defaultValue, let placeholder):
+			let text = currentValue.map(stripUSDQuotes) ?? defaultValue
+			LabeledContent(parameter.label) {
+				TextField(placeholder, text: Binding(
+					get: { text },
+					set: { onChange("string", quoteUSDString($0)) }
+				))
+				.textFieldStyle(.roundedBorder)
+			}
+
+		case .scalar(let defaultValue, let unit):
+			let value = currentValue.flatMap(Double.init) ?? defaultValue
+			LabeledContent(unit.map { "\(parameter.label) (\($0))" } ?? parameter.label) {
+				TextField("", value: Binding(
+					get: { value },
+					set: { onChange("double", String($0)) }
+				), format: .number.precision(.fractionLength(0...4)))
+				.textFieldStyle(.roundedBorder)
+				.frame(minWidth: 80)
+			}
+
+		case .choice(let defaultValue, let options):
+			let selection = currentValue.map(stripUSDQuotes) ?? defaultValue
+			Picker(parameter.label, selection: Binding(
+				get: { selection },
+				set: { onChange("token", quoteUSDString($0)) }
+			)) {
+				ForEach(options, id: \.self) { option in
+					Text(option).tag(option)
+				}
+			}
+		}
+	}
+}
+
+private struct AddComponentRow: View {
+	let onAdd: (_ name: String, _ identifier: String) -> Void
+	@State private var selection: String = ""
+
+	private var enabled: [InspectorComponentDefinition] {
+		InspectorComponentCatalog.all.filter { $0.isEnabledForAuthoring }
+	}
+
+	var body: some View {
+		HStack {
+			Picker("Add Component", selection: $selection) {
+				Text("Choose…").tag("")
+				ForEach(enabled) { definition in
+					Text(definition.name).tag(definition.identifier)
+				}
+			}
+			Button("Add") {
+				guard let definition = enabled.first(where: { $0.identifier == selection }) else { return }
+				onAdd(definition.authoredPrimName, definition.identifier)
+				selection = ""
+			}
+			.disabled(selection.isEmpty)
+			.controlSize(.small)
+		}
+	}
+}
+
+private func stripUSDQuotes(_ value: String) -> String {
+	var trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+	if trimmed.hasPrefix("\""), trimmed.hasSuffix("\""), trimmed.count >= 2 {
+		trimmed = String(trimmed.dropFirst().dropLast())
+	}
+	return trimmed
+}
+
+private func quoteUSDString(_ value: String) -> String {
+	let escaped = value
+		.replacingOccurrences(of: "\\", with: "\\\\")
+		.replacingOccurrences(of: "\"", with: "\\\"")
+	return "\"\(escaped)\""
+}
+
+private func parseBool(_ value: String) -> Bool? {
+	let lower = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+	switch lower {
+	case "true", "1": return true
+	case "false", "0": return false
+	default: return nil
+	}
+}
+
 private struct AddReferenceRow: View {
 	let onAdd: (SwiftUsdShell.USDReference) -> Void
 	@State private var assetPath: String = ""
@@ -299,25 +454,26 @@ public struct InspectorView: View {
 				if !store.primComponents.isEmpty {
 					DisclosureGroup(isExpanded: disclosure(\.componentsExpanded)) {
 						ForEach(store.primComponents) { component in
-							DisclosureGroup {
-								LabeledContent("Type", value: component.typeName)
-								Toggle(
-									"Active",
-									isOn: Binding(
-										get: { component.isActive },
-										set: { store.send(.setComponentActiveRequested(componentPath: component.path, isActive: $0)) }
-									)
-								)
-								LabeledContent("Path", value: component.path)
-								ForEach(component.authoredAttributes) { attribute in
-									LabeledContent(attribute.name, value: attribute.value)
-								}
-								Button("Delete Component", role: .destructive) {
+							ComponentEditorRow(
+								component: component,
+								onParameterChange: { attributeType, attributeName, valueLiteral in
+									store.send(.setComponentParameterRequested(
+										componentPath: component.path,
+										attributeType: attributeType,
+										attributeName: attributeName,
+										valueLiteral: valueLiteral
+									))
+								},
+								onActiveToggle: { isActive in
+									store.send(.setComponentActiveRequested(componentPath: component.path, isActive: isActive))
+								},
+								onDelete: {
 									store.send(.deleteComponentRequested(componentPath: component.path))
 								}
-							} label: {
-								LabeledContent(component.name, value: component.typeName)
-							}
+							)
+						}
+						AddComponentRow { name, identifier in
+							store.send(.addComponentRequested(componentName: name, componentIdentifier: identifier))
 						}
 					} label: {
 						Text("Components").font(.headline)

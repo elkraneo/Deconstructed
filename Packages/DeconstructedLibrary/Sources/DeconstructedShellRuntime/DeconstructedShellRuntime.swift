@@ -465,6 +465,39 @@ public enum DeconstructedShellRuntime {
 		try DeconstructedUSDInterop.setUpAxis(url: url, axis: axis)
 	}
 
+	// MARK: - Component Parameter Writes
+
+	public static func setComponentParameter(
+		url: URL,
+		componentPath: String,
+		attributeType: String,
+		attributeName: String,
+		valueLiteral: String
+	) throws {
+		try DeconstructedUSDInterop.setRealityKitComponentParameter(
+			url: url,
+			componentPrimPath: componentPath,
+			attributeType: attributeType,
+			attributeName: attributeName,
+			valueLiteral: valueLiteral
+		)
+	}
+
+	@discardableResult
+	public static func addComponent(
+		url: URL,
+		primPath: String,
+		componentName: String,
+		componentIdentifier: String
+	) throws -> String {
+		try DeconstructedUSDInterop.addRealityKitComponent(
+			url: url,
+			primPath: primPath,
+			componentName: componentName,
+			componentIdentifier: componentIdentifier
+		)
+	}
+
 	// MARK: - Material Edits
 
 	/// Executes a material edit request.
