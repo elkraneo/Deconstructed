@@ -309,6 +309,120 @@ public enum DeconstructedShellRuntime {
 		}
 	}
 
+	// MARK: - Transform Write
+
+	/// Writes a prim's local transform. Bridges the SwiftUsdShell
+	/// `USDTransformData` (which carries an optional orientation quaternion
+	/// the underlying operation does not author) onto the USDInterfaces
+	/// shape via `DeconstructedUSDInterop.setPrimTransform`.
+	public static func setPrimTransform(
+		url: URL,
+		primPath: String,
+		transform: SwiftUsdShell.USDTransformData
+	) throws {
+		let raw = USDInterfaces.USDTransformData(
+			position: transform.position,
+			rotationDegrees: transform.rotationDegrees,
+			scale: transform.scale
+		)
+		try DeconstructedUSDInterop.setPrimTransform(url: url, primPath: primPath, transform: raw)
+	}
+
+	// MARK: - Material Binding Write
+
+	/// Binds a material to a prim or clears the binding when `materialPath`
+	/// is `nil`. Delegates to `DeconstructedUSDInterop` so we reuse the
+	/// edit-target plumbing already wired there.
+	public static func setMaterialBinding(
+		url: URL,
+		primPath: String,
+		materialPath: String?
+	) throws {
+		if let materialPath {
+			try DeconstructedUSDInterop.setMaterialBinding(url: url, primPath: primPath, materialPath: materialPath)
+		} else {
+			try DeconstructedUSDInterop.clearMaterialBinding(url: url, primPath: primPath)
+		}
+	}
+
+	public static func setMaterialBindingStrength(
+		url: URL,
+		primPath: String,
+		strength: SwiftUsdShell.USDMaterialBindingStrength
+	) throws {
+		let raw = bridgeBindingStrengthOut(strength)
+		try DeconstructedUSDInterop.setMaterialBindingStrength(url: url, primPath: primPath, strength: raw)
+	}
+
+	private static func bridgeBindingStrengthOut(
+		_ shell: SwiftUsdShell.USDMaterialBindingStrength
+	) -> USDInterfaces.USDMaterialBindingStrength {
+		USDInterfaces.USDMaterialBindingStrength(rawValue: shell.rawValue) ?? .fallbackStrength
+	}
+
+	// MARK: - Variant Selection Write
+
+	public static func setPrimVariantSelection(
+		url: URL,
+		primPath: String,
+		setName: String,
+		selectionId: String?
+	) throws {
+		try DeconstructedUSDInterop.setPrimVariantSelection(
+			url: url,
+			primPath: primPath,
+			setName: setName,
+			selectionId: selectionId
+		)
+	}
+
+	// MARK: - Component Writes
+
+	public static func setComponentActive(
+		url: URL,
+		componentPath: String,
+		isActive: Bool
+	) throws {
+		try DeconstructedUSDInterop.setRealityKitComponentActive(
+			url: url,
+			componentPrimPath: componentPath,
+			isActive: isActive
+		)
+	}
+
+	public static func deleteComponent(url: URL, componentPath: String) throws {
+		try DeconstructedUSDInterop.deleteRealityKitComponent(
+			url: url,
+			componentPrimPath: componentPath
+		)
+	}
+
+	// MARK: - Reference Writes
+
+	public static func addPrimReference(
+		url: URL,
+		primPath: String,
+		reference: SwiftUsdShell.USDReference
+	) throws {
+		try DeconstructedUSDInterop.addPrimReference(
+			url: url,
+			primPath: primPath,
+			reference: USDInterfaces.USDReference(assetPath: reference.assetPath, primPath: reference.primPath)
+		)
+	}
+
+	public static func removePrimReference(
+		url: URL,
+		primPath: String,
+		reference: SwiftUsdShell.USDReference
+	) throws {
+		try DeconstructedUSDInterop.removePrimReference(
+			url: url,
+			primPath: primPath,
+			reference: USDInterfaces.USDReference(assetPath: reference.assetPath, primPath: reference.primPath)
+		)
+	}
+
 	// MARK: - Material Edits
 
 	/// Executes a material edit request.

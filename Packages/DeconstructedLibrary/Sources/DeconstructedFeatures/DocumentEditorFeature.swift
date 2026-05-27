@@ -557,6 +557,19 @@ public struct DocumentEditorFeature {
 				return .none
 
 			case .inspector(let inspectorAction):
+				// Apply live transform edits to the viewport without reloading the USD asset.
+				if case .primTransformEdited(let transform) = inspectorAction,
+					case .scene = state.selectedTab,
+					case .prim(let path) = state.inspector.currentTarget
+				{
+					return .send(.viewport(.applyLiveTransform(LiveTransformData(
+						primPath: path,
+						position: transform.position,
+						rotationDegrees: transform.rotationDegrees,
+						scale: transform.scale
+					))))
+				}
+
 				// Material binding edits should not force a full viewport reload; that resets camera/navigation.
 				if case .setMaterialBindingSucceeded = inspectorAction,
 					case .scene(let tabID) = state.selectedTab,

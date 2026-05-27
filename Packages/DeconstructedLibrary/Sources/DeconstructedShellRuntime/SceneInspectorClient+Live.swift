@@ -38,6 +38,34 @@ extension SceneInspectorClient {
 		},
 		primComponents: { url, primPath in
 			DeconstructedShellRuntime.primComponents(url: url, primPath: primPath)
+		},
+		setPrimTransform: { url, primPath, transform in
+			try DeconstructedShellRuntime.setPrimTransform(url: url, primPath: primPath, transform: transform)
+		},
+		setMaterialBinding: { url, primPath, materialPath in
+			try DeconstructedShellRuntime.setMaterialBinding(url: url, primPath: primPath, materialPath: materialPath)
+		},
+		setMaterialBindingStrength: { url, primPath, strength in
+			try DeconstructedShellRuntime.setMaterialBindingStrength(url: url, primPath: primPath, strength: strength)
+		},
+		setPrimVariantSelection: { url, primPath, setName, selectionId in
+			try DeconstructedShellRuntime.setPrimVariantSelection(
+				url: url, primPath: primPath, setName: setName, selectionId: selectionId
+			)
+		},
+		setComponentActive: { url, componentPath, isActive in
+			try DeconstructedShellRuntime.setComponentActive(
+				url: url, componentPath: componentPath, isActive: isActive
+			)
+		},
+		deleteComponent: { url, componentPath in
+			try DeconstructedShellRuntime.deleteComponent(url: url, componentPath: componentPath)
+		},
+		addPrimReference: { url, primPath, reference in
+			try DeconstructedShellRuntime.addPrimReference(url: url, primPath: primPath, reference: reference)
+		},
+		removePrimReference: { url, primPath, reference in
+			try DeconstructedShellRuntime.removePrimReference(url: url, primPath: primPath, reference: reference)
 		}
 	)
 }

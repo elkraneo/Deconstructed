@@ -175,6 +175,21 @@ public struct InspectorFeature {
 		case primCompositionArcsLoaded([SwiftUsdShell.USDCompositionArcSummary])
 		case loadPrimComponentsRequested(URL, primPath: String)
 		case primComponentsLoaded([InspectorComponentSummary])
+		case primTransformEdited(SwiftUsdShell.USDTransformData)
+		case persistPrimTransformRequested(URL, primPath: String, transform: SwiftUsdShell.USDTransformData)
+		case primTransformPersisted
+		case primTransformPersistFailed(String)
+		case setMaterialBindingRequested(materialPath: String?)
+		case setMaterialBindingStrengthRequested(SwiftUsdShell.USDMaterialBindingStrength)
+		case materialBindingWriteFailed(String)
+		case setVariantSelectionRequested(setName: String, selectionId: String?)
+		case variantSelectionWriteFailed(String)
+		case setComponentActiveRequested(componentPath: String, isActive: Bool)
+		case deleteComponentRequested(componentPath: String)
+		case componentWriteFailed(String)
+		case addReferenceRequested(SwiftUsdShell.USDReference)
+		case removeReferenceRequested(SwiftUsdShell.USDReference)
+		case referenceWriteFailed(String)
 		case setMaterialBindingSucceeded
 		case setMaterialBindingStrengthSucceeded
 		case primReferencesEditSucceeded
@@ -200,7 +215,12 @@ public struct InspectorFeature {
 
 	public init() {}
 
+	private enum CancelID: Hashable {
+		case persistTransform
+	}
+
 	@Dependency(\.sceneInspector) var sceneInspector
+	@Dependency(\.continuousClock) var clock
 
 	public var body: some ReducerOf<Self> {
 		Reduce { state, action in
@@ -304,6 +324,148 @@ public struct InspectorFeature {
 
 			case .primComponentsLoaded(let components):
 				state.primComponents = components
+				return .none
+
+			case .primTransformEdited(let transform):
+				state.primTransform = transform
+				guard let url = state.sceneURL, let primPath = state.selectedNodeID else {
+					return .none
+				}
+				return .run { [clock] send in
+					try? await clock.sleep(for: .milliseconds(120))
+					await send(.persistPrimTransformRequested(url, primPath: primPath, transform: transform))
+				}
+				.cancellable(id: CancelID.persistTransform, cancelInFlight: true)
+
+			case .persistPrimTransformRequested(let url, let primPath, let transform):
+				return .run { [sceneInspector] send in
+					do {
+						try await sceneInspector.setPrimTransform(url, primPath, transform)
+						await send(.primTransformPersisted)
+					} catch {
+						await send(.primTransformPersistFailed(error.localizedDescription))
+					}
+				}
+
+			case .primTransformPersisted:
+				return .none
+
+			case .primTransformPersistFailed(let message):
+				state.errorMessage = message
+				return .none
+
+			case .setMaterialBindingRequested(let materialPath):
+				guard let url = state.sceneURL, let primPath = state.selectedNodeID else {
+					return .none
+				}
+				return .run { [sceneInspector] send in
+					do {
+						try await sceneInspector.setMaterialBinding(url, primPath, materialPath)
+						await send(.setMaterialBindingSucceeded)
+						await send(.loadMaterialBindingRequested(url, primPath: primPath))
+					} catch {
+						await send(.materialBindingWriteFailed(error.localizedDescription))
+					}
+				}
+
+			case .setMaterialBindingStrengthRequested(let strength):
+				guard let url = state.sceneURL, let primPath = state.selectedNodeID else {
+					return .none
+				}
+				return .run { [sceneInspector] send in
+					do {
+						try await sceneInspector.setMaterialBindingStrength(url, primPath, strength)
+						await send(.setMaterialBindingStrengthSucceeded)
+						await send(.loadMaterialBindingRequested(url, primPath: primPath))
+					} catch {
+						await send(.materialBindingWriteFailed(error.localizedDescription))
+					}
+				}
+
+			case .materialBindingWriteFailed(let message):
+				state.errorMessage = message
+				return .none
+
+			case .setVariantSelectionRequested(let setName, let selectionId):
+				guard let url = state.sceneURL, let primPath = state.selectedNodeID else {
+					return .none
+				}
+				return .run { [sceneInspector] send in
+					do {
+						try await sceneInspector.setPrimVariantSelection(url, primPath, setName, selectionId)
+						await send(.setVariantSelectionSucceeded(selectionId))
+						await send(.loadPrimVariantSetsRequested(url, primPath: primPath))
+					} catch {
+						await send(.variantSelectionWriteFailed(error.localizedDescription))
+					}
+				}
+
+			case .variantSelectionWriteFailed(let message):
+				state.errorMessage = message
+				return .none
+
+			case .setComponentActiveRequested(let componentPath, let isActive):
+				guard let url = state.sceneURL, let primPath = state.selectedNodeID else {
+					return .none
+				}
+				return .run { [sceneInspector] send in
+					do {
+						try await sceneInspector.setComponentActive(url, componentPath, isActive)
+						await send(.setComponentActiveSucceeded(componentPath: componentPath, isActive: isActive))
+						await send(.loadPrimComponentsRequested(url, primPath: primPath))
+					} catch {
+						await send(.componentWriteFailed(error.localizedDescription))
+					}
+				}
+
+			case .deleteComponentRequested(let componentPath):
+				guard let url = state.sceneURL, let primPath = state.selectedNodeID else {
+					return .none
+				}
+				return .run { [sceneInspector] send in
+					do {
+						try await sceneInspector.deleteComponent(url, componentPath)
+						await send(.deleteComponentSucceeded(componentPath: componentPath))
+						await send(.loadPrimComponentsRequested(url, primPath: primPath))
+					} catch {
+						await send(.componentWriteFailed(error.localizedDescription))
+					}
+				}
+
+			case .componentWriteFailed(let message):
+				state.errorMessage = message
+				return .none
+
+			case .addReferenceRequested(let reference):
+				guard let url = state.sceneURL, let primPath = state.selectedNodeID else {
+					return .none
+				}
+				return .run { [sceneInspector] send in
+					do {
+						try await sceneInspector.addPrimReference(url, primPath, reference)
+						await send(.primReferencesEditSucceeded)
+						await send(.loadPrimReferencesRequested(url, primPath: primPath))
+					} catch {
+						await send(.referenceWriteFailed(error.localizedDescription))
+					}
+				}
+
+			case .removeReferenceRequested(let reference):
+				guard let url = state.sceneURL, let primPath = state.selectedNodeID else {
+					return .none
+				}
+				return .run { [sceneInspector] send in
+					do {
+						try await sceneInspector.removePrimReference(url, primPath, reference)
+						await send(.primReferencesEditSucceeded)
+						await send(.loadPrimReferencesRequested(url, primPath: primPath))
+					} catch {
+						await send(.referenceWriteFailed(error.localizedDescription))
+					}
+				}
+
+			case .referenceWriteFailed(let message):
+				state.errorMessage = message
 				return .none
 
 			case .loadPrimReferencesRequested(let url, let primPath):

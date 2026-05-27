@@ -8,6 +8,68 @@ private func format(_ vector: SIMD3<Double>) -> String {
 	String(format: "%.3g, %.3g, %.3g", vector.x, vector.y, vector.z)
 }
 
+private func updateTransform(
+	_ transform: SwiftUsdShell.USDTransformData,
+	position: SIMD3<Double>? = nil,
+	rotationDegrees: SIMD3<Double>? = nil,
+	scale: SIMD3<Double>? = nil
+) -> SwiftUsdShell.USDTransformData {
+	SwiftUsdShell.USDTransformData(
+		position: position ?? transform.position,
+		rotationDegrees: rotationDegrees ?? transform.rotationDegrees,
+		orientation: transform.orientation,
+		scale: scale ?? transform.scale
+	)
+}
+
+private struct AddReferenceRow: View {
+	let onAdd: (SwiftUsdShell.USDReference) -> Void
+	@State private var assetPath: String = ""
+	@State private var primPath: String = ""
+
+	var body: some View {
+		HStack {
+			TextField("Asset path", text: $assetPath)
+				.textFieldStyle(.roundedBorder)
+			TextField("Prim path (optional)", text: $primPath)
+				.textFieldStyle(.roundedBorder)
+			Button("Add") {
+				let reference = SwiftUsdShell.USDReference(
+					assetPath: assetPath,
+					primPath: primPath.isEmpty ? nil : primPath
+				)
+				onAdd(reference)
+				assetPath = ""
+				primPath = ""
+			}
+			.disabled(assetPath.isEmpty)
+			.controlSize(.small)
+		}
+	}
+}
+
+private struct TransformVectorEditor: View {
+	let label: String
+	let vector: SIMD3<Double>
+	let onChange: (SIMD3<Double>) -> Void
+
+	var body: some View {
+		LabeledContent(label) {
+			HStack(spacing: 4) {
+				axisField(value: vector.x) { onChange(SIMD3($0, vector.y, vector.z)) }
+				axisField(value: vector.y) { onChange(SIMD3(vector.x, $0, vector.z)) }
+				axisField(value: vector.z) { onChange(SIMD3(vector.x, vector.y, $0)) }
+			}
+		}
+	}
+
+	private func axisField(value: Double, set: @escaping (Double) -> Void) -> some View {
+		TextField("", value: Binding(get: { value }, set: { set($0) }), format: .number.precision(.fractionLength(0...3)))
+			.textFieldStyle(.roundedBorder)
+			.frame(minWidth: 60)
+	}
+}
+
 private func describe(_ value: SwiftUsdShell.USDMaterialPropertyInfo) -> String {
 	switch value {
 	case .bool(let v): return v ? "true" : "false"
@@ -82,21 +144,51 @@ public struct InspectorView: View {
 
 				if let transform = store.primTransform {
 					Section("Transform") {
-						LabeledContent("Position", value: format(transform.position))
-						LabeledContent("Rotation (deg)", value: format(transform.rotationDegrees))
-						LabeledContent("Scale", value: format(transform.scale))
+						TransformVectorEditor(label: "Position", vector: transform.position) { newValue in
+							store.send(.primTransformEdited(updateTransform(transform, position: newValue)))
+						}
+						TransformVectorEditor(label: "Rotation (deg)", vector: transform.rotationDegrees) { newValue in
+							store.send(.primTransformEdited(updateTransform(transform, rotationDegrees: newValue)))
+						}
+						TransformVectorEditor(label: "Scale", vector: transform.scale) { newValue in
+							store.send(.primTransformEdited(updateTransform(transform, scale: newValue)))
+						}
 					}
 				}
 
 				if let binding = store.materialBinding {
 					Section("Material Binding") {
 						LabeledContent("Effective", value: binding.effectiveMaterialPath?.rawValue ?? "—")
-						LabeledContent("Authored", value: binding.authoredMaterialPath?.rawValue ?? "—")
 						if let source = binding.bindingSourcePrimPath {
 							LabeledContent("Inherited From", value: source.rawValue)
 						}
-						if let strength = binding.bindingStrength {
-							LabeledContent("Strength", value: strength.displayName)
+
+						let authoredPath = binding.authoredMaterialPath?.rawValue
+						Picker(
+							"Authored Material",
+							selection: Binding(
+								get: { authoredPath ?? "" },
+								set: { newValue in
+									store.send(.setMaterialBindingRequested(materialPath: newValue.isEmpty ? nil : newValue))
+								}
+							)
+						) {
+							Text("None").tag("")
+							ForEach(store.availableMaterials) { material in
+								Text(material.name).tag(material.path.rawValue)
+							}
+						}
+
+						Picker(
+							"Strength",
+							selection: Binding(
+								get: { binding.bindingStrength ?? .fallbackStrength },
+								set: { store.send(.setMaterialBindingStrengthRequested($0)) }
+							)
+						) {
+							ForEach(SwiftUsdShell.USDMaterialBindingStrength.allCases, id: \.self) { strength in
+								Text(strength.displayName).tag(strength)
+							}
 						}
 					}
 
@@ -109,21 +201,52 @@ public struct InspectorView: View {
 					}
 				}
 
-				if !store.primReferences.isEmpty {
-					Section("References") {
+				Section("References") {
+					if store.primReferences.isEmpty {
+						Text("No authored references")
+							.foregroundStyle(.secondary)
+					} else {
 						ForEach(store.primReferences, id: \.self) { reference in
-							LabeledContent(reference.assetPath, value: reference.primPath ?? "—")
+							HStack {
+								VStack(alignment: .leading) {
+									Text(reference.assetPath)
+									if let primPath = reference.primPath {
+										Text(primPath).font(.caption).foregroundStyle(.secondary)
+									}
+								}
+								Spacer()
+								Button("Remove", role: .destructive) {
+									store.send(.removeReferenceRequested(reference))
+								}
+								.controlSize(.small)
+							}
 						}
+					}
+					AddReferenceRow { reference in
+						store.send(.addReferenceRequested(reference))
 					}
 				}
 
 				if !store.primVariantSets.isEmpty {
 					Section("Variants") {
 						ForEach(store.primVariantSets) { variantSet in
-							LabeledContent(
+							Picker(
 								variantSet.name.rawValue,
-								value: variantSet.selection?.rawValue ?? "—"
-							)
+								selection: Binding(
+									get: { variantSet.selection?.rawValue ?? "" },
+									set: { newValue in
+										store.send(.setVariantSelectionRequested(
+											setName: variantSet.name.rawValue,
+											selectionId: newValue.isEmpty ? nil : newValue
+										))
+									}
+								)
+							) {
+								Text("None").tag("")
+								ForEach(variantSet.choices, id: \.rawValue) { choice in
+									Text(choice.rawValue).tag(choice.rawValue)
+								}
+							}
 						}
 					}
 				}
@@ -144,10 +267,19 @@ public struct InspectorView: View {
 						ForEach(store.primComponents) { component in
 							DisclosureGroup {
 								LabeledContent("Type", value: component.typeName)
-								LabeledContent("Active", value: component.isActive ? "Yes" : "No")
+								Toggle(
+									"Active",
+									isOn: Binding(
+										get: { component.isActive },
+										set: { store.send(.setComponentActiveRequested(componentPath: component.path, isActive: $0)) }
+									)
+								)
 								LabeledContent("Path", value: component.path)
 								ForEach(component.authoredAttributes) { attribute in
 									LabeledContent(attribute.name, value: attribute.value)
+								}
+								Button("Delete Component", role: .destructive) {
+									store.send(.deleteComponentRequested(componentPath: component.path))
 								}
 							} label: {
 								LabeledContent(component.name, value: component.typeName)

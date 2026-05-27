@@ -20,6 +20,14 @@ public struct SceneInspectorClient: Sendable {
 	public var materialProperties: @Sendable (_ url: URL, _ materialPath: String) async -> [SwiftUsdShell.USDMaterialPropertySummary]
 	public var primCompositionArcs: @Sendable (_ url: URL, _ primPath: String) async -> [SwiftUsdShell.USDCompositionArcSummary]
 	public var primComponents: @Sendable (_ url: URL, _ primPath: String) async -> [InspectorComponentSummary]
+	public var setPrimTransform: @Sendable (_ url: URL, _ primPath: String, _ transform: SwiftUsdShell.USDTransformData) async throws -> Void
+	public var setMaterialBinding: @Sendable (_ url: URL, _ primPath: String, _ materialPath: String?) async throws -> Void
+	public var setMaterialBindingStrength: @Sendable (_ url: URL, _ primPath: String, _ strength: SwiftUsdShell.USDMaterialBindingStrength) async throws -> Void
+	public var setPrimVariantSelection: @Sendable (_ url: URL, _ primPath: String, _ setName: String, _ selectionId: String?) async throws -> Void
+	public var setComponentActive: @Sendable (_ url: URL, _ componentPath: String, _ isActive: Bool) async throws -> Void
+	public var deleteComponent: @Sendable (_ url: URL, _ componentPath: String) async throws -> Void
+	public var addPrimReference: @Sendable (_ url: URL, _ primPath: String, _ reference: SwiftUsdShell.USDReference) async throws -> Void
+	public var removePrimReference: @Sendable (_ url: URL, _ primPath: String, _ reference: SwiftUsdShell.USDReference) async throws -> Void
 
 	public init(
 		stageMetadata: @escaping @Sendable (_ url: URL) async -> SwiftUsdShell.USDStageMetadata = { _ in
@@ -51,7 +59,15 @@ public struct SceneInspectorClient: Sendable {
 		},
 		primComponents: @escaping @Sendable (_ url: URL, _ primPath: String) async -> [InspectorComponentSummary] = { _, _ in
 			[]
-		}
+		},
+		setPrimTransform: @escaping @Sendable (_ url: URL, _ primPath: String, _ transform: SwiftUsdShell.USDTransformData) async throws -> Void = { _, _, _ in },
+		setMaterialBinding: @escaping @Sendable (_ url: URL, _ primPath: String, _ materialPath: String?) async throws -> Void = { _, _, _ in },
+		setMaterialBindingStrength: @escaping @Sendable (_ url: URL, _ primPath: String, _ strength: SwiftUsdShell.USDMaterialBindingStrength) async throws -> Void = { _, _, _ in },
+		setPrimVariantSelection: @escaping @Sendable (_ url: URL, _ primPath: String, _ setName: String, _ selectionId: String?) async throws -> Void = { _, _, _, _ in },
+		setComponentActive: @escaping @Sendable (_ url: URL, _ componentPath: String, _ isActive: Bool) async throws -> Void = { _, _, _ in },
+		deleteComponent: @escaping @Sendable (_ url: URL, _ componentPath: String) async throws -> Void = { _, _ in },
+		addPrimReference: @escaping @Sendable (_ url: URL, _ primPath: String, _ reference: SwiftUsdShell.USDReference) async throws -> Void = { _, _, _ in },
+		removePrimReference: @escaping @Sendable (_ url: URL, _ primPath: String, _ reference: SwiftUsdShell.USDReference) async throws -> Void = { _, _, _ in }
 	) {
 		self.stageMetadata = stageMetadata
 		self.primTransform = primTransform
@@ -63,6 +79,14 @@ public struct SceneInspectorClient: Sendable {
 		self.materialProperties = materialProperties
 		self.primCompositionArcs = primCompositionArcs
 		self.primComponents = primComponents
+		self.setPrimTransform = setPrimTransform
+		self.setMaterialBinding = setMaterialBinding
+		self.setMaterialBindingStrength = setMaterialBindingStrength
+		self.setPrimVariantSelection = setPrimVariantSelection
+		self.setComponentActive = setComponentActive
+		self.deleteComponent = deleteComponent
+		self.addPrimReference = addPrimReference
+		self.removePrimReference = removePrimReference
 	}
 }
 
