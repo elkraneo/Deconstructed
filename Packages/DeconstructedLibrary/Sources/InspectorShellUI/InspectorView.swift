@@ -1,9 +1,11 @@
+import AppKit
 import ComposableArchitecture
 import InspectorFeature
 import InspectorModels
 import Sharing
 import SwiftUI
 import SwiftUsdShell
+import UniformTypeIdentifiers
 import simd
 
 private func format(_ vector: SIMD3<Double>) -> String {
@@ -29,6 +31,7 @@ private struct ComponentEditorRow: View {
 	let onParameterChange: (_ attributeType: String, _ attributeName: String, _ valueLiteral: String) -> Void
 	let onActiveToggle: (Bool) -> Void
 	let onDelete: () -> Void
+	let onPaste: (String) -> Void
 
 	private var componentIdentifier: String? {
 		component.authoredAttributes
@@ -41,8 +44,44 @@ private struct ComponentEditorRow: View {
 		return InspectorComponentCatalog.definition(forIdentifier: id)
 	}
 
+	private var nonLayoutAttributes: [InspectorAuthoredAttribute] {
+		let layoutKeys: Set<String> = Set((definition?.parameterLayout ?? []).map(\.key))
+		return component.authoredAttributes.filter { attribute in
+			!layoutKeys.contains(attribute.name) && attribute.name != "info:id"
+		}
+	}
+
 	var body: some View {
 		DisclosureGroup {
+			HStack {
+				Spacer()
+				Menu {
+					Button("Copy Component") { copyComponentPayload() }
+					Button("Copy Component Name") { copyComponentName() }
+					Button("Paste Component") {
+						guard let identifier = copiedComponentIdentifierFromPasteboard() else { return }
+						onPaste(identifier)
+					}
+					.disabled(copiedComponentIdentifierFromPasteboard() == nil)
+					Divider()
+					Button(component.isActive ? "Deactivate" : "Activate") {
+						onActiveToggle(!component.isActive)
+					}
+					Divider()
+					Button("Remove Overrides") {}
+						.disabled(true)
+					Divider()
+					Button("Delete", role: .destructive, action: onDelete)
+				} label: {
+					Image(systemName: "ellipsis")
+						.font(.system(size: 12, weight: .semibold))
+						.foregroundStyle(.secondary)
+						.frame(width: 20, height: 20)
+				}
+				.menuStyle(.borderlessButton)
+				.fixedSize()
+			}
+
 			LabeledContent("Type", value: component.typeName)
 			Toggle(
 				"Active",
@@ -59,13 +98,16 @@ private struct ComponentEditorRow: View {
 						}
 					)
 				}
-			} else {
-				ForEach(component.authoredAttributes) { attribute in
-					LabeledContent(attribute.name, value: attribute.value)
-				}
 			}
 
-			Button("Delete Component", role: .destructive, action: onDelete)
+			ForEach(nonLayoutAttributes) { attribute in
+				GenericAttributeEditor(
+					attribute: attribute,
+					onChange: { attributeType, valueLiteral in
+						onParameterChange(attributeType, attribute.name, valueLiteral)
+					}
+				)
+			}
 		} label: {
 			LabeledContent(component.name, value: definition?.name ?? component.typeName)
 		}
@@ -73,6 +115,68 @@ private struct ComponentEditorRow: View {
 
 	private func lookup(_ key: String) -> String? {
 		component.authoredAttributes.first { $0.name == key }?.value
+	}
+
+	private func copyComponentName() {
+		NSPasteboard.general.clearContents()
+		NSPasteboard.general.setString(definition?.name ?? component.name, forType: .string)
+	}
+
+	private func copyComponentPayload() {
+		let payloadName = definition?.name ?? component.name
+		let payloadIdentifier = definition?.identifier ?? "unknown"
+		let payload = """
+		{
+		  "name": "\(payloadName)",
+		  "authoredPrimName": "\(component.name)",
+		  "path": "\(component.path)",
+		  "identifier": "\(payloadIdentifier)"
+		}
+		"""
+		NSPasteboard.general.clearContents()
+		NSPasteboard.general.setString(payload, forType: .string)
+	}
+
+	private func copiedComponentIdentifierFromPasteboard() -> String? {
+		guard let payload = NSPasteboard.general.string(forType: .string),
+		      let data = payload.data(using: .utf8),
+		      let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+		else { return nil }
+		return object["identifier"] as? String
+	}
+}
+
+private struct GenericAttributeEditor: View {
+	let attribute: InspectorAuthoredAttribute
+	let onChange: (_ attributeType: String, _ valueLiteral: String) -> Void
+
+	var body: some View {
+		if let bool = parseBool(attribute.value) {
+			Toggle(
+				attribute.name,
+				isOn: Binding(
+					get: { bool },
+					set: { onChange("bool", $0 ? "true" : "false") }
+				)
+			)
+		} else if let number = Double(attribute.value.trimmingCharacters(in: .whitespacesAndNewlines)) {
+			LabeledContent(attribute.name) {
+				TextField("", value: Binding(
+					get: { number },
+					set: { onChange("double", String($0)) }
+				), format: .number.precision(.fractionLength(0...4)))
+				.textFieldStyle(.roundedBorder)
+				.frame(minWidth: 80)
+			}
+		} else {
+			LabeledContent(attribute.name) {
+				TextField("", text: Binding(
+					get: { stripUSDQuotes(attribute.value) },
+					set: { onChange("string", quoteUSDString($0)) }
+				))
+				.textFieldStyle(.roundedBorder)
+			}
+		}
 	}
 }
 
@@ -130,28 +234,29 @@ private struct ComponentParameterEditor: View {
 
 private struct AddComponentRow: View {
 	let onAdd: (_ name: String, _ identifier: String) -> Void
-	@State private var selection: String = ""
-
-	private var enabled: [InspectorComponentDefinition] {
-		InspectorComponentCatalog.all.filter { $0.isEnabledForAuthoring }
-	}
 
 	var body: some View {
-		HStack {
-			Picker("Add Component", selection: $selection) {
-				Text("Choose…").tag("")
-				ForEach(enabled) { definition in
-					Text(definition.name).tag(definition.identifier)
+		Menu {
+			ForEach(InspectorComponentCatalog.grouped, id: \.0) { category, components in
+				Section(category.displayName) {
+					ForEach(components, id: \.id) { component in
+						Button(component.name) {
+							onAdd(component.authoredPrimName, component.identifier)
+						}
+						.disabled(!component.isEnabledForAuthoring)
+						.help(component.summary)
+					}
 				}
 			}
-			Button("Add") {
-				guard let definition = enabled.first(where: { $0.identifier == selection }) else { return }
-				onAdd(definition.authoredPrimName, definition.identifier)
-				selection = ""
-			}
-			.disabled(selection.isEmpty)
-			.controlSize(.small)
+		} label: {
+			Label("Add Component", systemImage: "plus.circle")
+				.font(.system(size: 12, weight: .semibold))
+				.frame(maxWidth: .infinity)
 		}
+		.menuStyle(.borderlessButton)
+		.padding(8)
+		.background(.thinMaterial)
+		.clipShape(RoundedRectangle(cornerRadius: 6))
 	}
 }
 
@@ -176,6 +281,107 @@ private func parseBool(_ value: String) -> Bool? {
 	case "true", "1": return true
 	case "false", "0": return false
 	default: return nil
+	}
+}
+
+private struct ReferencesEditor: View {
+	let references: [SwiftUsdShell.USDReference]
+	let onAdd: (SwiftUsdShell.USDReference) -> Void
+	let onRemove: (SwiftUsdShell.USDReference) -> Void
+	let onReplace: (_ old: SwiftUsdShell.USDReference, _ new: SwiftUsdShell.USDReference) -> Void
+	@State private var selectedIndex: Int?
+
+	var body: some View {
+		VStack(alignment: .leading, spacing: 10) {
+			if references.isEmpty {
+				Text("No authored references")
+					.foregroundStyle(.secondary)
+			} else {
+				VStack(alignment: .leading, spacing: 4) {
+					ForEach(Array(references.enumerated()), id: \.offset) { index, reference in
+						Button {
+							selectedIndex = index
+						} label: {
+							HStack(spacing: 8) {
+								Image(systemName: "shippingbox")
+									.font(.system(size: 11))
+									.foregroundStyle(.secondary)
+								VStack(alignment: .leading, spacing: 2) {
+									Text(reference.assetPath)
+										.font(.system(size: 11))
+										.lineLimit(1)
+										.truncationMode(.middle)
+									if let primPath = reference.primPath, !primPath.isEmpty {
+										Text("Prim: \(primPath)")
+											.font(.system(size: 10))
+											.foregroundStyle(.secondary)
+											.lineLimit(1)
+											.truncationMode(.middle)
+									}
+								}
+								Spacer()
+							}
+							.padding(.horizontal, 8)
+							.padding(.vertical, 6)
+							.background(
+								selectedIndex == index ? Color.accentColor.opacity(0.18) : Color.clear
+							)
+							.clipShape(RoundedRectangle(cornerRadius: 8))
+						}
+						.buttonStyle(.plain)
+					}
+				}
+			}
+
+			Divider()
+
+			HStack(spacing: 10) {
+				Button {
+					guard let reference = chooseReferenceFile() else { return }
+					onAdd(reference)
+				} label: {
+					Image(systemName: "plus")
+				}
+				.buttonStyle(.plain)
+
+				Button {
+					guard let index = selectedIndex, references.indices.contains(index) else { return }
+					onRemove(references[index])
+					selectedIndex = references.count <= 1 ? nil : min(index, references.count - 2)
+				} label: {
+					Image(systemName: "minus")
+				}
+				.buttonStyle(.plain)
+				.disabled(selectedIndex == nil)
+
+				Button("Replace") {
+					guard let index = selectedIndex, references.indices.contains(index) else { return }
+					guard let newReference = chooseReferenceFile() else { return }
+					onReplace(references[index], newReference)
+				}
+				.buttonStyle(.plain)
+				.disabled(selectedIndex == nil)
+
+				AddReferenceRow(onAdd: onAdd)
+			}
+			.font(.system(size: 13, weight: .semibold))
+		}
+	}
+
+	private func chooseReferenceFile() -> SwiftUsdShell.USDReference? {
+		let panel = NSOpenPanel()
+		panel.allowsMultipleSelection = false
+		panel.canChooseDirectories = false
+		panel.canChooseFiles = true
+		panel.allowedContentTypes = [
+			UTType(filenameExtension: "usd"),
+			UTType(filenameExtension: "usda"),
+			UTType(filenameExtension: "usdc"),
+			UTType(filenameExtension: "usdz")
+		].compactMap { $0 }
+		panel.prompt = "Select"
+		guard panel.runModal() == .OK, let url = panel.url else { return nil }
+		return SwiftUsdShell.USDReference(assetPath: url.path)
 	}
 }
 
@@ -227,16 +433,78 @@ private struct TransformVectorEditor: View {
 	}
 }
 
-private func describe(_ value: SwiftUsdShell.USDMaterialPropertyInfo) -> String {
-	switch value {
-	case .bool(let v): return v ? "true" : "false"
-	case .color(let r, let g, let b): return String(format: "%.3g, %.3g, %.3g", r, g, b)
-	case .float(let v): return String(format: "%g", v)
-	case .int(let v): return String(v)
-	case .string(let v): return v
-	case .texture(let url, let resolved): return resolved ?? url
-	case .token(let v): return v
-	case .unsupported(_, let description): return description
+private struct MaterialPropertyRow: View {
+	let property: SwiftUsdShell.USDMaterialPropertySummary
+
+	var body: some View {
+		LabeledContent(property.name) {
+			switch property.value {
+			case let .color(r, g, b):
+				HStack(spacing: 8) {
+					Color(red: Double(r), green: Double(g), blue: Double(b))
+						.frame(width: 14, height: 14)
+						.clipShape(RoundedRectangle(cornerRadius: 3))
+						.overlay(
+							RoundedRectangle(cornerRadius: 3)
+								.strokeBorder(.quaternary, lineWidth: 1)
+						)
+					Text(String(format: "%.3f, %.3f, %.3f", r, g, b))
+						.font(.system(size: 11))
+						.foregroundStyle(.secondary)
+				}
+			case let .float(v):
+				Text(v.formatted(.number.precision(.fractionLength(0...3))))
+					.font(.system(size: 11))
+					.foregroundStyle(.secondary)
+			case let .texture(url, resolved):
+				TextureValueView(url: url, resolvedPath: resolved)
+			case let .bool(v):
+				Text(v ? "true" : "false").font(.system(size: 11)).foregroundStyle(.secondary)
+			case let .int(v):
+				Text(String(v)).font(.system(size: 11)).foregroundStyle(.secondary)
+			case let .string(v):
+				Text(v).font(.system(size: 11)).foregroundStyle(.secondary)
+					.lineLimit(1).truncationMode(.middle)
+			case let .token(v):
+				Text(v).font(.system(size: 11)).foregroundStyle(.secondary)
+			case let .unsupported(_, description):
+				Text(description).font(.system(size: 11)).foregroundStyle(.secondary)
+					.lineLimit(1).truncationMode(.middle)
+			}
+		}
+	}
+}
+
+private struct TextureValueView: View {
+	let url: String
+	let resolvedPath: String?
+
+	var body: some View {
+		HStack(spacing: 8) {
+			if let image = loadPreviewImage() {
+				Image(nsImage: image)
+					.resizable()
+					.scaledToFill()
+					.frame(width: 18, height: 18)
+					.clipShape(RoundedRectangle(cornerRadius: 4))
+			} else {
+				Image(systemName: "photo")
+					.font(.system(size: 12))
+					.foregroundStyle(.secondary)
+			}
+
+			Text(resolvedPath?.isEmpty == false ? resolvedPath! : url)
+				.font(.system(size: 11))
+				.foregroundStyle(.secondary)
+				.lineLimit(1)
+				.truncationMode(.middle)
+				.textSelection(.enabled)
+		}
+	}
+
+	private func loadPreviewImage() -> NSImage? {
+		guard let resolvedPath, !resolvedPath.isEmpty else { return nil }
+		return NSImage(contentsOf: URL(fileURLWithPath: resolvedPath))
 	}
 }
 
@@ -376,7 +644,7 @@ public struct InspectorView: View {
 					if !store.materialProperties.isEmpty {
 						DisclosureGroup(isExpanded: disclosure(\.materialPropertiesExpanded)) {
 							ForEach(store.materialProperties, id: \.name) { property in
-								LabeledContent(property.name, value: describe(property.value))
+								MaterialPropertyRow(property: property)
 							}
 						} label: {
 							Text("Material Properties").font(.headline)
@@ -385,29 +653,15 @@ public struct InspectorView: View {
 				}
 
 				DisclosureGroup(isExpanded: disclosure(\.referencesExpanded)) {
-					if store.primReferences.isEmpty {
-						Text("No authored references")
-							.foregroundStyle(.secondary)
-					} else {
-						ForEach(store.primReferences, id: \.self) { reference in
-							HStack {
-								VStack(alignment: .leading) {
-									Text(reference.assetPath)
-									if let primPath = reference.primPath {
-										Text(primPath).font(.caption).foregroundStyle(.secondary)
-									}
-								}
-								Spacer()
-								Button("Remove", role: .destructive) {
-									store.send(.removeReferenceRequested(reference))
-								}
-								.controlSize(.small)
-							}
+					ReferencesEditor(
+						references: store.primReferences,
+						onAdd: { store.send(.addReferenceRequested($0)) },
+						onRemove: { store.send(.removeReferenceRequested($0)) },
+						onReplace: { old, new in
+							store.send(.removeReferenceRequested(old))
+							store.send(.addReferenceRequested(new))
 						}
-					}
-					AddReferenceRow { reference in
-						store.send(.addReferenceRequested(reference))
-					}
+					)
 				} label: {
 					Text("References").font(.headline)
 				}
@@ -472,6 +726,14 @@ public struct InspectorView: View {
 								},
 								onDelete: {
 									store.send(.deleteComponentRequested(componentPath: component.path))
+								},
+								onPaste: { identifier in
+									if let definition = InspectorComponentCatalog.definition(forIdentifier: identifier) {
+										store.send(.addComponentRequested(
+											componentName: definition.authoredPrimName,
+											componentIdentifier: definition.identifier
+										))
+									}
 								}
 							)
 						}
