@@ -123,6 +123,14 @@ public struct InspectorView: View {
 	}
 
 	public var body: some View {
+		ScrollView {
+			content
+				.padding()
+		}
+	}
+
+	@ViewBuilder
+	private var content: some View {
 		VStack(alignment: .leading, spacing: 12) {
 			Text("Inspector")
 				.font(.headline)
@@ -359,7 +367,7 @@ public struct InspectorView: View {
 
 			Spacer(minLength: 0)
 		}
-		.padding()
+		.frame(maxWidth: .infinity, alignment: .leading)
 	}
 }
 
