@@ -334,126 +334,270 @@ private func parseBool(_ value: String) -> Bool? {
 
 // MARK: - Audio Mix Groups Editor
 
+private func parseUSDRelationshipTargets(_ raw: String) -> [String] {
+	let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+	if trimmed.hasPrefix("["), trimmed.hasSuffix("]"), trimmed.count >= 2 {
+		let body = String(trimmed.dropFirst().dropLast())
+		return body
+			.split(separator: ",", omittingEmptySubsequences: true)
+			.map { parseUSDRelationshipTargetLiteral(String($0)) }
+			.filter { !$0.isEmpty }
+	}
+	let single = parseUSDRelationshipTargetLiteral(trimmed)
+	return single.isEmpty ? [] : [single]
+}
+
+private func parseUSDRelationshipTargetLiteral(_ raw: String) -> String {
+	let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+	if trimmed.hasPrefix("<"), trimmed.hasSuffix(">"), trimmed.count >= 2 {
+		return String(trimmed.dropFirst().dropLast())
+	}
+	return trimmed
+}
+
+private func parseUSDAssetPathLiteral(_ raw: String) -> String {
+	let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+	guard trimmed.count >= 2, trimmed.first == "@", trimmed.last == "@" else {
+		return trimmed
+	}
+	let start = trimmed.index(after: trimmed.startIndex)
+	let end = trimmed.index(before: trimmed.endIndex)
+	return String(trimmed[start..<end])
+}
+
 private struct InlineAudioMixGroupsEditor: View {
 	let component: InspectorComponentSummary
 	let onParameterChange: (_ targetPrimPath: String, _ attributeType: String, _ attributeName: String, _ valueLiteral: String) -> Void
 	let onOpenAudioMixer: () -> Void
 
-	private var mixGroups: [ComponentDescendantAttributes] {
-		// Heuristic: a descendant is a mix group if its name contains "MixGroup"
-		// (case-insensitive) or it authors any of speed / gain / mute. Audio
-		// files are remaining descendants that don't match.
-		component.descendants.filter { descendant in
-			descendant.name.lowercased().contains("mixgroup") ||
-			descendant.authoredAttributes.contains { ["speed", "gain", "mute"].contains($0.name) }
+	@State private var selectedGroupPath: String?
+
+	private struct AssignedFile: Identifiable {
+		let path: String
+		let displayName: String
+		let mixGroupTarget: String
+		var id: String { path }
+	}
+
+	private struct MixGroupModel: Identifiable {
+		let path: String
+		let displayName: String
+		let gain: Double
+		let mute: Bool
+		let speed: Double
+		let assignedFiles: [AssignedFile]
+		var id: String { path }
+	}
+
+	private var assignedFiles: [AssignedFile] {
+		component.descendants.compactMap { descendant in
+			let fileLiteral = descendant.authoredAttributes.first { $0.name == "file" }?.value ?? ""
+			guard !fileLiteral.isEmpty else { return nil }
+			let mixGroupLiteral = descendant.authoredAttributes.first { $0.name == "mixGroup" }?.value ?? ""
+			let target = parseUSDRelationshipTargets(mixGroupLiteral).first ?? ""
+			guard !target.isEmpty else { return nil }
+			let relativeAssetPath = parseUSDAssetPathLiteral(fileLiteral)
+			let displayName = URL(fileURLWithPath: relativeAssetPath).lastPathComponent
+			return AssignedFile(
+				path: descendant.path,
+				displayName: displayName.isEmpty ? descendant.name : displayName,
+				mixGroupTarget: target
+			)
 		}
 	}
 
-	private func audioFiles(under group: ComponentDescendantAttributes) -> [ComponentDescendantAttributes] {
-		component.descendants.filter { descendant in
-			descendant.path.hasPrefix(group.path + "/") &&
-			!descendant.name.lowercased().contains("mixgroup")
+	private var mixGroups: [MixGroupModel] {
+		let files = assignedFiles
+		return component.descendants.compactMap { descendant -> MixGroupModel? in
+			let fileLiteral = descendant.authoredAttributes.first { $0.name == "file" }?.value ?? ""
+			guard fileLiteral.isEmpty else { return nil }
+			let gainLiteral = descendant.authoredAttributes.first { $0.name == "gain" }?.value ?? ""
+			let muteLiteral = descendant.authoredAttributes.first { $0.name == "mute" }?.value ?? ""
+			let speedLiteral = descendant.authoredAttributes.first { $0.name == "speed" }?.value ?? ""
+			guard !gainLiteral.isEmpty || !muteLiteral.isEmpty || !speedLiteral.isEmpty else {
+				return nil
+			}
+			return MixGroupModel(
+				path: descendant.path,
+				displayName: descendant.name,
+				gain: Double(gainLiteral.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0,
+				mute: parseBool(muteLiteral) ?? false,
+				speed: Double(speedLiteral.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 1,
+				assignedFiles: files
+					.filter { $0.mixGroupTarget == descendant.path }
+					.sorted { $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending }
+			)
 		}
+		.sorted { $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending }
 	}
 
 	var body: some View {
-		VStack(alignment: .leading, spacing: 10) {
-			HStack {
-				Text("Mix Groups").font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
-				Spacer()
-				Button("Open Audio Mixer", action: onOpenAudioMixer)
-					.buttonStyle(.borderless)
-					.font(.system(size: 11, weight: .semibold))
-			}
+		let groups = mixGroups
+		let selectedGroup = groups.first(where: { $0.path == selectedGroupPath }) ?? groups.first
 
-			if mixGroups.isEmpty {
-				Text("No mix groups").font(.system(size: 11)).foregroundStyle(.secondary)
-			} else {
-				ForEach(mixGroups) { group in
-					MixGroupCard(
-						group: group,
-						audioFiles: audioFiles(under: group),
-						onParameterChange: onParameterChange
-					)
+		HStack(alignment: .top, spacing: 16) {
+			VStack(alignment: .leading, spacing: 12) {
+				HStack(spacing: 8) {
+					Text("Audio Mix Groups")
+						.font(.system(size: 12, weight: .semibold))
+					Spacer()
+					Button(action: onOpenAudioMixer) {
+						Image(systemName: "slider.horizontal.3")
+							.font(.system(size: 12, weight: .medium))
+					}
+					.buttonStyle(.plain)
+					.help("Open Audio Mixer")
 				}
-			}
-		}
-	}
-}
 
-private struct MixGroupCard: View {
-	let group: ComponentDescendantAttributes
-	let audioFiles: [ComponentDescendantAttributes]
-	let onParameterChange: (_ targetPrimPath: String, _ attributeType: String, _ attributeName: String, _ valueLiteral: String) -> Void
+				if groups.isEmpty {
+					Text("No mix groups.")
+						.font(.system(size: 11))
+						.foregroundStyle(.secondary)
+				} else {
+					ScrollView {
+						VStack(alignment: .leading, spacing: 8) {
+							ForEach(groups) { group in
+								VStack(alignment: .leading, spacing: 4) {
+									HStack(spacing: 8) {
+										Image(systemName: "slider.horizontal.3")
+											.font(.system(size: 11))
+											.foregroundStyle(.secondary)
+										Text(group.displayName)
+											.font(.system(size: 11, weight: .semibold))
+										Spacer()
+									}
+									.padding(.horizontal, 8)
+									.padding(.vertical, 6)
+									.frame(maxWidth: .infinity, alignment: .leading)
+									.background(
+										group.path == selectedGroup?.path
+											? Color.accentColor.opacity(0.15)
+											: Color.clear
+									)
+									.clipShape(RoundedRectangle(cornerRadius: 6))
+									.contentShape(RoundedRectangle(cornerRadius: 6))
+									.onTapGesture {
+										selectedGroupPath = group.path
+									}
 
-	private func value(_ name: String) -> String? {
-		group.authoredAttributes.first { $0.name == name }?.value
-	}
-
-	private func chooseAudioFile() -> URL? {
-		let panel = NSOpenPanel()
-		panel.allowsMultipleSelection = false
-		panel.canChooseDirectories = false
-		panel.canChooseFiles = true
-		panel.allowedContentTypes = [
-			UTType(filenameExtension: "wav") ?? .audio,
-			UTType(filenameExtension: "mp3") ?? .audio,
-			UTType(filenameExtension: "m4a") ?? .audio
-		]
-		panel.prompt = "Select"
-		return panel.runModal() == .OK ? panel.url : nil
-	}
-
-	var body: some View {
-		VStack(alignment: .leading, spacing: 6) {
-			Text(group.name).font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
-
-			LabeledContent("Speed") {
-				TextField("", value: Binding(
-					get: { value("speed").flatMap(Double.init) ?? 1.0 },
-					set: { onParameterChange(group.path, "double", "speed", String($0)) }
-				), format: .number.precision(.fractionLength(0...3)))
-				.textFieldStyle(.roundedBorder)
-				.frame(width: 90)
-			}
-
-			LabeledContent("dB") {
-				TextField("", value: Binding(
-					get: { value("gain").flatMap(Double.init) ?? 0.0 },
-					set: { onParameterChange(group.path, "double", "gain", String($0)) }
-				), format: .number.precision(.fractionLength(0...3)))
-				.textFieldStyle(.roundedBorder)
-				.frame(width: 90)
-			}
-
-			Toggle("Mute", isOn: Binding(
-				get: { value("mute").flatMap(parseBool) ?? false },
-				set: { onParameterChange(group.path, "bool", "mute", $0 ? "true" : "false") }
-			))
-
-			Text("Assigned Audio").font(.system(size: 11)).foregroundStyle(.secondary)
-			if audioFiles.isEmpty {
-				Text("No audio assigned").font(.system(size: 11)).foregroundStyle(.secondary)
-			} else {
-				ForEach(audioFiles) { file in
-					HStack(spacing: 8) {
-						Image(systemName: "waveform").font(.system(size: 11)).foregroundStyle(.cyan)
-						Text(file.name).font(.system(size: 11)).lineLimit(1)
-						Spacer()
+									if group.path == selectedGroup?.path {
+										if group.assignedFiles.isEmpty {
+											Text("No audio assigned.")
+												.font(.system(size: 11))
+												.foregroundStyle(.secondary)
+												.padding(.leading, 20)
+										} else {
+											ForEach(group.assignedFiles) { file in
+												HStack(spacing: 8) {
+													Image(systemName: "waveform")
+														.font(.system(size: 11))
+														.foregroundStyle(.cyan)
+													Text(file.displayName)
+														.font(.system(size: 11))
+														.lineLimit(1)
+													Spacer(minLength: 0)
+												}
+												.padding(.leading, 20)
+											}
+										}
+									}
+								}
+							}
+						}
 					}
 				}
 			}
-			Button("Choose…") {
-				guard let url = chooseAudioFile() else { return }
-				onParameterChange(group.path, "asset[]", "resources", quoteUSDString(url.path))
+			.frame(width: 210)
+
+			Divider()
+
+			VStack(alignment: .leading, spacing: 16) {
+				if let selectedGroup {
+					VStack(alignment: .leading, spacing: 12) {
+						HStack {
+							Text("Speed")
+								.font(.system(size: 11))
+								.foregroundStyle(.secondary)
+							Spacer()
+							TextField(
+								"",
+								value: Binding(
+									get: { selectedGroup.speed },
+									set: { onParameterChange(selectedGroup.path, "float", "speed", String($0)) }
+								),
+								format: .number.precision(.fractionLength(0...3))
+							)
+							.textFieldStyle(.roundedBorder)
+							.frame(width: 70)
+							.font(.system(size: 11))
+						}
+
+						HStack {
+							Text("dB")
+								.font(.system(size: 11))
+								.foregroundStyle(.secondary)
+							Spacer()
+							TextField(
+								"",
+								value: Binding(
+									get: { selectedGroup.gain },
+									set: { onParameterChange(selectedGroup.path, "float", "gain", String($0)) }
+								),
+								format: .number.precision(.fractionLength(0...3))
+							)
+							.textFieldStyle(.roundedBorder)
+							.frame(width: 70)
+							.font(.system(size: 11))
+						}
+
+						VStack(spacing: 6) {
+							Text("Level")
+								.font(.system(size: 11))
+								.foregroundStyle(.secondary)
+							Slider(
+								value: Binding(
+									get: { selectedGroup.gain },
+									set: { onParameterChange(selectedGroup.path, "float", "gain", String($0)) }
+								),
+								in: -60...6
+							)
+							.rotationEffect(.degrees(-90))
+							.frame(width: 32, height: 160)
+						}
+
+						Toggle(
+							"Mute",
+							isOn: Binding(
+								get: { selectedGroup.mute },
+								set: { onParameterChange(selectedGroup.path, "bool", "mute", $0 ? "1" : "0") }
+							)
+						)
+						.font(.system(size: 11, weight: .semibold))
+						.toggleStyle(.button)
+
+						Text(selectedGroup.displayName)
+							.font(.system(size: 11, weight: .semibold))
+							.foregroundStyle(.secondary)
+					}
+					.padding(12)
+					.frame(width: 180, alignment: .leading)
+					.background(
+						RoundedRectangle(cornerRadius: 12, style: .continuous)
+							.fill(Color(nsColor: .controlBackgroundColor))
+					)
+				} else {
+					Text("Select a mix group to edit.")
+						.font(.system(size: 11))
+						.foregroundStyle(.secondary)
+				}
 			}
-			.buttonStyle(.borderless)
-			.font(.system(size: 11))
+			.frame(maxWidth: .infinity, alignment: .leading)
 		}
-		.padding(8)
-		.frame(maxWidth: .infinity, alignment: .leading)
-		.background(.quaternary.opacity(0.35))
-		.clipShape(RoundedRectangle(cornerRadius: 6))
+		.onAppear {
+			if selectedGroupPath == nil {
+				selectedGroupPath = mixGroups.first?.path
+			}
+		}
 	}
 }
 
@@ -463,6 +607,35 @@ private struct AnimationLibraryEditor: View {
 	let component: InspectorComponentSummary
 	let onParameterChange: (_ targetPrimPath: String, _ attributeType: String, _ attributeName: String, _ valueLiteral: String) -> Void
 	@State private var selectedResourcePath: String?
+
+	private struct AnimationResource: Identifiable {
+		let path: String
+		let displayName: String
+		let relativeAssetPath: String
+		var id: String { path }
+	}
+
+	private var animationResources: [AnimationResource] {
+		component.descendants.compactMap { descendant in
+			let fileLiteral = descendant.authoredAttributes.first { $0.name == "file" }?.value ?? ""
+			guard !fileLiteral.isEmpty else { return nil }
+			let nameLiteral = stripUSDQuotes(
+				descendant.authoredAttributes.first { $0.name == "name" }?.value ?? ""
+			)
+			let relativeAssetPath = parseUSDAssetPathLiteral(fileLiteral)
+			let resolvedName: String = {
+				if !nameLiteral.isEmpty { return nameLiteral }
+				let lastComponent = URL(fileURLWithPath: relativeAssetPath).lastPathComponent
+				return lastComponent.isEmpty ? descendant.name : lastComponent
+			}()
+			return AnimationResource(
+				path: descendant.path,
+				displayName: resolvedName,
+				relativeAssetPath: relativeAssetPath
+			)
+		}
+		.sorted { $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending }
+	}
 
 	private func chooseAnimationFile() -> URL? {
 		let panel = NSOpenPanel()
@@ -481,31 +654,32 @@ private struct AnimationLibraryEditor: View {
 	}
 
 	var body: some View {
+		let resources = animationResources
 		VStack(alignment: .leading, spacing: 8) {
 			Text("Animation Resources").font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
 
 			VStack(alignment: .leading, spacing: 0) {
-				if component.descendants.isEmpty {
-					Text("No animation resources")
+				if resources.isEmpty {
+					Text("No animation resources.")
 						.font(.system(size: 11)).foregroundStyle(.secondary)
 						.padding(10)
 						.frame(maxWidth: .infinity, alignment: .leading)
 				} else {
-					ForEach(component.descendants) { resource in
+					ForEach(resources) { resource in
 						Button {
 							selectedResourcePath = resource.path
 						} label: {
 							HStack(spacing: 8) {
 								Image(systemName: "film").font(.system(size: 11)).foregroundStyle(.cyan)
-								Text(resource.name).font(.system(size: 11)).lineLimit(1)
-								Spacer()
+								Text(resource.displayName).font(.system(size: 11)).lineLimit(1)
+								Spacer(minLength: 0)
 							}
 							.padding(.horizontal, 8)
 							.padding(.vertical, 6)
 							.frame(maxWidth: .infinity, alignment: .leading)
 							.background(
 								selectedResourcePath == resource.path
-									? Color.accentColor.opacity(0.18)
+									? Color.accentColor.opacity(0.22)
 									: Color.clear
 							)
 						}
@@ -515,7 +689,7 @@ private struct AnimationLibraryEditor: View {
 			}
 			.frame(minHeight: 120, maxHeight: 180)
 			.background(.quaternary.opacity(0.35))
-			.clipShape(RoundedRectangle(cornerRadius: 6))
+			.clipShape(RoundedRectangle(cornerRadius: 8))
 
 			HStack(spacing: 10) {
 				Button {
@@ -526,21 +700,30 @@ private struct AnimationLibraryEditor: View {
 					onParameterChange(component.path, "asset", "file", quoteUSDString(url.path))
 				} label: {
 					Image(systemName: "plus")
+						.font(.system(size: 12, weight: .medium))
 				}
 				.buttonStyle(.plain)
 
 				Button {
 					guard let path = selectedResourcePath else { return }
-					onParameterChange(path, "string", "file", "\"\"")
+					// NOTE: removing an animation library resource requires a dedicated
+					// shell action (removeAnimationLibraryResourceRequested) that does
+					// not exist on the shell feature today. As a best-effort fallback we
+					// clear the `file` attribute so the row drops out of the resource
+					// list on the next reload. Replace with a real remove RPC when it
+					// becomes available.
+					onParameterChange(path, "asset", "file", "@@")
 					selectedResourcePath = nil
 				} label: {
 					Image(systemName: "minus")
+						.font(.system(size: 12, weight: .medium))
 				}
 				.buttonStyle(.plain)
 				.disabled(selectedResourcePath == nil)
 
 				Spacer()
 			}
+			.padding(.horizontal, 4)
 		}
 	}
 }
@@ -560,6 +743,7 @@ private struct BehaviorsEditor: View {
 		let colliders: [String]
 		let actionPath: String?
 		let actionType: String?
+		let actionTargetPath: String?
 		let notificationIdentifier: String?
 	}
 
@@ -568,10 +752,10 @@ private struct BehaviorsEditor: View {
 
 	private func triggerLabel(_ type: String) -> String {
 		switch type {
-		case "TapGesture": return "On Tap"
-		case "Collide": return "On Collide"
-		case "AddedToScene": return "On Added"
-		case "Notification": return "On Notification"
+		case "TapGesture": return "OnTap"
+		case "Collide": return "OnCollision"
+		case "AddedToScene": return "OnAddedToScene"
+		case "Notification": return "OnNotification"
 		default: return type
 		}
 	}
@@ -610,7 +794,8 @@ private struct BehaviorsEditor: View {
 				drafts[behaviorPath] = BehaviorModel(
 					id: behaviorPath, path: behaviorPath, title: title,
 					triggerPath: nil, triggerType: nil, colliders: [],
-					actionPath: nil, actionType: nil, notificationIdentifier: nil
+					actionPath: nil, actionType: nil, actionTargetPath: nil,
+					notificationIdentifier: nil
 				)
 				order.append(behaviorPath)
 			}
@@ -623,18 +808,31 @@ private struct BehaviorsEditor: View {
 				m = BehaviorModel(id: m.id, path: m.path, title: m.title,
 					triggerPath: p, triggerType: tt.isEmpty ? "TapGesture" : tt,
 					colliders: cols, actionPath: m.actionPath, actionType: m.actionType,
+					actionTargetPath: m.actionTargetPath,
 					notificationIdentifier: id.isEmpty ? nil : id)
 			case "action":
 				let at = stripUSDQuotes(attrs["info:id"] ?? "")
+				let target = parseColliderCSV(attrs["animationLibraryKeyOverrideKey"] ?? "").first
 				m = BehaviorModel(id: m.id, path: m.path, title: m.title,
 					triggerPath: m.triggerPath, triggerType: m.triggerType, colliders: m.colliders,
 					actionPath: p, actionType: at.isEmpty ? "PlayTimeline" : at,
+					actionTargetPath: target,
 					notificationIdentifier: m.notificationIdentifier)
 			default: break
 			}
 			drafts[behaviorPath] = m
 		}
 		return order.compactMap { drafts[$0] }
+	}
+
+	private func actionTargetOptions(from models: [BehaviorModel]) -> [String] {
+		var options: [String] = ["None"]
+		for model in models {
+			if let triggerPath = model.triggerPath, !options.contains(triggerPath) {
+				options.append(triggerPath)
+			}
+		}
+		return options
 	}
 
 	var body: some View {
@@ -682,6 +880,24 @@ private struct BehaviorsEditor: View {
 									set: { onParameterChange(actionPath, "token", "info:id", quoteUSDString($0)) }
 								)) {
 									ForEach(actionTypes, id: \.self) { a in Text(a).tag(a) }
+								}
+								.labelsHidden()
+							}
+							LabeledContent("Action Target") {
+								Picker("", selection: Binding(
+									get: { behavior.actionTargetPath ?? "None" },
+									set: { newValue in
+										let literal = newValue == "None" ? "None" : "<\(newValue)>"
+										onParameterChange(actionPath, "rel", "animationLibraryKeyOverrideKey", literal)
+									}
+								)) {
+									ForEach(actionTargetOptions(from: behaviors), id: \.self) { option in
+										if option == "None" {
+											Text("None").tag(option)
+										} else {
+											Text(option).tag(option)
+										}
+									}
 								}
 								.labelsHidden()
 							}
@@ -762,8 +978,44 @@ private struct PhysicsBodyEditor: View {
 		)
 	}
 
+	private func modeBinding() -> Binding<String> {
+		Binding(
+			get: { value("motionType").map(stripUSDQuotes) ?? "Dynamic" },
+			set: { onParameterChange(component.path, "token", "motionType", quoteUSDString($0)) }
+		)
+	}
+
+	private func boolBinding(_ name: String, fallback: Bool) -> Binding<Bool> {
+		Binding(
+			get: { value(name).flatMap(parseBool) ?? fallback },
+			set: { onParameterChange(component.path, "bool", name, $0 ? "true" : "false") }
+		)
+	}
+
 	var body: some View {
-		VStack(alignment: .leading, spacing: 0) {
+		VStack(alignment: .leading, spacing: 8) {
+			LabeledContent("Mode") {
+				Picker("", selection: modeBinding()) {
+					Text("Dynamic").tag("Dynamic")
+					Text("Kinematic").tag("Kinematic")
+					Text("Static").tag("Static")
+				}
+				.labelsHidden()
+				.pickerStyle(.menu)
+				.frame(width: 170)
+			}
+
+			Toggle("Detect Continuous Collision", isOn: boolBinding("isCCDEnabled", fallback: false))
+				.toggleStyle(.checkbox)
+				.font(.system(size: 11))
+
+			Toggle("Affected by Gravity", isOn: boolBinding("gravityEnabled", fallback: true))
+				.toggleStyle(.checkbox)
+				.font(.system(size: 11))
+
+			scalarField("angularDamping", type: "float", label: "Angular Damping")
+			scalarField("linearDamping", type: "float", label: "Linear Damping")
+
 			PhysicsSubsection(title: "Physics Material", isExpanded: $materialExpanded) {
 				scalarField("staticFriction", type: "float", label: "Static Friction")
 				scalarField("dynamicFriction", type: "float", label: "Dynamic Friction")
@@ -879,83 +1131,610 @@ private struct PhysicsAxis: View {
 
 // MARK: - Particle Emitter Editor
 
+private enum ParticleEmitterTab: Hashable {
+	case emitter
+	case particles
+}
+
+private enum ParticleEmitterSelection: Hashable {
+	case main
+	case spawned
+}
+
 private struct ParticleEmitterEditor: View {
 	let component: InspectorComponentSummary
 	let onParameterChange: (_ targetPrimPath: String, _ attributeType: String, _ attributeName: String, _ valueLiteral: String) -> Void
 
-	private var currentStateValue: String? {
-		component.authoredAttributes.first { $0.name == "currentState" }?.value
+	@State private var selectedTab: ParticleEmitterTab = .emitter
+	@State private var selectedEmitter: ParticleEmitterSelection = .main
+	@State private var timingExpanded = true
+	@State private var shapeExpanded = true
+	@State private var spawningExpanded = true
+	@State private var mainSectionExpanded = true
+	@State private var propertiesExpanded = true
+	@State private var colorExpanded = true
+	@State private var texturesExpanded = true
+	@State private var animationExpanded = false
+	@State private var motionExpanded = true
+	@State private var renderingExpanded = true
+	@State private var forceFieldsExpanded = true
+
+	// MARK: Descendant lookup
+
+	private var mainEmitterDescendant: ComponentDescendantAttributes? {
+		component.descendants.first { $0.name.lowercased().contains("main") }
 	}
 
-	private var mainEmitter: [ComponentDescendantAttributes] {
-		component.descendants.filter { $0.name.lowercased().contains("main") }
+	private var spawnedEmitterDescendant: ComponentDescendantAttributes? {
+		component.descendants.first { $0.name.lowercased().contains("spawn") }
 	}
 
-	private var spawnedEmitter: [ComponentDescendantAttributes] {
-		component.descendants.filter { $0.name.lowercased().contains("spawn") }
+	private var selectedEmitterDescendant: ComponentDescendantAttributes? {
+		selectedEmitter == .main ? mainEmitterDescendant : spawnedEmitterDescendant
 	}
+
+	private var selectedEmitterPath: String {
+		selectedEmitterDescendant?.path
+			?? (component.path + "/currentState/" + (selectedEmitter == .main ? "mainEmitter" : "spawnedEmitter"))
+	}
+
+	private var currentStatePath: String { component.path }
+
+	// MARK: Attribute readers
+
+	private func currentStateRaw(_ name: String) -> String? {
+		component.authoredAttributes.first { $0.name == name }?.value
+	}
+
+	private func emitterRaw(_ name: String) -> String? {
+		selectedEmitterDescendant?.authoredAttributes.first { $0.name == name }?.value
+	}
+
+	private func currentStateBool(_ name: String, fallback: Bool) -> Bool {
+		currentStateRaw(name).flatMap(parseBool) ?? fallback
+	}
+
+	private func currentStateDouble(_ name: String, fallback: Double) -> Double {
+		guard let raw = currentStateRaw(name) else { return fallback }
+		return Double(raw.trimmingCharacters(in: .whitespacesAndNewlines)) ?? fallback
+	}
+
+	private func currentStateString(_ name: String, fallback: String) -> String {
+		currentStateRaw(name).map(stripUSDQuotes) ?? fallback
+	}
+
+	private func emitterBool(_ name: String, fallback: Bool) -> Bool {
+		emitterRaw(name).flatMap(parseBool) ?? fallback
+	}
+
+	private func emitterDouble(_ name: String, fallback: Double) -> Double {
+		guard let raw = emitterRaw(name) else { return fallback }
+		return Double(raw.trimmingCharacters(in: .whitespacesAndNewlines)) ?? fallback
+	}
+
+	private func emitterString(_ name: String, fallback: String) -> String {
+		emitterRaw(name).map(stripUSDQuotes) ?? fallback
+	}
+
+	// MARK: Vector helpers
+
+	private static func parseVector3(_ raw: String) -> (x: Double, y: Double, z: Double) {
+		let trimmed = raw.trimmingCharacters(in: CharacterSet(charactersIn: " ()"))
+		let parts = trimmed.split(separator: ",").map {
+			Double($0.trimmingCharacters(in: .whitespaces)) ?? 0
+		}
+		guard parts.count == 3 else { return (0, 0, 0) }
+		return (parts[0], parts[1], parts[2])
+	}
+
+	private static func formatVector3(_ x: Double, _ y: Double, _ z: Double) -> String {
+		String(format: "(%.3f, %.3f, %.3f)", x, y, z)
+	}
+
+	// MARK: Writers
+
+	private func writeCurrentStateBool(_ name: String, _ value: Bool) {
+		onParameterChange(currentStatePath, "bool", name, value ? "1" : "0")
+	}
+
+	private func writeCurrentStateDouble(_ name: String, _ value: Double) {
+		onParameterChange(currentStatePath, "float", name, String(format: "%g", value))
+	}
+
+	private func writeCurrentStateToken(_ name: String, _ value: String) {
+		onParameterChange(currentStatePath, "token", name, value)
+	}
+
+	private func writeCurrentStateVector(_ name: String, _ value: (Double, Double, Double)) {
+		onParameterChange(currentStatePath, "float3", name, Self.formatVector3(value.0, value.1, value.2))
+	}
+
+	private func writeEmitterBool(_ name: String, _ value: Bool) {
+		onParameterChange(selectedEmitterPath, "bool", name, value ? "1" : "0")
+	}
+
+	private func writeEmitterDouble(_ name: String, _ value: Double) {
+		onParameterChange(selectedEmitterPath, "float", name, String(format: "%g", value))
+	}
+
+	private func writeEmitterInt(_ name: String, _ value: Int) {
+		onParameterChange(selectedEmitterPath, "int", name, String(value))
+	}
+
+	private func writeEmitterToken(_ name: String, _ value: String) {
+		onParameterChange(selectedEmitterPath, "token", name, value)
+	}
+
+	private func writeEmitterString(_ name: String, _ value: String) {
+		onParameterChange(selectedEmitterPath, "string", name, quoteUSDString(value))
+	}
+
+	private func writeEmitterVector(_ name: String, _ value: (Double, Double, Double)) {
+		onParameterChange(selectedEmitterPath, "float3", name, Self.formatVector3(value.0, value.1, value.2))
+	}
+
+	// MARK: Body
 
 	var body: some View {
-		VStack(alignment: .leading, spacing: 10) {
-			LabeledContent("Current State") {
-				Picker("", selection: Binding(
-					get: { stripUSDQuotes(currentStateValue ?? "Idle") },
-					set: { onParameterChange(component.path, "token", "currentState", quoteUSDString($0)) }
-				)) {
-					Text("Idle").tag("Idle")
-					Text("Playing").tag("Playing")
-					Text("Paused").tag("Paused")
-				}
-				.labelsHidden()
-				.frame(width: 120)
+		VStack(alignment: .leading, spacing: 12) {
+			Picker("Tab", selection: $selectedTab) {
+				Text("Emitter").tag(ParticleEmitterTab.emitter)
+				Text("Particles").tag(ParticleEmitterTab.particles)
+			}
+			.pickerStyle(.segmented)
+			.labelsHidden()
+
+			if selectedTab == .particles {
+				emitterDropdown
 			}
 
-			if !mainEmitter.isEmpty {
-				emitterGroup(title: "Main Emitter", descendants: mainEmitter)
-			}
-			if !spawnedEmitter.isEmpty {
-				emitterGroup(title: "Spawned Emitter", descendants: spawnedEmitter)
+			Divider()
+
+			VStack(alignment: .leading, spacing: 16) {
+				if selectedTab == .emitter {
+					emitterTabContent
+				} else {
+					particlesTabContent
+				}
 			}
 		}
 	}
 
+	// MARK: Dropdown
+
+	private var emitterDropdown: some View {
+		HStack {
+			Text("Emitter").font(.system(size: 11)).foregroundStyle(.secondary)
+			Spacer()
+			Picker("", selection: $selectedEmitter) {
+				Text("Main").tag(ParticleEmitterSelection.main)
+				Text("Secondary").tag(ParticleEmitterSelection.spawned)
+			}
+			.labelsHidden()
+			.pickerStyle(.menu)
+			.frame(width: 120)
+			.disabled(!currentStateBool("isSpawningEnabled", fallback: false))
+		}
+	}
+
+	// MARK: Emitter tab
+
 	@ViewBuilder
-	private func emitterGroup(title: String, descendants: [ComponentDescendantAttributes]) -> some View {
-		VStack(alignment: .leading, spacing: 6) {
-			Text(title).font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
-			ForEach(descendants) { descendant in
-				ForEach(descendant.authoredAttributes.filter { $0.name != "info:id" }) { attribute in
-					inferredEditor(for: attribute, path: descendant.path)
+	private var emitterTabContent: some View {
+		DisclosureGroup("Timing", isExpanded: $timingExpanded) {
+			VStack(alignment: .leading, spacing: 8) {
+				peToggle("Loop", value: currentStateBool("loops", fallback: true)) { writeCurrentStateBool("loops", $0) }
+				peScalarRow("Emission Duration", unit: "s", value: currentStateDouble("emissionDuration", fallback: 1.0)) {
+					writeCurrentStateDouble("emissionDuration", $0)
+				}
+				peScalarRow("Idle Duration", unit: "s", value: currentStateDouble("idleDuration", fallback: 0)) {
+					writeCurrentStateDouble("idleDuration", $0)
+				}
+				peScalarRow("Warmup Duration", unit: "s", value: currentStateDouble("warmupDuration", fallback: 0)) {
+					writeCurrentStateDouble("warmupDuration", $0)
+				}
+				peScalarRow("Speed", unit: "×", value: currentStateDouble("simulationSpeed", fallback: 1.0)) {
+					writeCurrentStateDouble("simulationSpeed", $0)
 				}
 			}
+			.padding(.vertical, 4)
 		}
-		.padding(8)
-		.background(.quaternary.opacity(0.35))
-		.clipShape(RoundedRectangle(cornerRadius: 6))
+		.font(.system(size: 11, weight: .semibold))
+
+		DisclosureGroup("Shape", isExpanded: $shapeExpanded) {
+			VStack(alignment: .leading, spacing: 8) {
+				peChoiceRow("Emitter Shape", value: currentStateString("emitterShape", fallback: "Plane"), options: [
+					"Box", "Sphere", "Cone", "Cylinder", "Plane", "Point", "Torus"
+				]) { writeCurrentStateToken("emitterShape", quoteUSDString($0)) }
+
+				let shape = currentStateString("emitterShape", fallback: "Plane")
+				if shape == "Torus" {
+					peScalarRow("Inner Radius", unit: nil, value: currentStateDouble("torusInnerRadius", fallback: 0.5)) {
+						writeCurrentStateDouble("torusInnerRadius", $0)
+					}
+				}
+				if ["Sphere", "Cone", "Cylinder", "Torus"].contains(shape) {
+					peScalarRow("Radial Amount", unit: nil, value: currentStateDouble("radialAmount", fallback: .pi)) {
+						writeCurrentStateDouble("radialAmount", $0)
+					}
+				}
+
+				peChoiceRow("Birth Location", value: currentStateString("birthLocation", fallback: "Surface"), options: ["Surface", "Volume", "Vertices"]) {
+					writeCurrentStateToken("birthLocation", quoteUSDString($0))
+				}
+				peChoiceRow("Birth Direction", value: currentStateString("birthDirection", fallback: "Normal"), options: ["Normal", "World", "Local"]) {
+					writeCurrentStateToken("birthDirection", quoteUSDString($0))
+				}
+
+				peVectorRow("Shape Size", value: Self.parseVector3(currentStateRaw("shapeSize") ?? "(0.1, 0.1, 0.1)")) { writeCurrentStateVector("shapeSize", $0) }
+
+				peToggle("Particles in Local Space", value: currentStateBool("isLocal", fallback: false)) { writeCurrentStateBool("isLocal", $0) }
+				peToggle("Fields in Local Space", value: currentStateBool("simulationInLocalSpace", fallback: false)) {
+					writeCurrentStateBool("simulationInLocalSpace", $0)
+				}
+			}
+			.padding(.vertical, 4)
+		}
+		.font(.system(size: 11, weight: .semibold))
+
+		DisclosureGroup("Spawning", isExpanded: $spawningExpanded) {
+			VStack(alignment: .leading, spacing: 8) {
+				peChoiceRow("Spawn Occasion", value: currentStateString("spawnOccasion", fallback: "OnDeath"), options: ["OnBirth", "OnDeath", "OnUpdate"]) {
+					writeCurrentStateToken("spawnOccasion", quoteUSDString($0))
+				}
+				peScalarRow("Velocity Factor", unit: nil, value: currentStateDouble("spawnVelocityFactor", fallback: 1.0)) {
+					writeCurrentStateDouble("spawnVelocityFactor", $0)
+				}
+				peScalarRow("Spread Factor", unit: nil, value: currentStateDouble("spawnSpreadFactor", fallback: 0)) {
+					writeCurrentStateDouble("spawnSpreadFactor", $0)
+				}
+				peScalarRow("Spread Variation", unit: nil, value: currentStateDouble("spawnSpreadFactorVariation", fallback: 0)) {
+					writeCurrentStateDouble("spawnSpreadFactorVariation", $0)
+				}
+				peToggle("Inherit Color", value: currentStateBool("spawnInheritParentColor", fallback: false)) {
+					writeCurrentStateBool("spawnInheritParentColor", $0)
+				}
+			}
+			.padding(.vertical, 4)
+		}
+		.font(.system(size: 11, weight: .semibold))
+	}
+
+	// MARK: Particles tab
+
+	@ViewBuilder
+	private var particlesTabContent: some View {
+		if selectedEmitter == .main {
+			peToggle(
+				"Secondary Emitter Enabled",
+				value: currentStateBool("isSpawningEnabled", fallback: false)
+			) { writeCurrentStateBool("isSpawningEnabled", $0) }
+				.font(.system(size: 11, weight: .semibold))
+		}
+
+		DisclosureGroup("Main", isExpanded: $mainSectionExpanded) {
+			VStack(alignment: .leading, spacing: 8) {
+				peScalarRow("Birth Rate", unit: nil, value: emitterDouble("birthRate", fallback: 100), fractionDigits: 0) {
+					writeEmitterDouble("birthRate", $0)
+				}
+				peScalarRow("Birth Rate Variation", unit: nil, value: emitterDouble("birthRateVariation", fallback: 0), fractionDigits: 0) {
+					writeEmitterDouble("birthRateVariation", $0)
+				}
+				peIntRow("Burst Count", value: Int(emitterDouble("burstCount", fallback: 100))) { writeEmitterInt("burstCount", $0) }
+				peIntRow("Burst Count Variation", value: Int(emitterDouble("burstCountVariation", fallback: 0))) {
+					writeEmitterInt("burstCountVariation", $0)
+				}
+			}
+			.padding(.vertical, 4)
+		}
+		.font(.system(size: 11, weight: .semibold))
+
+		DisclosureGroup("Properties", isExpanded: $propertiesExpanded) {
+			VStack(alignment: .leading, spacing: 8) {
+				peScalarRow("Life Span", unit: "s", value: emitterDouble("particleLifeSpan", fallback: 1.0)) { writeEmitterDouble("particleLifeSpan", $0) }
+				peScalarRow("Life Span Variation", unit: "s", value: emitterDouble("particleLifeSpanVariation", fallback: 0)) {
+					writeEmitterDouble("particleLifeSpanVariation", $0)
+				}
+				peScalarRow("Size", unit: "cm", value: emitterDouble("particleSize", fallback: 0.02)) { writeEmitterDouble("particleSize", $0) }
+				peScalarRow("Size Variation", unit: "cm", value: emitterDouble("particleSizeVariation", fallback: 0)) {
+					writeEmitterDouble("particleSizeVariation", $0)
+				}
+				peScalarRow("Size Over Life", unit: nil, value: emitterDouble("sizeOverLife", fallback: 1.0)) { writeEmitterDouble("sizeOverLife", $0) }
+				peScalarRow("Size Over Life Power", unit: nil, value: emitterDouble("sizeOverLifePower", fallback: 1.0)) {
+					writeEmitterDouble("sizeOverLifePower", $0)
+				}
+				peScalarRow("Mass", unit: "g", value: emitterDouble("particleMass", fallback: 1.0)) { writeEmitterDouble("particleMass", $0) }
+				peScalarRow("Mass Variation", unit: "g", value: emitterDouble("particleMassVariation", fallback: 0)) {
+					writeEmitterDouble("particleMassVariation", $0)
+				}
+				peChoiceRow(
+					"Orientation Mode",
+					value: emitterString("billboardMode", fallback: "Billboard"),
+					options: ["Billboard", "BillboardYAligned", "Free"]
+				) { writeEmitterToken("billboardMode", quoteUSDString($0)) }
+				peScalarRow("Angle", unit: "°", value: emitterDouble("particleAngle", fallback: 0)) { writeEmitterDouble("particleAngle", $0) }
+				peScalarRow("Angle Variation", unit: "°", value: emitterDouble("particleAngleVariation", fallback: 0)) {
+					writeEmitterDouble("particleAngleVariation", $0)
+				}
+				peScalarRow("Stretch Factor", unit: nil, value: emitterDouble("stretchFactor", fallback: 0)) { writeEmitterDouble("stretchFactor", $0) }
+			}
+			.padding(.vertical, 4)
+		}
+		.font(.system(size: 11, weight: .semibold))
+
+		DisclosureGroup("Color", isExpanded: $colorExpanded) {
+			VStack(alignment: .leading, spacing: 8) {
+				HStack {
+					Text("Start Color").font(.system(size: 11))
+					Spacer()
+					Toggle("Range", isOn: Binding(
+						get: { emitterBool("useStartColorRange", fallback: false) },
+						set: { writeEmitterBool("useStartColorRange", $0) }
+					))
+					.toggleStyle(.checkbox)
+					.font(.system(size: 10))
+				}
+				peColorRow(value: emitterString("startColorA", fallback: "(1, 1, 1, 1)")) {
+					writeEmitterString("startColorA", $0)
+				}
+				if emitterBool("useStartColorRange", fallback: false) {
+					peColorRow(value: emitterString("startColorB", fallback: "(1, 1, 1, 1)")) {
+						writeEmitterString("startColorB", $0)
+					}
+				}
+
+				Divider()
+
+				HStack {
+					Text("End Color").font(.system(size: 11))
+					Spacer()
+					Toggle("Enable", isOn: Binding(
+						get: { emitterBool("useEndColor", fallback: false) },
+						set: { writeEmitterBool("useEndColor", $0) }
+					))
+					.toggleStyle(.checkbox)
+					.font(.system(size: 10))
+				}
+				if emitterBool("useEndColor", fallback: false) {
+					Toggle("Range", isOn: Binding(
+						get: { emitterBool("useEndColorRange", fallback: false) },
+						set: { writeEmitterBool("useEndColorRange", $0) }
+					))
+					.toggleStyle(.checkbox)
+					.font(.system(size: 10))
+					peColorRow(value: emitterString("endColorA", fallback: "(1, 1, 1, 1)")) {
+						writeEmitterString("endColorA", $0)
+					}
+					if emitterBool("useEndColorRange", fallback: false) {
+						peColorRow(value: emitterString("endColorB", fallback: "(1, 1, 1, 1)")) {
+							writeEmitterString("endColorB", $0)
+						}
+					}
+				}
+
+				Divider()
+
+				peScalarRow("Color Evolution Power", unit: nil, value: emitterDouble("colorEvolutionPower", fallback: 1.0)) {
+					writeEmitterDouble("colorEvolutionPower", $0)
+				}
+				peChoiceRow(
+					"Opacity Over Life",
+					value: emitterString("opacityOverLife", fallback: "QuickFadeInOut"),
+					options: ["Constant", "EaseFadeIn", "EaseFadeOut", "GradualFadeInOut", "LinearFadeIn", "LinearFadeOut", "QuickFadeInOut"]
+				) { writeEmitterToken("opacityOverLife", quoteUSDString($0)) }
+			}
+			.padding(.vertical, 4)
+		}
+		.font(.system(size: 11, weight: .semibold))
+
+		DisclosureGroup("Textures", isExpanded: $texturesExpanded) {
+			VStack(alignment: .leading, spacing: 8) {
+				peChoiceRow("Blend Mode", value: emitterString("blendMode", fallback: "Alpha"), options: ["Alpha", "Additive", "Opaque"]) {
+					writeEmitterToken("blendMode", quoteUSDString($0))
+				}
+			}
+			.padding(.vertical, 4)
+		}
+		.font(.system(size: 11, weight: .semibold))
+
+		DisclosureGroup("Animation", isExpanded: $animationExpanded) {
+			VStack(alignment: .leading, spacing: 8) {
+				peToggle("Is Animated", value: emitterBool("isAnimated", fallback: false)) { writeEmitterBool("isAnimated", $0) }
+				if emitterBool("isAnimated", fallback: false) {
+					peScalarRow("Frame Rate", unit: nil, value: emitterDouble("frameRate", fallback: 12.0)) { writeEmitterDouble("frameRate", $0) }
+					peScalarRow("Frame Rate Variation", unit: nil, value: emitterDouble("frameRateVariation", fallback: 0)) {
+						writeEmitterDouble("frameRateVariation", $0)
+					}
+					peIntRow("Initial Frame", value: Int(emitterDouble("initialFrame", fallback: 0))) { writeEmitterInt("initialFrame", $0) }
+					peIntRow("Initial Frame Variation", value: Int(emitterDouble("initialFrameVariation", fallback: 0))) {
+						writeEmitterInt("initialFrameVariation", $0)
+					}
+					peIntRow("Row Count", value: Int(emitterDouble("rowCount", fallback: 1))) { writeEmitterInt("rowCount", $0) }
+					peIntRow("Column Count", value: Int(emitterDouble("columnCount", fallback: 1))) { writeEmitterInt("columnCount", $0) }
+					peChoiceRow("Animation Mode", value: emitterString("animationRepeatMode", fallback: "Looping"), options: ["Looping", "AutoReverse", "PlayOnce"]) {
+						writeEmitterToken("animationRepeatMode", quoteUSDString($0))
+					}
+				}
+			}
+			.padding(.vertical, 4)
+		}
+		.font(.system(size: 11, weight: .semibold))
+
+		DisclosureGroup("Motion", isExpanded: $motionExpanded) {
+			VStack(alignment: .leading, spacing: 8) {
+				peVectorRow("Acceleration", value: Self.parseVector3(emitterRaw("acceleration") ?? "(0, 0, 0)")) {
+					writeEmitterVector("acceleration", $0)
+				}
+				peScalarRow("Drag", unit: nil, value: emitterDouble("dampingFactor", fallback: 0)) { writeEmitterDouble("dampingFactor", $0) }
+				peScalarRow("Spreading Angle", unit: "°", value: emitterDouble("spreadingAngle", fallback: 0)) {
+					writeEmitterDouble("spreadingAngle", $0)
+				}
+				peScalarRow("Angular Velocity", unit: "rad/s", value: emitterDouble("particleAngularVelocity", fallback: 0)) {
+					writeEmitterDouble("particleAngularVelocity", $0)
+				}
+				peScalarRow("Angular Velocity Var", unit: "rad/s", value: emitterDouble("particleAngularVelocityVariation", fallback: 0)) {
+					writeEmitterDouble("particleAngularVelocityVariation", $0)
+				}
+			}
+			.padding(.vertical, 4)
+		}
+		.font(.system(size: 11, weight: .semibold))
+
+		DisclosureGroup("Rendering", isExpanded: $renderingExpanded) {
+			VStack(alignment: .leading, spacing: 8) {
+				peToggle("Lighting Enabled", value: emitterBool("isLightingEnabled", fallback: false)) {
+					writeEmitterBool("isLightingEnabled", $0)
+				}
+				peChoiceRow(
+					"Sort Order",
+					value: emitterString("sortOrder", fallback: "Unsorted"),
+					options: ["Unsorted", "IncreasingID", "DecreasingID", "IncreasingAge", "DecreasingAge", "IncreasingDepth", "DecreasingDepth"]
+				) { writeEmitterToken("sortOrder", quoteUSDString($0)) }
+			}
+			.padding(.vertical, 4)
+		}
+		.font(.system(size: 11, weight: .semibold))
+
+		DisclosureGroup("Force Fields", isExpanded: $forceFieldsExpanded) {
+			VStack(alignment: .leading, spacing: 8) {
+				peVectorRow("Attraction Center", value: Self.parseVector3(emitterRaw("radialGravityCenter") ?? "(0, 0, 0)")) {
+					writeEmitterVector("radialGravityCenter", $0)
+				}
+				peScalarRow("Attraction Strength", unit: nil, value: emitterDouble("radialGravityStrength", fallback: 0)) {
+					writeEmitterDouble("radialGravityStrength", $0)
+				}
+				peVectorRow("Vortex Direction", value: Self.parseVector3(emitterRaw("vortexDirection") ?? "(0, 0, 0)")) {
+					writeEmitterVector("vortexDirection", $0)
+				}
+				peScalarRow("Vortex Strength", unit: nil, value: emitterDouble("vortexStrength", fallback: 0)) {
+					writeEmitterDouble("vortexStrength", $0)
+				}
+				peScalarRow("Noise Strength", unit: nil, value: emitterDouble("noiseStrength", fallback: 0)) {
+					writeEmitterDouble("noiseStrength", $0)
+				}
+				peScalarRow("Noise Scale", unit: nil, value: emitterDouble("noiseScale", fallback: 1.0)) {
+					writeEmitterDouble("noiseScale", $0)
+				}
+				peScalarRow("Noise Speed", unit: nil, value: emitterDouble("noiseAnimationSpeed", fallback: 1.0)) {
+					writeEmitterDouble("noiseAnimationSpeed", $0)
+				}
+			}
+			.padding(.vertical, 4)
+		}
+		.font(.system(size: 11, weight: .semibold))
+	}
+
+	// MARK: Row helpers
+
+	@ViewBuilder
+	private func peToggle(_ label: String, value: Bool, onChange: @escaping (Bool) -> Void) -> some View {
+		Toggle(label, isOn: Binding(get: { value }, set: onChange))
+			.toggleStyle(.checkbox)
+			.font(.system(size: 11))
 	}
 
 	@ViewBuilder
-	private func inferredEditor(for attribute: InspectorAuthoredAttribute, path: String) -> some View {
-		if let bool = parseBool(attribute.value) {
-			Toggle(attribute.name, isOn: Binding(
-				get: { bool },
-				set: { onParameterChange(path, "bool", attribute.name, $0 ? "true" : "false") }
-			))
-		} else if let n = Double(attribute.value.trimmingCharacters(in: .whitespacesAndNewlines)) {
-			LabeledContent(attribute.name) {
-				TextField("", value: Binding(get: { n }, set: { onParameterChange(path, "double", attribute.name, String($0)) }),
-					format: .number.precision(.fractionLength(0...4)))
-					.textFieldStyle(.roundedBorder)
-					.frame(minWidth: 80)
-			}
-		} else {
-			LabeledContent(attribute.name) {
-				TextField("", text: Binding(
-					get: { stripUSDQuotes(attribute.value) },
-					set: { onParameterChange(path, "string", attribute.name, quoteUSDString($0)) }
-				))
+	private func peScalarRow(
+		_ label: String,
+		unit: String?,
+		value: Double,
+		fractionDigits: Int = 3,
+		onChange: @escaping (Double) -> Void
+	) -> some View {
+		HStack {
+			Text(label).font(.system(size: 11))
+			Spacer()
+			HStack(spacing: 4) {
+				TextField(
+					"",
+					value: Binding(get: { value }, set: onChange),
+					format: .number.precision(.fractionLength(0...fractionDigits))
+				)
 				.textFieldStyle(.roundedBorder)
+				.frame(width: 70)
+				if let unit {
+					Text(unit).font(.system(size: 10)).foregroundStyle(.secondary)
+				}
 			}
+		}
+	}
+
+	@ViewBuilder
+	private func peIntRow(_ label: String, value: Int, onChange: @escaping (Int) -> Void) -> some View {
+		HStack {
+			Text(label).font(.system(size: 11))
+			Spacer()
+			TextField(
+				"",
+				text: Binding(
+					get: { String(value) },
+					set: { if let v = Int($0) { onChange(v) } }
+				)
+			)
+			.textFieldStyle(.roundedBorder)
+			.frame(width: 80)
+		}
+	}
+
+	@ViewBuilder
+	private func peChoiceRow(
+		_ label: String,
+		value: String,
+		options: [String],
+		onChange: @escaping (String) -> Void
+	) -> some View {
+		HStack {
+			Text(label).font(.system(size: 11))
+			Spacer()
+			Picker("", selection: Binding(get: { value }, set: onChange)) {
+				ForEach(options, id: \.self) { Text($0).tag($0) }
+			}
+			.labelsHidden()
+			.pickerStyle(.menu)
+			.frame(width: 150)
+		}
+	}
+
+	@ViewBuilder
+	private func peVectorRow(
+		_ label: String,
+		value: (x: Double, y: Double, z: Double),
+		onChange: @escaping ((Double, Double, Double)) -> Void
+	) -> some View {
+		HStack {
+			Text(label).font(.system(size: 11))
+			Spacer()
+			HStack(spacing: 4) {
+				peAxisField(axis: "X", value: value.x) { onChange(($0, value.y, value.z)) }
+				peAxisField(axis: "Y", value: value.y) { onChange((value.x, $0, value.z)) }
+				peAxisField(axis: "Z", value: value.z) { onChange((value.x, value.y, $0)) }
+			}
+		}
+	}
+
+	@ViewBuilder
+	private func peAxisField(axis: String, value: Double, onChange: @escaping (Double) -> Void) -> some View {
+		TextField(
+			axis,
+			text: Binding(
+				get: { String(format: "%.3f", value) },
+				set: { if let v = Double($0) { onChange(v) } }
+			)
+		)
+		.textFieldStyle(.roundedBorder)
+		.frame(width: 50)
+	}
+
+	@ViewBuilder
+	private func peColorRow(value: String, onChange: @escaping (String) -> Void) -> some View {
+		HStack {
+			Spacer()
+			TextField(
+				"RGBA",
+				text: Binding(get: { value }, set: onChange)
+			)
+			.textFieldStyle(.roundedBorder)
+			.frame(width: 170)
 		}
 	}
 }
@@ -970,13 +1749,34 @@ private struct CustomDockingRegionEditor: View {
 		component.authoredAttributes.first { $0.name == name }?.value
 	}
 
+	private static func parseVector3(_ raw: String) -> (x: Double, y: Double, z: Double) {
+		let trimmed = raw.trimmingCharacters(in: CharacterSet(charactersIn: " ()"))
+		let parts = trimmed.split(separator: ",").map {
+			Double($0.trimmingCharacters(in: .whitespaces)) ?? 0
+		}
+		guard parts.count == 3 else { return (0, 0, 0) }
+		return (parts[0], parts[1], parts[2])
+	}
+
+	/// Width in centimeters. RCP stores width implicitly in the m_bounds struct
+	/// (max.x - min.x) measured in meters; falls back to a direct `width`
+	/// attribute literal if the runtime has flattened it.
 	private var widthValue: Double {
-		value("width").flatMap(Double.init) ?? 240
+		if let raw = value("width"), let direct = Double(raw.trimmingCharacters(in: .whitespacesAndNewlines)) {
+			return direct
+		}
+		let maxBounds = Self.parseVector3(value("max") ?? "(1.2, 0.5, 0)")
+		let minBounds = Self.parseVector3(value("min") ?? "(-1.2, -0.5, 0)")
+		return max(0.0, (maxBounds.x - minBounds.x) * 100.0)
+	}
+
+	private var previewVideoRaw: String {
+		guard let raw = value("previewVideo") else { return "" }
+		return stripUSDQuotes(raw)
 	}
 
 	private var previewVideoLabel: String {
-		guard let raw = value("previewVideo") else { return "None" }
-		let unquoted = stripUSDQuotes(raw)
+		let unquoted = previewVideoRaw
 		if unquoted.isEmpty { return "None" }
 		return unquoted.split(separator: "/").last.map(String.init) ?? unquoted
 	}
@@ -993,25 +1793,42 @@ private struct CustomDockingRegionEditor: View {
 
 	var body: some View {
 		VStack(alignment: .leading, spacing: 10) {
-			LabeledContent("Width (cm)") {
-				TextField("", value: Binding(
-					get: { widthValue },
-					set: { onParameterChange(component.path, "float", "width", String($0)) }
-				), format: .number.precision(.fractionLength(0...3)))
-				.textFieldStyle(.roundedBorder)
-				.frame(width: 90)
+			HStack {
+				Text("Width").font(.system(size: 11))
+				Spacer()
+				HStack(spacing: 6) {
+					TextField(
+						"",
+						value: Binding(
+							get: { widthValue },
+							set: { onParameterChange(component.path, "float", "width", String(format: "%g", $0)) }
+						),
+						format: .number.precision(.fractionLength(0...3))
+					)
+					.textFieldStyle(.roundedBorder)
+					.frame(width: 90)
+					Text("cm").font(.system(size: 10)).foregroundStyle(.secondary)
+				}
 			}
-			LabeledContent("Preview Video") {
-				Text(previewVideoLabel).font(.system(size: 11))
+
+			VStack(alignment: .leading, spacing: 4) {
+				Text("Preview Video")
+					.font(.system(size: 11))
+					.foregroundStyle(.secondary)
+				Text(previewVideoLabel)
+					.font(.system(size: 11))
+					.foregroundStyle(.primary)
+					.lineLimit(1)
 			}
+
 			HStack(spacing: 10) {
 				Button("Choose…") {
 					guard let url = chooseVideo() else { return }
-					onParameterChange(component.path, "asset", "previewVideo", quoteUSDString(url.path))
+					onParameterChange(component.path, "customDataAsset", "previewVideo", quoteUSDString(url.path))
 				}
 				.buttonStyle(.borderless)
 				Button("Clear") {
-					onParameterChange(component.path, "asset", "previewVideo", "\"\"")
+					onParameterChange(component.path, "customDataAsset", "previewVideo", quoteUSDString(""))
 				}
 				.buttonStyle(.borderless)
 				.disabled(previewVideoLabel == "None")
