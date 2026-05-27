@@ -411,25 +411,175 @@ private struct AddReferenceRow: View {
 	}
 }
 
-private struct TransformVectorEditor: View {
+private struct TransformEditor: View {
+	let transform: SwiftUsdShell.USDTransformData
+	let onChange: (SwiftUsdShell.USDTransformData) -> Void
+	@State private var isUniformScale: Bool = true
+
+	var body: some View {
+		VStack(alignment: .leading, spacing: 8) {
+			TransformVectorRow(label: "Position", values: transform.position) { newValue in
+				onChange(updateTransform(transform, position: newValue))
+			}
+			TransformVectorRow(label: "Rotation (deg)", values: transform.rotationDegrees) { newValue in
+				onChange(updateTransform(transform, rotationDegrees: newValue))
+			}
+			UniformScaleRow(
+				values: transform.scale,
+				isUniformScale: $isUniformScale
+			) { newValue in
+				onChange(updateTransform(transform, scale: newValue))
+			}
+		}
+	}
+}
+
+private struct TransformVectorRow: View {
 	let label: String
-	let vector: SIMD3<Double>
+	let values: SIMD3<Double>
 	let onChange: (SIMD3<Double>) -> Void
 
 	var body: some View {
-		LabeledContent(label) {
-			HStack(spacing: 4) {
-				axisField(value: vector.x) { onChange(SIMD3($0, vector.y, vector.z)) }
-				axisField(value: vector.y) { onChange(SIMD3(vector.x, $0, vector.z)) }
-				axisField(value: vector.z) { onChange(SIMD3(vector.x, vector.y, $0)) }
+		HStack(spacing: 8) {
+			Text(label)
+				.font(.system(size: 11))
+				.foregroundStyle(.secondary)
+				.frame(width: 100, alignment: .leading)
+			Spacer()
+			EditableAxisField(value: values.x, label: "X") { v in
+				onChange(SIMD3(v, values.y, values.z))
+			}
+			EditableAxisField(value: values.y, label: "Y") { v in
+				onChange(SIMD3(values.x, v, values.z))
+			}
+			EditableAxisField(value: values.z, label: "Z") { v in
+				onChange(SIMD3(values.x, values.y, v))
+			}
+		}
+	}
+}
+
+private struct UniformScaleRow: View {
+	let values: SIMD3<Double>
+	@Binding var isUniformScale: Bool
+	let onChange: (SIMD3<Double>) -> Void
+
+	var body: some View {
+		HStack(spacing: 8) {
+			Text("Scale")
+				.font(.system(size: 11))
+				.foregroundStyle(.secondary)
+				.frame(width: 80, alignment: .leading)
+
+			Button {
+				isUniformScale.toggle()
+				guard isUniformScale else { return }
+				let v = (values.x + values.y + values.z) / 3.0
+				onChange(SIMD3<Double>(repeating: v))
+			} label: {
+				Image(systemName: isUniformScale ? "link.circle.fill" : "link.circle")
+					.font(.system(size: 11, weight: .semibold))
+					.foregroundStyle(isUniformScale ? .primary : .secondary)
+					.padding(4)
+					.background(.quaternary.opacity(0.55))
+					.clipShape(RoundedRectangle(cornerRadius: 6))
+			}
+			.buttonStyle(.plain)
+			.help("Toggle uniform scale")
+
+			Spacer()
+
+			EditableAxisField(value: values.x, label: "X") { v in
+				onChange(updatedScale(.x, value: v))
+			}
+			EditableAxisField(value: values.y, label: "Y") { v in
+				onChange(updatedScale(.y, value: v))
+			}
+			EditableAxisField(value: values.z, label: "Z") { v in
+				onChange(updatedScale(.z, value: v))
 			}
 		}
 	}
 
-	private func axisField(value: Double, set: @escaping (Double) -> Void) -> some View {
-		TextField("", value: Binding(get: { value }, set: { set($0) }), format: .number.precision(.fractionLength(0...3)))
-			.textFieldStyle(.roundedBorder)
-			.frame(minWidth: 60)
+	private enum Axis { case x, y, z }
+
+	private func updatedScale(_ axis: Axis, value: Double) -> SIMD3<Double> {
+		if isUniformScale {
+			return SIMD3<Double>(repeating: value)
+		}
+		var updated = values
+		switch axis {
+		case .x: updated.x = value
+		case .y: updated.y = value
+		case .z: updated.z = value
+		}
+		return updated
+	}
+}
+
+private struct EditableAxisField: View {
+	let value: Double
+	let label: String
+	let onCommit: (Double) -> Void
+
+	@State private var text: String = ""
+	@State private var isEditing: Bool = false
+	@FocusState private var isFocused: Bool
+
+	private static let numberFormat = FloatingPointFormatStyle<Double>.number
+		.precision(.fractionLength(0...3))
+
+	var body: some View {
+		TextField(label, text: $text)
+			.focused($isFocused)
+			.textFieldStyle(.plain)
+			.font(.system(size: 11, weight: .medium))
+			.multilineTextAlignment(.trailing)
+			.frame(width: 44, alignment: .trailing)
+			.padding(.horizontal, 6)
+			.padding(.vertical, 4)
+			.background(.quaternary.opacity(0.5))
+			.clipShape(RoundedRectangle(cornerRadius: 6))
+			.overlay(
+				Text(label)
+					.font(.system(size: 8))
+					.foregroundStyle(.secondary)
+					.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+					.padding(.leading, 4)
+					.padding(.bottom, 2)
+			)
+			.onAppear { text = value.formatted(Self.numberFormat) }
+			.onChange(of: value) { _, newValue in
+				if !isEditing && !isFocused {
+					text = newValue.formatted(Self.numberFormat)
+				}
+			}
+			.onChange(of: isFocused) { wasFocused, nowFocused in
+				if wasFocused && !nowFocused {
+					commit()
+					isEditing = false
+				} else if nowFocused {
+					isEditing = true
+				}
+			}
+			.onSubmit {
+				commit()
+				isEditing = false
+			}
+			.onExitCommand {
+				text = value.formatted(Self.numberFormat)
+				isEditing = false
+				isFocused = false
+			}
+	}
+
+	private func commit() {
+		guard let parsed = Double(text.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+			text = value.formatted(Self.numberFormat)
+			return
+		}
+		onCommit(parsed)
+		text = parsed.formatted(Self.numberFormat)
 	}
 }
 
@@ -589,14 +739,8 @@ public struct InspectorView: View {
 
 				if let transform = store.primTransform {
 					DisclosureGroup(isExpanded: disclosure(\.transformExpanded)) {
-						TransformVectorEditor(label: "Position", vector: transform.position) { newValue in
-							store.send(.primTransformEdited(updateTransform(transform, position: newValue)))
-						}
-						TransformVectorEditor(label: "Rotation (deg)", vector: transform.rotationDegrees) { newValue in
-							store.send(.primTransformEdited(updateTransform(transform, rotationDegrees: newValue)))
-						}
-						TransformVectorEditor(label: "Scale", vector: transform.scale) { newValue in
-							store.send(.primTransformEdited(updateTransform(transform, scale: newValue)))
+						TransformEditor(transform: transform) { updated in
+							store.send(.primTransformEdited(updated))
 						}
 					} label: {
 						Text("Transform").font(.headline)
