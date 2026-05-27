@@ -29,9 +29,11 @@ private func updateTransform(
 private struct ComponentEditorRow: View {
 	let component: InspectorComponentSummary
 	let onParameterChange: (_ attributeType: String, _ attributeName: String, _ valueLiteral: String) -> Void
+	let onDescendantChange: (_ targetPrimPath: String, _ attributeType: String, _ attributeName: String, _ valueLiteral: String) -> Void
 	let onActiveToggle: (Bool) -> Void
 	let onDelete: () -> Void
 	let onPaste: (String) -> Void
+	let onOpenAudioMixer: () -> Void
 
 	private var componentIdentifier: String? {
 		component.authoredAttributes
@@ -108,8 +110,34 @@ private struct ComponentEditorRow: View {
 					}
 				)
 			}
+
+			descendantEditor
 		} label: {
 			LabeledContent(component.name, value: definition?.name ?? component.typeName)
+		}
+	}
+
+	@ViewBuilder
+	private var descendantEditor: some View {
+		switch componentIdentifier {
+		case "RealityKit.AudioMixGroups":
+			InlineAudioMixGroupsEditor(
+				component: component,
+				onParameterChange: onDescendantChange,
+				onOpenAudioMixer: onOpenAudioMixer
+			)
+		case "RealityKit.AnimationLibrary":
+			AnimationLibraryEditor(
+				component: component,
+				onParameterChange: onDescendantChange
+			)
+		default:
+			if !component.descendants.isEmpty {
+				GenericDescendantEditor(
+					descendants: component.descendants,
+					onParameterChange: onDescendantChange
+				)
+			}
 		}
 	}
 
@@ -281,6 +309,276 @@ private func parseBool(_ value: String) -> Bool? {
 	case "true", "1": return true
 	case "false", "0": return false
 	default: return nil
+	}
+}
+
+// MARK: - Audio Mix Groups Editor
+
+private struct InlineAudioMixGroupsEditor: View {
+	let component: InspectorComponentSummary
+	let onParameterChange: (_ targetPrimPath: String, _ attributeType: String, _ attributeName: String, _ valueLiteral: String) -> Void
+	let onOpenAudioMixer: () -> Void
+
+	private var mixGroups: [ComponentDescendantAttributes] {
+		// Heuristic: a descendant is a mix group if its name contains "MixGroup"
+		// (case-insensitive) or it authors any of speed / gain / mute. Audio
+		// files are remaining descendants that don't match.
+		component.descendants.filter { descendant in
+			descendant.name.lowercased().contains("mixgroup") ||
+			descendant.authoredAttributes.contains { ["speed", "gain", "mute"].contains($0.name) }
+		}
+	}
+
+	private func audioFiles(under group: ComponentDescendantAttributes) -> [ComponentDescendantAttributes] {
+		component.descendants.filter { descendant in
+			descendant.path.hasPrefix(group.path + "/") &&
+			!descendant.name.lowercased().contains("mixgroup")
+		}
+	}
+
+	var body: some View {
+		VStack(alignment: .leading, spacing: 10) {
+			HStack {
+				Text("Mix Groups").font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
+				Spacer()
+				Button("Open Audio Mixer", action: onOpenAudioMixer)
+					.buttonStyle(.borderless)
+					.font(.system(size: 11, weight: .semibold))
+			}
+
+			if mixGroups.isEmpty {
+				Text("No mix groups").font(.system(size: 11)).foregroundStyle(.secondary)
+			} else {
+				ForEach(mixGroups) { group in
+					MixGroupCard(
+						group: group,
+						audioFiles: audioFiles(under: group),
+						onParameterChange: onParameterChange
+					)
+				}
+			}
+		}
+	}
+}
+
+private struct MixGroupCard: View {
+	let group: ComponentDescendantAttributes
+	let audioFiles: [ComponentDescendantAttributes]
+	let onParameterChange: (_ targetPrimPath: String, _ attributeType: String, _ attributeName: String, _ valueLiteral: String) -> Void
+
+	private func value(_ name: String) -> String? {
+		group.authoredAttributes.first { $0.name == name }?.value
+	}
+
+	private func chooseAudioFile() -> URL? {
+		let panel = NSOpenPanel()
+		panel.allowsMultipleSelection = false
+		panel.canChooseDirectories = false
+		panel.canChooseFiles = true
+		panel.allowedContentTypes = [
+			UTType(filenameExtension: "wav") ?? .audio,
+			UTType(filenameExtension: "mp3") ?? .audio,
+			UTType(filenameExtension: "m4a") ?? .audio
+		]
+		panel.prompt = "Select"
+		return panel.runModal() == .OK ? panel.url : nil
+	}
+
+	var body: some View {
+		VStack(alignment: .leading, spacing: 6) {
+			Text(group.name).font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
+
+			LabeledContent("Speed") {
+				TextField("", value: Binding(
+					get: { value("speed").flatMap(Double.init) ?? 1.0 },
+					set: { onParameterChange(group.path, "double", "speed", String($0)) }
+				), format: .number.precision(.fractionLength(0...3)))
+				.textFieldStyle(.roundedBorder)
+				.frame(width: 90)
+			}
+
+			LabeledContent("dB") {
+				TextField("", value: Binding(
+					get: { value("gain").flatMap(Double.init) ?? 0.0 },
+					set: { onParameterChange(group.path, "double", "gain", String($0)) }
+				), format: .number.precision(.fractionLength(0...3)))
+				.textFieldStyle(.roundedBorder)
+				.frame(width: 90)
+			}
+
+			Toggle("Mute", isOn: Binding(
+				get: { value("mute").flatMap(parseBool) ?? false },
+				set: { onParameterChange(group.path, "bool", "mute", $0 ? "true" : "false") }
+			))
+
+			Text("Assigned Audio").font(.system(size: 11)).foregroundStyle(.secondary)
+			if audioFiles.isEmpty {
+				Text("No audio assigned").font(.system(size: 11)).foregroundStyle(.secondary)
+			} else {
+				ForEach(audioFiles) { file in
+					HStack(spacing: 8) {
+						Image(systemName: "waveform").font(.system(size: 11)).foregroundStyle(.cyan)
+						Text(file.name).font(.system(size: 11)).lineLimit(1)
+						Spacer()
+					}
+				}
+			}
+			Button("Choose…") {
+				guard let url = chooseAudioFile() else { return }
+				onParameterChange(group.path, "asset[]", "resources", quoteUSDString(url.path))
+			}
+			.buttonStyle(.borderless)
+			.font(.system(size: 11))
+		}
+		.padding(8)
+		.frame(maxWidth: .infinity, alignment: .leading)
+		.background(.quaternary.opacity(0.35))
+		.clipShape(RoundedRectangle(cornerRadius: 6))
+	}
+}
+
+// MARK: - Animation Library Editor
+
+private struct AnimationLibraryEditor: View {
+	let component: InspectorComponentSummary
+	let onParameterChange: (_ targetPrimPath: String, _ attributeType: String, _ attributeName: String, _ valueLiteral: String) -> Void
+	@State private var selectedResourcePath: String?
+
+	private func chooseAnimationFile() -> URL? {
+		let panel = NSOpenPanel()
+		panel.canChooseFiles = true
+		panel.canChooseDirectories = false
+		panel.allowsMultipleSelection = false
+		panel.allowedContentTypes = [
+			UTType(filenameExtension: "usd") ?? .data,
+			UTType(filenameExtension: "usda") ?? .data,
+			UTType(filenameExtension: "usdc") ?? .data,
+			UTType(filenameExtension: "usdz") ?? .data,
+			UTType(filenameExtension: "realityfile") ?? .data
+		]
+		panel.prompt = "Select"
+		return panel.runModal() == .OK ? panel.url : nil
+	}
+
+	var body: some View {
+		VStack(alignment: .leading, spacing: 8) {
+			Text("Animation Resources").font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
+
+			VStack(alignment: .leading, spacing: 0) {
+				if component.descendants.isEmpty {
+					Text("No animation resources")
+						.font(.system(size: 11)).foregroundStyle(.secondary)
+						.padding(10)
+						.frame(maxWidth: .infinity, alignment: .leading)
+				} else {
+					ForEach(component.descendants) { resource in
+						Button {
+							selectedResourcePath = resource.path
+						} label: {
+							HStack(spacing: 8) {
+								Image(systemName: "film").font(.system(size: 11)).foregroundStyle(.cyan)
+								Text(resource.name).font(.system(size: 11)).lineLimit(1)
+								Spacer()
+							}
+							.padding(.horizontal, 8)
+							.padding(.vertical, 6)
+							.frame(maxWidth: .infinity, alignment: .leading)
+							.background(
+								selectedResourcePath == resource.path
+									? Color.accentColor.opacity(0.18)
+									: Color.clear
+							)
+						}
+						.buttonStyle(.plain)
+					}
+				}
+			}
+			.frame(minHeight: 120, maxHeight: 180)
+			.background(.quaternary.opacity(0.35))
+			.clipShape(RoundedRectangle(cornerRadius: 6))
+
+			HStack(spacing: 10) {
+				Button {
+					guard let url = chooseAnimationFile() else { return }
+					// Author a new resource as an attribute on the component; the
+					// USDA mutator inserts a child prim that the next reload picks
+					// up as a fresh descendant.
+					onParameterChange(component.path, "asset", "file", quoteUSDString(url.path))
+				} label: {
+					Image(systemName: "plus")
+				}
+				.buttonStyle(.plain)
+
+				Button {
+					guard let path = selectedResourcePath else { return }
+					onParameterChange(path, "string", "file", "\"\"")
+					selectedResourcePath = nil
+				} label: {
+					Image(systemName: "minus")
+				}
+				.buttonStyle(.plain)
+				.disabled(selectedResourcePath == nil)
+
+				Spacer()
+			}
+		}
+	}
+}
+
+// MARK: - Generic Descendant Editor
+
+private struct GenericDescendantEditor: View {
+	let descendants: [ComponentDescendantAttributes]
+	let onParameterChange: (_ targetPrimPath: String, _ attributeType: String, _ attributeName: String, _ valueLiteral: String) -> Void
+
+	var body: some View {
+		VStack(alignment: .leading, spacing: 8) {
+			ForEach(descendants) { descendant in
+				let visible = descendant.authoredAttributes.filter { $0.name != "info:id" }
+				if !visible.isEmpty {
+					Text(descendant.name).font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
+					ForEach(visible) { attribute in
+						descendantAttributeEditor(
+							for: attribute,
+							targetPrimPath: descendant.path,
+							labelPrefix: descendant.name
+						)
+					}
+				}
+			}
+		}
+	}
+
+	@ViewBuilder
+	private func descendantAttributeEditor(
+		for attribute: InspectorAuthoredAttribute,
+		targetPrimPath: String,
+		labelPrefix: String
+	) -> some View {
+		let label = "\(labelPrefix).\(attribute.name)"
+		if let bool = parseBool(attribute.value) {
+			Toggle(label, isOn: Binding(
+				get: { bool },
+				set: { onParameterChange(targetPrimPath, "bool", attribute.name, $0 ? "true" : "false") }
+			))
+		} else if let number = Double(attribute.value.trimmingCharacters(in: .whitespacesAndNewlines)) {
+			LabeledContent(label) {
+				TextField("", value: Binding(
+					get: { number },
+					set: { onParameterChange(targetPrimPath, "double", attribute.name, String($0)) }
+				), format: .number.precision(.fractionLength(0...4)))
+				.textFieldStyle(.roundedBorder)
+				.frame(minWidth: 80)
+			}
+		} else {
+			LabeledContent(label) {
+				TextField("", text: Binding(
+					get: { stripUSDQuotes(attribute.value) },
+					set: { onParameterChange(targetPrimPath, "string", attribute.name, quoteUSDString($0)) }
+				))
+				.textFieldStyle(.roundedBorder)
+			}
+		}
 	}
 }
 
@@ -865,6 +1163,14 @@ public struct InspectorView: View {
 										valueLiteral: valueLiteral
 									))
 								},
+								onDescendantChange: { targetPrimPath, attributeType, attributeName, valueLiteral in
+									store.send(.setComponentParameterRequested(
+										componentPath: targetPrimPath,
+										attributeType: attributeType,
+										attributeName: attributeName,
+										valueLiteral: valueLiteral
+									))
+								},
 								onActiveToggle: { isActive in
 									store.send(.setComponentActiveRequested(componentPath: component.path, isActive: isActive))
 								},
@@ -878,7 +1184,8 @@ public struct InspectorView: View {
 											componentIdentifier: definition.identifier
 										))
 									}
-								}
+								},
+								onOpenAudioMixer: onOpenAudioMixer
 							)
 						}
 					}
@@ -889,16 +1196,11 @@ public struct InspectorView: View {
 					Text("Components").font(.headline)
 				}
 
-				let audioMixComponents = store.primComponents.filter { $0.typeName == "RealityKit.AudioMixGroups" }
-				if !audioMixComponents.isEmpty {
-					DisclosureGroup(isExpanded: disclosure(\.audioMixGroupsExpanded)) {
-						ForEach(audioMixComponents) { component in
-							LabeledContent(component.name, value: component.path)
-						}
-					} label: {
-						Text("Audio Mix Groups").font(.headline)
-					}
-				}
+				// Audio Mix Groups, Animation Library, and other component-specific
+				// editors are now rendered inline within each component's disclosure
+				// in the Components section above. The flat filter that used to live
+				// here was misleading (it keyed on typeName, not the info:id
+				// identifier) and duplicated affordances now handled per-component.
 			} else {
 				Text("No selection")
 					.foregroundStyle(.secondary)
