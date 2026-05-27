@@ -38,6 +38,8 @@ private struct ComponentEditorRow: View {
 	let onAssignAudioMixGroupResource: (_ componentPath: String, _ mixGroupPath: String, _ sourceURL: URL) -> Void
 	let onAddBehavior: (_ behaviorsContainerPath: String, _ triggerType: String) -> Void
 	let onRemoveBehavior: (_ behaviorsContainerPath: String, _ behaviorPath: String) -> Void
+	let onAddAnimationResource: (_ componentPath: String, _ sourceURL: URL) -> Void
+	let onRemoveAnimationResource: (_ componentPath: String, _ resourcePrimPath: String) -> Void
 
 	private var componentIdentifier: String? {
 		component.authoredAttributes
@@ -135,7 +137,9 @@ private struct ComponentEditorRow: View {
 		case "RealityKit.AnimationLibrary":
 			AnimationLibraryEditor(
 				component: component,
-				onParameterChange: onDescendantChange
+				onParameterChange: onDescendantChange,
+				onAddResource: onAddAnimationResource,
+				onRemoveResource: onRemoveAnimationResource
 			)
 		case "RCP.BehaviorsContainer":
 			BehaviorsEditor(
@@ -643,6 +647,8 @@ private struct InlineAudioMixGroupsEditor: View {
 private struct AnimationLibraryEditor: View {
 	let component: InspectorComponentSummary
 	let onParameterChange: (_ targetPrimPath: String, _ attributeType: String, _ attributeName: String, _ valueLiteral: String) -> Void
+	let onAddResource: (_ componentPath: String, _ sourceURL: URL) -> Void
+	let onRemoveResource: (_ componentPath: String, _ resourcePrimPath: String) -> Void
 	@State private var selectedResourcePath: String?
 
 	private struct AnimationResource: Identifiable {
@@ -731,10 +737,7 @@ private struct AnimationLibraryEditor: View {
 			HStack(spacing: 10) {
 				Button {
 					guard let url = chooseAnimationFile() else { return }
-					// Author a new resource as an attribute on the component; the
-					// USDA mutator inserts a child prim that the next reload picks
-					// up as a fresh descendant.
-					onParameterChange(component.path, "asset", "file", quoteUSDString(url.path))
+					onAddResource(component.path, url)
 				} label: {
 					Image(systemName: "plus")
 						.font(.system(size: 12, weight: .medium))
@@ -743,13 +746,7 @@ private struct AnimationLibraryEditor: View {
 
 				Button {
 					guard let path = selectedResourcePath else { return }
-					// NOTE: removing an animation library resource requires a dedicated
-					// shell action (removeAnimationLibraryResourceRequested) that does
-					// not exist on the shell feature today. As a best-effort fallback we
-					// clear the `file` attribute so the row drops out of the resource
-					// list on the next reload. Replace with a real remove RPC when it
-					// becomes available.
-					onParameterChange(path, "asset", "file", "@@")
+					onRemoveResource(component.path, path)
 					selectedResourcePath = nil
 				} label: {
 					Image(systemName: "minus")
@@ -2655,6 +2652,18 @@ public struct InspectorView: View {
 									store.send(.removeBehaviorRequested(
 										behaviorsContainerPath: containerPath,
 										behaviorPath: behaviorPath
+									))
+								},
+								onAddAnimationResource: { componentPath, sourceURL in
+									store.send(.addAnimationLibraryResourceRequested(
+										componentPath: componentPath,
+										sourceURL: sourceURL
+									))
+								},
+								onRemoveAnimationResource: { componentPath, resourcePrimPath in
+									store.send(.removeAnimationLibraryResourceRequested(
+										componentPath: componentPath,
+										resourcePrimPath: resourcePrimPath
 									))
 								}
 							)

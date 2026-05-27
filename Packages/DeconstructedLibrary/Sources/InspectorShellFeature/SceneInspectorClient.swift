@@ -36,6 +36,10 @@ public struct SceneInspectorClient: Sendable {
 	public var meshSortingGroupMembers: @Sendable (_ url: URL, _ groupPrimPath: String, _ candidatePrimPaths: [String]) async -> [String]
 	public var addBehavior: @Sendable (_ url: URL, _ behaviorsContainerPath: String, _ triggerType: String) async throws -> String
 	public var removeBehavior: @Sendable (_ url: URL, _ behaviorsContainerPath: String, _ behaviorPath: String) async throws -> Void
+	public var addAudioMixGroup: @Sendable (_ url: URL, _ componentPath: String, _ existingMixGroupPaths: [String]) async throws -> String
+	public var assignAudioMixGroupResource: @Sendable (_ url: URL, _ componentPath: String, _ mixGroupPath: String, _ sourceURL: URL, _ existingAudioFilePaths: [String], _ rootPrimPath: String) async throws -> Void
+	public var addAnimationLibraryResource: @Sendable (_ url: URL, _ componentPath: String, _ sourceURL: URL, _ existingResourcePaths: [String]) async throws -> String
+	public var removeAnimationLibraryResource: @Sendable (_ url: URL, _ resourcePrimPath: String) async throws -> Void
 
 	public init(
 		stageMetadata: @escaping @Sendable (_ url: URL) async -> SwiftUsdShell.USDStageMetadata = { _ in
@@ -83,7 +87,11 @@ public struct SceneInspectorClient: Sendable {
 		addComponent: @escaping @Sendable (_ url: URL, _ primPath: String, _ componentName: String, _ componentIdentifier: String) async throws -> String = { _, _, _, _ in "" },
 		meshSortingGroupMembers: @escaping @Sendable (_ url: URL, _ groupPrimPath: String, _ candidatePrimPaths: [String]) async -> [String] = { _, _, _ in [] },
 		addBehavior: @escaping @Sendable (_ url: URL, _ behaviorsContainerPath: String, _ triggerType: String) async throws -> String = { _, _, _ in "" },
-		removeBehavior: @escaping @Sendable (_ url: URL, _ behaviorsContainerPath: String, _ behaviorPath: String) async throws -> Void = { _, _, _ in }
+		removeBehavior: @escaping @Sendable (_ url: URL, _ behaviorsContainerPath: String, _ behaviorPath: String) async throws -> Void = { _, _, _ in },
+		addAudioMixGroup: @escaping @Sendable (_ url: URL, _ componentPath: String, _ existingMixGroupPaths: [String]) async throws -> String = { _, _, _ in "" },
+		assignAudioMixGroupResource: @escaping @Sendable (_ url: URL, _ componentPath: String, _ mixGroupPath: String, _ sourceURL: URL, _ existingAudioFilePaths: [String], _ rootPrimPath: String) async throws -> Void = { _, _, _, _, _, _ in },
+		addAnimationLibraryResource: @escaping @Sendable (_ url: URL, _ componentPath: String, _ sourceURL: URL, _ existingResourcePaths: [String]) async throws -> String = { _, _, _, _ in "" },
+		removeAnimationLibraryResource: @escaping @Sendable (_ url: URL, _ resourcePrimPath: String) async throws -> Void = { _, _ in }
 	) {
 		self.stageMetadata = stageMetadata
 		self.primTransform = primTransform
@@ -111,6 +119,10 @@ public struct SceneInspectorClient: Sendable {
 		self.meshSortingGroupMembers = meshSortingGroupMembers
 		self.addBehavior = addBehavior
 		self.removeBehavior = removeBehavior
+		self.addAudioMixGroup = addAudioMixGroup
+		self.assignAudioMixGroupResource = assignAudioMixGroupResource
+		self.addAnimationLibraryResource = addAnimationLibraryResource
+		self.removeAnimationLibraryResource = removeAnimationLibraryResource
 	}
 }
 

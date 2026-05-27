@@ -196,6 +196,12 @@ public struct InspectorFeature {
 		case removeBehaviorRequested(behaviorsContainerPath: String, behaviorPath: String)
 		case removeBehaviorSucceeded(behaviorsContainerPath: String)
 		case removeBehaviorFailed(String)
+		case addAnimationLibraryResourceRequested(componentPath: String, sourceURL: URL)
+		case addAnimationLibraryResourceSucceeded(componentPath: String)
+		case addAnimationLibraryResourceFailed(String)
+		case removeAnimationLibraryResourceRequested(componentPath: String, resourcePrimPath: String)
+		case removeAnimationLibraryResourceSucceeded(componentPath: String)
+		case removeAnimationLibraryResourceFailed(String)
 		case primTransformEdited(SwiftUsdShell.USDTransformData)
 		case persistPrimTransformRequested(URL, primPath: String, transform: SwiftUsdShell.USDTransformData)
 		case primTransformPersistFailed(String)
@@ -707,10 +713,90 @@ public struct InspectorFeature {
 				)
 				return .none
 
-			case .addAudioMixGroupRequested,
-				.assignAudioMixGroupResourceRequested,
-				.setRawComponentAttributeRequested:
+			case .setRawComponentAttributeRequested:
 				state.errorMessage = "Inspector editing requires the SwiftUsdShell runtime adapter."
+				return .none
+
+			case .addAudioMixGroupRequested(let componentPath):
+				guard let url = state.sceneURL,
+				      let selectedID = state.selectedNodeID
+				else { return .none }
+				let existing = (state.primComponents.first { $0.path == componentPath }?.descendants ?? [])
+					.filter { d in d.authoredAttributes.first { $0.name == "file" }?.value.isEmpty ?? true }
+					.map(\.path)
+				return .run { [sceneInspector] send in
+					do {
+						_ = try await sceneInspector.addAudioMixGroup(url, componentPath, existing)
+						await send(.loadPrimComponentsRequested(url, primPath: selectedID))
+					} catch {
+						await send(.componentParameterWriteFailed(error.localizedDescription))
+					}
+				}
+
+			case .assignAudioMixGroupResourceRequested(let componentPath, let mixGroupPath, let sourceURL):
+				guard let url = state.sceneURL,
+				      let selectedID = state.selectedNodeID
+				else { return .none }
+				let existing = (state.primComponents.first { $0.path == componentPath }?.descendants ?? [])
+					.filter { d in !((d.authoredAttributes.first { $0.name == "file" }?.value ?? "").isEmpty) }
+					.map(\.path)
+				let rootPrimPath = state.sceneNodes.first?.path ?? "/Root"
+				return .run { [sceneInspector] send in
+					do {
+						try await sceneInspector.assignAudioMixGroupResource(
+							url, componentPath, mixGroupPath, sourceURL, existing, rootPrimPath
+						)
+						await send(.loadPrimComponentsRequested(url, primPath: selectedID))
+					} catch {
+						await send(.componentParameterWriteFailed(error.localizedDescription))
+					}
+				}
+
+			case .addAnimationLibraryResourceRequested(let componentPath, let sourceURL):
+				guard let url = state.sceneURL,
+				      let selectedID = state.selectedNodeID
+				else { return .none }
+				let existing = (state.primComponents.first { $0.path == componentPath }?.descendants ?? [])
+					.filter { d in !((d.authoredAttributes.first { $0.name == "file" }?.value ?? "").isEmpty) }
+					.map(\.path)
+				return .run { [sceneInspector] send in
+					do {
+						_ = try await sceneInspector.addAnimationLibraryResource(url, componentPath, sourceURL, existing)
+						await send(.addAnimationLibraryResourceSucceeded(componentPath: componentPath))
+						await send(.loadPrimComponentsRequested(url, primPath: selectedID))
+					} catch {
+						await send(.addAnimationLibraryResourceFailed(error.localizedDescription))
+					}
+				}
+
+			case .addAnimationLibraryResourceSucceeded:
+				state.errorMessage = nil
+				return .none
+
+			case .addAnimationLibraryResourceFailed(let message):
+				state.errorMessage = "Failed to add animation resource: \(message)"
+				return .none
+
+			case .removeAnimationLibraryResourceRequested(_, let resourcePrimPath):
+				guard let url = state.sceneURL,
+				      let selectedID = state.selectedNodeID
+				else { return .none }
+				return .run { [sceneInspector] send in
+					do {
+						try await sceneInspector.removeAnimationLibraryResource(url, resourcePrimPath)
+						await send(.removeAnimationLibraryResourceSucceeded(componentPath: resourcePrimPath))
+						await send(.loadPrimComponentsRequested(url, primPath: selectedID))
+					} catch {
+						await send(.removeAnimationLibraryResourceFailed(error.localizedDescription))
+					}
+				}
+
+			case .removeAnimationLibraryResourceSucceeded:
+				state.errorMessage = nil
+				return .none
+
+			case .removeAnimationLibraryResourceFailed(let message):
+				state.errorMessage = "Failed to remove animation resource: \(message)"
 				return .none
 
 			case .setMaterialBindingSucceeded,

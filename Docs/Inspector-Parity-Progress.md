@@ -48,9 +48,9 @@ Never `cd Packages/DeconstructedLibrary/ && swift build`.
 
 These touch the same shell-feature + runtime + interop files; do them in one sweep to minimise merge churn.
 
-- [ ] **P3-A** Animation Library — `addAnimationLibraryResource(componentPath:, sourceURL:)` and `removeAnimationLibraryResource(componentPath:, resourcePrimPath:)`. Add → authors a new child prim with `name` + `file` attributes. Remove → deactivates the child prim (matches orphan behavior in `InspectorFeature.swift:1735`).
+- [x] **P3-A** Animation Library + Audio Mix Group RPCs. **LANDED.** New `DeconstructedShellRuntime/AssetAuthoring.swift` hosts file-copy + sanitize + unique-path helpers and the four statics (`addAudioMixGroup`, `assignAudioMixGroupResource`, `addAnimationLibraryResource`, `removeAnimationLibraryResource`). Audio mix group actions that were previously stubbed (`Inspector editing requires the SwiftUsdShell runtime adapter`) now go through the live runtime. `AnimationLibraryEditor` plus/minus buttons hit real add/remove RPCs instead of placeholder attribute writes.
 - [x] **P3-B** Behaviors RPCs. **LANDED.** New `addBehavior(url, containerPath, triggerType)` + `removeBehavior(url, containerPath, behaviorPath)` on `SceneInspectorClient`, runtime delegates to existing `DeconstructedUSDInterop.addBehaviorToContainer` / `removeBehaviorFromContainer`. UI: Add Behavior menu now creates a real subprim; per-row `minus.circle` deletes.
-- [ ] **P3-C** Wire UI callbacks for P3-A/P3-B in `AnimationLibraryEditor` (replace today's `onParameterChange` empty-asset shim with proper add/remove) and `BehaviorsEditor` (Add Behavior menu + per-behavior delete).
+- [x] **P3-C** UI callbacks landed alongside P3-A and P3-B.
 
 ## Phase 4 — Scene Playback section
 

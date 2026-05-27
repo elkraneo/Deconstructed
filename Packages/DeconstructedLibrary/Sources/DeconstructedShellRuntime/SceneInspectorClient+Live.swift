@@ -113,6 +113,37 @@ extension SceneInspectorClient {
 				behaviorsContainerPrimPath: behaviorsContainerPath,
 				behaviorPrimPath: behaviorPath
 			)
+		},
+		addAudioMixGroup: { url, componentPath, existing in
+			try DeconstructedShellRuntime.addAudioMixGroup(
+				url: url,
+				componentPath: componentPath,
+				existingMixGroupPaths: existing
+			)
+		},
+		assignAudioMixGroupResource: { url, componentPath, mixGroupPath, sourceURL, existing, rootPrimPath in
+			try DeconstructedShellRuntime.assignAudioMixGroupResource(
+				url: url,
+				componentPath: componentPath,
+				mixGroupPath: mixGroupPath,
+				sourceURL: sourceURL,
+				existingAudioFilePaths: existing,
+				rootPrimPath: rootPrimPath
+			)
+		},
+		addAnimationLibraryResource: { url, componentPath, sourceURL, existing in
+			try DeconstructedShellRuntime.addAnimationLibraryResource(
+				url: url,
+				componentPath: componentPath,
+				sourceURL: sourceURL,
+				existingResourcePaths: existing
+			)
+		},
+		removeAnimationLibraryResource: { url, resourcePrimPath in
+			try DeconstructedShellRuntime.removeAnimationLibraryResource(
+				url: url,
+				resourcePrimPath: resourcePrimPath
+			)
 		}
 	)
 }
