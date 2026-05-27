@@ -51,19 +51,22 @@ public struct InspectorComponentSummary: Equatable, Sendable, Identifiable {
 	public var typeName: String
 	public var isActive: Bool
 	public var authoredAttributes: [InspectorAuthoredAttribute]
+	public var descendants: [ComponentDescendantAttributes]
 
 	public init(
 		path: String,
 		name: String,
 		typeName: String,
 		isActive: Bool,
-		authoredAttributes: [InspectorAuthoredAttribute] = []
+		authoredAttributes: [InspectorAuthoredAttribute] = [],
+		descendants: [ComponentDescendantAttributes] = []
 	) {
 		self.path = path
 		self.name = name
 		self.typeName = typeName
 		self.isActive = isActive
 		self.authoredAttributes = authoredAttributes
+		self.descendants = descendants
 	}
 }
 

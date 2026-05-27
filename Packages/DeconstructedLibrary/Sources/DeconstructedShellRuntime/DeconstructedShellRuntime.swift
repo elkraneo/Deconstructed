@@ -327,14 +327,46 @@ public enum DeconstructedShellRuntime {
 		let infos = DeconstructedUSDInterop.listRealityKitComponentPrims(url: url, parentPrimPath: primPath)
 		return infos.map { info -> InspectorComponentSummary in
 			let attrs = DeconstructedUSDInterop.getPrimAttributes(url: url, primPath: info.path)?.authoredAttributes ?? []
+			let descendants = walkComponentDescendants(url: url, parentPath: info.path)
 			return InspectorComponentSummary(
 				path: info.path,
 				name: info.primName,
 				typeName: info.typeName,
 				isActive: info.isActive,
-				authoredAttributes: attrs.map { InspectorAuthoredAttribute(name: $0.name, value: $0.value) }
+				authoredAttributes: attrs.map { InspectorAuthoredAttribute(name: $0.name, value: $0.value) },
+				descendants: descendants
 			)
 		}
+	}
+
+	/// Recursively walks child prims under a component, returning each
+	/// descendant flattened with its authored attributes. Reuses the
+	/// `DeconstructedUSDInterop.listChildPrims` text walker (open-source) and
+	/// `getPrimAttributes` so no OpenUSDKit-internal API is touched.
+	private static func walkComponentDescendants(
+		url: URL,
+		parentPath: String,
+		depth: Int = 0
+	) -> [ComponentDescendantAttributes] {
+		// Defensive cap: real component subtrees are 2-3 deep; anything deeper is
+		// almost certainly a runaway prim graph and we'd rather truncate than hang.
+		guard depth < 6 else { return [] }
+		var collected: [ComponentDescendantAttributes] = []
+		let children = DeconstructedUSDInterop.listChildPrims(url: url, parentPrimPath: parentPath)
+		for child in children {
+			let attrs = DeconstructedUSDInterop.getPrimAttributes(url: url, primPath: child.path)?.authoredAttributes ?? []
+			collected.append(
+				ComponentDescendantAttributes(
+					path: child.path,
+					name: child.primName,
+					authoredAttributes: attrs.map { InspectorAuthoredAttribute(name: $0.name, value: $0.value) }
+				)
+			)
+			collected.append(
+				contentsOf: walkComponentDescendants(url: url, parentPath: child.path, depth: depth + 1)
+			)
+		}
+		return collected
 	}
 
 	// MARK: - Transform Write
