@@ -95,6 +95,18 @@ public struct EditOp: Sendable, Hashable {
 	public init() {}
 }
 
+public struct USDAChildPrimInfo: Sendable, Hashable {
+	public var path: String
+	public var primName: String
+	public var typeName: String?
+
+	public init(path: String, primName: String, typeName: String?) {
+		self.path = path
+		self.primName = primName
+		self.typeName = typeName
+	}
+}
+
 public struct RealityKitComponentPrimInfo: Sendable, Hashable {
 	public var path: String
 	public var primName: String
@@ -901,6 +913,23 @@ public enum DeconstructedUSDInterop {
 		)
 	}
 
+	/// Lists the direct child prims authored under `parentPrimPath` in the
+	/// USDA source, returning their full path, leaf name and authored typeName.
+	/// Uses the same lightweight text parser as `listRealityKitComponentPrims`;
+	/// pure open-source path, no OpenUSDKit dependency.
+	public static func listChildPrims(
+		url: URL,
+		parentPrimPath: String
+	) -> [USDAChildPrimInfo] {
+		guard url.pathExtension.lowercased() == "usda" else {
+			return []
+		}
+		guard let source = try? String(contentsOf: url, encoding: .utf8) else {
+			return []
+		}
+		return parseChildPrimsFromUSDA(source: source, parentPrimPath: parentPrimPath)
+	}
+
 	public static func primRelationshipTargets(
 		url: URL,
 		primPath: String,
@@ -1537,6 +1566,57 @@ private func parsePrimDeclarationLine(_ line: String) -> ParsedPrimDeclaration? 
 		primName: primName,
 		metadataText: metadataText
 	)
+}
+
+private func parseChildPrimsFromUSDA(
+	source: String,
+	parentPrimPath: String
+) -> [USDAChildPrimInfo] {
+	let lines = source.split(whereSeparator: \.isNewline).map(String.init)
+	var stack: [USDAPrimContext] = []
+	var pending: USDAPrimContext?
+	var children: [USDAChildPrimInfo] = []
+
+	for line in lines {
+		if let declaration = parsePrimDeclarationLine(line) {
+			let parentPath = stack.last?.path
+			let path = if let parent = parentPath {
+				"\(parent)/\(declaration.primName)"
+			} else {
+				"/\(declaration.primName)"
+			}
+			let context = USDAPrimContext(path: path, indent: declaration.indent)
+			if line.contains("{") {
+				stack.append(context)
+			} else {
+				pending = context
+			}
+
+			if parentPath == parentPrimPath {
+				children.append(
+					USDAChildPrimInfo(
+						path: path,
+						primName: declaration.primName,
+						typeName: declaration.typeName
+					)
+				)
+			}
+		}
+
+		if line.contains("{"), let pendingContext = pending {
+			stack.append(pendingContext)
+			pending = nil
+		}
+
+		let closingCount = line.filter { $0 == "}" }.count
+		if closingCount > 0 {
+			for _ in 0..<closingCount {
+				_ = stack.popLast()
+			}
+		}
+	}
+
+	return children
 }
 
 private func parseRealityKitComponentPrimsFromUSDA(

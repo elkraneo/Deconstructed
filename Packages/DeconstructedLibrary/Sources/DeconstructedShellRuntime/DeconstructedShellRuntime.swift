@@ -192,23 +192,51 @@ public enum DeconstructedShellRuntime {
 
 	// MARK: - Material Properties
 
-	/// Returns the authored attributes on a Material prim, surfaced as a
-	/// best-effort property list until shader-network walking lands.
-	/// Each authored attribute is mapped to an `unsupported` property whose
-	/// `valueDescription` carries the rendered string from OpenUSD.
+	/// Returns the material's authored attributes plus the authored
+	/// attributes of every Shader-style child prim under it, so the
+	/// inspector surfaces inputs:diffuseColor / metallic / roughness etc.
+	/// for a typical UsdPreviewSurface / MaterialX network.
+	///
+	/// Implementation: USDA-text walk via `DeconstructedUSDInterop.listChildPrims`
+	/// to enumerate immediate children (open-source path, no OpenUSDKit
+	/// dependency), then `USDOperationsClient.primAttributes` on each child.
+	/// Each property is prefixed with the shader prim name so multi-shader
+	/// networks stay disambiguated.
 	public static func materialProperties(
 		url: URL, materialPath: String
 	) -> [SwiftUsdShell.USDMaterialPropertySummary] {
-		guard let raw = USDOperationsClient().primAttributes(url: url, path: materialPath) else {
-			return []
+		let client = USDOperationsClient()
+		var summaries: [SwiftUsdShell.USDMaterialPropertySummary] = []
+
+		if let materialAttrs = client.primAttributes(url: url, path: materialPath) {
+			for attr in materialAttrs.authoredAttributes {
+				summaries.append(
+					SwiftUsdShell.USDMaterialPropertySummary(
+						name: attr.name,
+						propertyType: .unsupported,
+						value: .unsupported(typeName: "", valueDescription: attr.value)
+					)
+				)
+			}
 		}
-		return raw.authoredAttributes.map { attr in
-			SwiftUsdShell.USDMaterialPropertySummary(
-				name: attr.name,
-				propertyType: .unsupported,
-				value: .unsupported(typeName: "", valueDescription: attr.value)
-			)
+
+		let children = DeconstructedUSDInterop.listChildPrims(url: url, parentPrimPath: materialPath)
+		for child in children {
+			guard let shaderAttrs = client.primAttributes(url: url, path: child.path) else {
+				continue
+			}
+			for attr in shaderAttrs.authoredAttributes {
+				summaries.append(
+					SwiftUsdShell.USDMaterialPropertySummary(
+						name: "\(child.primName).\(attr.name)",
+						propertyType: .unsupported,
+						value: .unsupported(typeName: child.typeName ?? "", valueDescription: attr.value)
+					)
+				)
+			}
 		}
+
+		return summaries
 	}
 
 	// MARK: - Material Binding
