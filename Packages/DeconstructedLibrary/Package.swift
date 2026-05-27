@@ -188,6 +188,7 @@ let package = Package(
 				"RCPDocument",
 				"ProjectBrowserFeature",
 				"SceneGraphFeature",
+				"SceneGraphClients",
 				"InspectorFeature",
 				"ViewportModels",
 				.product(
@@ -307,6 +308,8 @@ let package = Package(
 				dependencies: [
 					"InspectorFeature",
 					"DeconstructedUSDInterop",
+					"DeconstructedModels",
+					"SceneGraphClients",
 					.product(name: "SwiftUsdShell", package: "SwiftUsdShell"),
 					.product(name: "USDOperations", package: "USDInterop"),
 					.product(name: "USDInterfaces", package: "USDInterop"),

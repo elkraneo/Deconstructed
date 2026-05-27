@@ -3,6 +3,7 @@ import DeconstructedClients
 import DeconstructedShellRuntime
 import Foundation
 import InspectorFeature
+import SceneGraphClients
 
 @Reducer
 public struct AppFeature {
@@ -19,6 +20,7 @@ public struct AppFeature {
 	private static let liveDependenciesInstalled: Bool = {
 		prepareDependencies {
 			$0.sceneInspector = .live
+			$0.sceneEditClient = .live
 		}
 		return true
 	}()
