@@ -190,6 +190,12 @@ public struct InspectorFeature {
 		case primComponentsLoaded([InspectorComponentSummary])
 		case loadMeshSortingGroupMembersRequested(URL, groupPrimPath: String, candidatePrimPaths: [String])
 		case meshSortingGroupMembersLoaded([String])
+		case addBehaviorRequested(behaviorsContainerPath: String, triggerType: String)
+		case addBehaviorSucceeded(behaviorsContainerPath: String)
+		case addBehaviorFailed(String)
+		case removeBehaviorRequested(behaviorsContainerPath: String, behaviorPath: String)
+		case removeBehaviorSucceeded(behaviorsContainerPath: String)
+		case removeBehaviorFailed(String)
 		case primTransformEdited(SwiftUsdShell.USDTransformData)
 		case persistPrimTransformRequested(URL, primPath: String, transform: SwiftUsdShell.USDTransformData)
 		case primTransformPersistFailed(String)
@@ -372,6 +378,50 @@ public struct InspectorFeature {
 
 			case .meshSortingGroupMembersLoaded(let members):
 				state.meshSortingGroupMembers = members
+				return .none
+
+			case .addBehaviorRequested(let containerPath, let triggerType):
+				guard let url = state.sceneURL,
+				      let selectedID = state.selectedNodeID
+				else { return .none }
+				return .run { [sceneInspector] send in
+					do {
+						_ = try await sceneInspector.addBehavior(url, containerPath, triggerType)
+						await send(.addBehaviorSucceeded(behaviorsContainerPath: containerPath))
+						await send(.loadPrimComponentsRequested(url, primPath: selectedID))
+					} catch {
+						await send(.addBehaviorFailed(error.localizedDescription))
+					}
+				}
+
+			case .addBehaviorSucceeded:
+				state.errorMessage = nil
+				return .none
+
+			case .addBehaviorFailed(let message):
+				state.errorMessage = "Failed to add behavior: \(message)"
+				return .none
+
+			case .removeBehaviorRequested(let containerPath, let behaviorPath):
+				guard let url = state.sceneURL,
+				      let selectedID = state.selectedNodeID
+				else { return .none }
+				return .run { [sceneInspector] send in
+					do {
+						try await sceneInspector.removeBehavior(url, containerPath, behaviorPath)
+						await send(.removeBehaviorSucceeded(behaviorsContainerPath: containerPath))
+						await send(.loadPrimComponentsRequested(url, primPath: selectedID))
+					} catch {
+						await send(.removeBehaviorFailed(error.localizedDescription))
+					}
+				}
+
+			case .removeBehaviorSucceeded:
+				state.errorMessage = nil
+				return .none
+
+			case .removeBehaviorFailed(let message):
+				state.errorMessage = "Failed to remove behavior: \(message)"
 				return .none
 
 			case .primTransformEdited(let transform):

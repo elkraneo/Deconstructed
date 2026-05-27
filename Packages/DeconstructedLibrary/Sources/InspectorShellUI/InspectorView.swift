@@ -36,6 +36,8 @@ private struct ComponentEditorRow: View {
 	let onOpenAudioMixer: () -> Void
 	let onAddAudioMixGroup: (_ componentPath: String) -> Void
 	let onAssignAudioMixGroupResource: (_ componentPath: String, _ mixGroupPath: String, _ sourceURL: URL) -> Void
+	let onAddBehavior: (_ behaviorsContainerPath: String, _ triggerType: String) -> Void
+	let onRemoveBehavior: (_ behaviorsContainerPath: String, _ behaviorPath: String) -> Void
 
 	private var componentIdentifier: String? {
 		component.authoredAttributes
@@ -138,7 +140,9 @@ private struct ComponentEditorRow: View {
 		case "RCP.BehaviorsContainer":
 			BehaviorsEditor(
 				component: component,
-				onParameterChange: onDescendantChange
+				onParameterChange: onDescendantChange,
+				onAddBehavior: onAddBehavior,
+				onRemoveBehavior: onRemoveBehavior
 			)
 		case "RealityKit.RigidBody", "RealityKit.PhysicsBody":
 			PhysicsBodyEditor(
@@ -766,6 +770,8 @@ private struct AnimationLibraryEditor: View {
 private struct BehaviorsEditor: View {
 	let component: InspectorComponentSummary
 	let onParameterChange: (_ targetPrimPath: String, _ attributeType: String, _ attributeName: String, _ valueLiteral: String) -> Void
+	let onAddBehavior: (_ behaviorsContainerPath: String, _ triggerType: String) -> Void
+	let onRemoveBehavior: (_ behaviorsContainerPath: String, _ behaviorPath: String) -> Void
 
 	private struct BehaviorModel: Identifiable {
 		let id: String
@@ -876,7 +882,19 @@ private struct BehaviorsEditor: View {
 			} else {
 				ForEach(behaviors) { behavior in
 					VStack(alignment: .leading, spacing: 6) {
-						Text(behavior.title).font(.system(size: 11, weight: .semibold))
+						HStack {
+							Text(behavior.title).font(.system(size: 11, weight: .semibold))
+							Spacer()
+							Button {
+								onRemoveBehavior(component.path, behavior.path)
+							} label: {
+								Image(systemName: "minus.circle")
+									.font(.system(size: 11))
+									.foregroundStyle(.secondary)
+							}
+							.buttonStyle(.plain)
+							.help("Delete Behavior")
+						}
 						if let triggerPath = behavior.triggerPath {
 							LabeledContent("Trigger") {
 								Picker("", selection: Binding(
@@ -942,15 +960,10 @@ private struct BehaviorsEditor: View {
 				}
 			}
 
-			// NOTE: Creating new behavior prims requires runtime support that's not
-			// yet wired through the shell. The Add menu writes a placeholder
-			// `_addBehavior` attribute on the component path — the adapter currently
-			// no-ops on unknown attribute names, so this is purely an intent signal
-			// until the runtime gains a real createBehavior endpoint.
 			Menu {
 				ForEach(triggerTypes, id: \.self) { t in
 					Button("Add \(triggerLabel(t))") {
-						onParameterChange(component.path, "string", "_addBehavior", quoteUSDString(t))
+						onAddBehavior(component.path, t)
 					}
 				}
 			} label: {
@@ -2630,6 +2643,18 @@ public struct InspectorView: View {
 										componentPath: componentPath,
 										mixGroupPath: mixGroupPath,
 										sourceURL: url
+									))
+								},
+								onAddBehavior: { containerPath, triggerType in
+									store.send(.addBehaviorRequested(
+										behaviorsContainerPath: containerPath,
+										triggerType: triggerType
+									))
+								},
+								onRemoveBehavior: { containerPath, behaviorPath in
+									store.send(.removeBehaviorRequested(
+										behaviorsContainerPath: containerPath,
+										behaviorPath: behaviorPath
 									))
 								}
 							)

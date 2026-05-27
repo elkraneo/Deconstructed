@@ -99,6 +99,20 @@ extension SceneInspectorClient {
 				groupPrimPath: groupPrimPath,
 				candidatePrimPaths: candidatePrimPaths
 			)
+		},
+		addBehavior: { url, behaviorsContainerPath, triggerType in
+			try DeconstructedShellRuntime.addBehavior(
+				url: url,
+				behaviorsContainerPrimPath: behaviorsContainerPath,
+				triggerType: triggerType
+			)
+		},
+		removeBehavior: { url, behaviorsContainerPath, behaviorPath in
+			try DeconstructedShellRuntime.removeBehavior(
+				url: url,
+				behaviorsContainerPrimPath: behaviorsContainerPath,
+				behaviorPrimPath: behaviorPath
+			)
 		}
 	)
 }

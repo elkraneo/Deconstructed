@@ -49,7 +49,7 @@ Never `cd Packages/DeconstructedLibrary/ && swift build`.
 These touch the same shell-feature + runtime + interop files; do them in one sweep to minimise merge churn.
 
 - [ ] **P3-A** Animation Library — `addAnimationLibraryResource(componentPath:, sourceURL:)` and `removeAnimationLibraryResource(componentPath:, resourcePrimPath:)`. Add → authors a new child prim with `name` + `file` attributes. Remove → deactivates the child prim (matches orphan behavior in `InspectorFeature.swift:1735`).
-- [ ] **P3-B** Behaviors — `createBehavior(componentPath:)` and `removeBehavior(componentPath:, behaviorPath:)`. Create → mints a new behavior subprim with default trigger + action. Remove → deactivates the behavior subprim. Wire the per-behavior `minus.circle` button in `BehaviorsEditor`.
+- [x] **P3-B** Behaviors RPCs. **LANDED.** New `addBehavior(url, containerPath, triggerType)` + `removeBehavior(url, containerPath, behaviorPath)` on `SceneInspectorClient`, runtime delegates to existing `DeconstructedUSDInterop.addBehaviorToContainer` / `removeBehaviorFromContainer`. UI: Add Behavior menu now creates a real subprim; per-row `minus.circle` deletes.
 - [ ] **P3-C** Wire UI callbacks for P3-A/P3-B in `AnimationLibraryEditor` (replace today's `onParameterChange` empty-asset shim with proper add/remove) and `BehaviorsEditor` (Add Behavior menu + per-behavior delete).
 
 ## Phase 4 — Scene Playback section

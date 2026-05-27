@@ -415,6 +415,39 @@ public enum DeconstructedShellRuntime {
 		return trimmed
 	}
 
+	// MARK: - Behaviors Write
+
+	/// Authors a new RealityKit behavior subprim under the parent of the
+	/// behaviors container. Delegates to `DeconstructedUSDInterop` for the
+	/// USDA edits. Returns the newly-authored behavior prim path so callers
+	/// can refresh state targeted at that path.
+	@discardableResult
+	public static func addBehavior(
+		url: URL,
+		behaviorsContainerPrimPath: String,
+		triggerType: String
+	) throws -> String {
+		try DeconstructedUSDInterop.addBehaviorToContainer(
+			url: url,
+			behaviorsContainerPrimPath: behaviorsContainerPrimPath,
+			triggerType: triggerType
+		)
+	}
+
+	/// Removes a behavior subprim and unhooks it from the container's
+	/// `behaviors` relationship.
+	public static func removeBehavior(
+		url: URL,
+		behaviorsContainerPrimPath: String,
+		behaviorPrimPath: String
+	) throws {
+		try DeconstructedUSDInterop.removeBehaviorFromContainer(
+			url: url,
+			behaviorsContainerPrimPath: behaviorsContainerPrimPath,
+			behaviorPrimPath: behaviorPrimPath
+		)
+	}
+
 	// MARK: - Transform Write
 
 	/// Writes a prim's local transform. Bridges the SwiftUsdShell
