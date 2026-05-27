@@ -759,8 +759,17 @@ public struct InspectorFeature {
 			case .sceneMetadataLoaded(let metadata):
 				let previous = state.layerData ?? SceneLayerData()
 				let upAxis = SceneUpAxis(rawValue: metadata.upAxis?.rawValue ?? "Y") ?? .y
+				// metadata.defaultPrimName is the USD token (e.g. "Root"), but
+				// availablePrims are full prim paths ("/Root"). Normalize to a
+				// path so the Default Prim picker tag matches its selection.
+				let defaultPrimPath: String?
+				if let name = metadata.defaultPrimName?.rawValue, !name.isEmpty {
+					defaultPrimPath = name.hasPrefix("/") ? name : "/\(name)"
+				} else {
+					defaultPrimPath = nil
+				}
 				state.layerData = SceneLayerData(
-					defaultPrim: metadata.defaultPrimName?.rawValue,
+					defaultPrim: defaultPrimPath,
 					availablePrims: previous.availablePrims,
 					metersPerUnit: metadata.metersPerUnit ?? 1,
 					upAxis: upAxis
