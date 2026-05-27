@@ -381,7 +381,11 @@ public struct InspectorFeature {
 				}
 
 			case .primTransformLoaded(let transform):
-				state.primTransform = transform
+				// If the prim has no authored xformOp attributes (typical for a
+				// freshly-inserted primitive like `def Cone "Cone1"`), the runtime
+				// returns nil. Show an identity transform so the user can place
+				// the new prim — the first edit will author the xformOp attrs.
+				state.primTransform = transform ?? SwiftUsdShell.USDTransformData()
 				return .none
 
 			case .loadMaterialBindingRequested(let url, let primPath):
