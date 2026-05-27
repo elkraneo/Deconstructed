@@ -451,8 +451,11 @@ public struct InspectorView: View {
 					}
 				}
 
-				if !store.primComponents.isEmpty {
-					DisclosureGroup(isExpanded: disclosure(\.componentsExpanded)) {
+				DisclosureGroup(isExpanded: disclosure(\.componentsExpanded)) {
+					if store.primComponents.isEmpty {
+						Text("No authored components")
+							.foregroundStyle(.secondary)
+					} else {
 						ForEach(store.primComponents) { component in
 							ComponentEditorRow(
 								component: component,
@@ -472,12 +475,12 @@ public struct InspectorView: View {
 								}
 							)
 						}
-						AddComponentRow { name, identifier in
-							store.send(.addComponentRequested(componentName: name, componentIdentifier: identifier))
-						}
-					} label: {
-						Text("Components").font(.headline)
 					}
+					AddComponentRow { name, identifier in
+						store.send(.addComponentRequested(componentName: name, componentIdentifier: identifier))
+					}
+				} label: {
+					Text("Components").font(.headline)
 				}
 
 				let audioMixComponents = store.primComponents.filter { $0.typeName == "RealityKit.AudioMixGroups" }
