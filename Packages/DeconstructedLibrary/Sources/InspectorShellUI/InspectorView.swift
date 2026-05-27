@@ -34,6 +34,8 @@ private struct ComponentEditorRow: View {
 	let onDelete: () -> Void
 	let onPaste: (String) -> Void
 	let onOpenAudioMixer: () -> Void
+	let onAddAudioMixGroup: (_ componentPath: String) -> Void
+	let onAssignAudioMixGroupResource: (_ componentPath: String, _ mixGroupPath: String, _ sourceURL: URL) -> Void
 
 	private var componentIdentifier: String? {
 		component.authoredAttributes
@@ -124,7 +126,9 @@ private struct ComponentEditorRow: View {
 			InlineAudioMixGroupsEditor(
 				component: component,
 				onParameterChange: onDescendantChange,
-				onOpenAudioMixer: onOpenAudioMixer
+				onOpenAudioMixer: onOpenAudioMixer,
+				onAddMixGroup: onAddAudioMixGroup,
+				onAssignResource: onAssignAudioMixGroupResource
 			)
 		case "RealityKit.AnimationLibrary":
 			AnimationLibraryEditor(
@@ -369,6 +373,8 @@ private struct InlineAudioMixGroupsEditor: View {
 	let component: InspectorComponentSummary
 	let onParameterChange: (_ targetPrimPath: String, _ attributeType: String, _ attributeName: String, _ valueLiteral: String) -> Void
 	let onOpenAudioMixer: () -> Void
+	let onAddMixGroup: (_ componentPath: String) -> Void
+	let onAssignResource: (_ componentPath: String, _ mixGroupPath: String, _ sourceURL: URL) -> Void
 
 	@State private var selectedGroupPath: String?
 
@@ -441,6 +447,14 @@ private struct InlineAudioMixGroupsEditor: View {
 					Text("Audio Mix Groups")
 						.font(.system(size: 12, weight: .semibold))
 					Spacer()
+					Button {
+						onAddMixGroup(component.path)
+					} label: {
+						Image(systemName: "plus")
+							.font(.system(size: 12, weight: .medium))
+					}
+					.buttonStyle(.plain)
+					.help("Add Mix Group")
 					Button(action: onOpenAudioMixer) {
 						Image(systemName: "slider.horizontal.3")
 							.font(.system(size: 12, weight: .medium))
@@ -500,6 +514,15 @@ private struct InlineAudioMixGroupsEditor: View {
 												.padding(.leading, 20)
 											}
 										}
+										Button {
+											chooseAudio(for: group.path)
+										} label: {
+											Label("Choose…", systemImage: "plus.circle")
+												.font(.system(size: 11))
+										}
+										.buttonStyle(.plain)
+										.padding(.leading, 20)
+										.padding(.top, 2)
 									}
 								}
 							}
@@ -598,6 +621,16 @@ private struct InlineAudioMixGroupsEditor: View {
 				selectedGroupPath = mixGroups.first?.path
 			}
 		}
+	}
+
+	private func chooseAudio(for mixGroupPath: String) {
+		let panel = NSOpenPanel()
+		panel.allowsMultipleSelection = false
+		panel.canChooseDirectories = false
+		panel.canChooseFiles = true
+		panel.allowedContentTypes = [.audio]
+		guard panel.runModal() == .OK, let url = panel.url else { return }
+		onAssignResource(component.path, mixGroupPath, url)
 	}
 }
 
@@ -2510,7 +2543,17 @@ public struct InspectorView: View {
 										))
 									}
 								},
-								onOpenAudioMixer: onOpenAudioMixer
+								onOpenAudioMixer: onOpenAudioMixer,
+								onAddAudioMixGroup: { componentPath in
+									store.send(.addAudioMixGroupRequested(componentPath: componentPath))
+								},
+								onAssignAudioMixGroupResource: { componentPath, mixGroupPath, url in
+									store.send(.assignAudioMixGroupResourceRequested(
+										componentPath: componentPath,
+										mixGroupPath: mixGroupPath,
+										sourceURL: url
+									))
+								}
 							)
 						}
 					}
@@ -2532,12 +2575,13 @@ public struct InspectorView: View {
 						Picker(
 							"Up Axis",
 							selection: Binding(
-								get: { layer.upAxis.rawValue },
-								set: { store.send(.setUpAxisRequested($0)) }
+								get: { layer.upAxis },
+								set: { store.send(.setUpAxisRequested($0.rawValue)) }
 							)
 						) {
-							Text("Y").tag("Y")
-							Text("Z").tag("Z")
+							ForEach(SceneUpAxis.allCases, id: \.self) { axis in
+								Text(axis.displayName).tag(axis)
+							}
 						}
 
 						LabeledContent("Meters Per Unit") {
@@ -2571,8 +2615,12 @@ public struct InspectorView: View {
 								Text(prim).tag(prim)
 							}
 						}
+
+						Button("Convert Variants to Configurations") {}
+							.disabled(true)
+							.help("Available in a future update.")
 					} label: {
-						Text("Stage").font(.headline)
+						Text("Layer Data").font(.headline)
 					}
 				}
 

@@ -9,9 +9,16 @@ public enum InspectorTarget: Equatable, Sendable {
 	case prim(path: String)
 }
 
-public enum SceneUpAxis: String, Equatable, Sendable {
+public enum SceneUpAxis: String, Equatable, Sendable, CaseIterable {
 	case y = "Y"
 	case z = "Z"
+
+	public var displayName: String {
+		switch self {
+		case .y: return "Y"
+		case .z: return "Z"
+		}
+	}
 }
 
 public struct SceneLayerData: Equatable, Sendable {
