@@ -227,7 +227,9 @@ let package = Package(
 			name: "InspectorUI",
 			dependencies: [
 				"InspectorFeature",
+				"InspectorModels",
 				.product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
+				.product(name: "Sharing", package: "swift-sharing"),
 			],
 			path: "Packages/DeconstructedLibrary/Sources/InspectorShellUI"
 		),

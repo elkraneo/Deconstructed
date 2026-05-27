@@ -337,6 +337,8 @@ let package = Package(
 			name: "InspectorUI",
 			dependencies: [
 				"InspectorFeature",
+				"InspectorModels",
+				.product(name: "Sharing", package: "swift-sharing"),
 			],
 			path: "Sources/InspectorShellUI"
 		),

@@ -7,33 +7,45 @@ public struct InspectorDisclosureState: Equatable, Sendable {
 	public var primDataExpanded: Bool
 	public var primAttributesExpanded: Bool
 	public var materialBindingsExpanded: Bool
+	public var materialPropertiesExpanded: Bool
 	public var transformExpanded: Bool
 	public var variantsExpanded: Bool
 	public var referencesExpanded: Bool
+	public var compositionExpanded: Bool
 	public var componentsExpanded: Bool
+	public var audioMixGroupsExpanded: Bool
 	public var scenePlaybackExpanded: Bool
 	public var layerDataExpanded: Bool
+	public var materialsExpanded: Bool
 
 	public init(
 		primDataExpanded: Bool = true,
 		primAttributesExpanded: Bool = true,
 		materialBindingsExpanded: Bool = true,
+		materialPropertiesExpanded: Bool = false,
 		transformExpanded: Bool = true,
 		variantsExpanded: Bool = true,
 		referencesExpanded: Bool = true,
+		compositionExpanded: Bool = false,
 		componentsExpanded: Bool = true,
+		audioMixGroupsExpanded: Bool = false,
 		scenePlaybackExpanded: Bool = true,
-		layerDataExpanded: Bool = true
+		layerDataExpanded: Bool = true,
+		materialsExpanded: Bool = true
 	) {
 		self.primDataExpanded = primDataExpanded
 		self.primAttributesExpanded = primAttributesExpanded
 		self.materialBindingsExpanded = materialBindingsExpanded
+		self.materialPropertiesExpanded = materialPropertiesExpanded
 		self.transformExpanded = transformExpanded
 		self.variantsExpanded = variantsExpanded
 		self.referencesExpanded = referencesExpanded
+		self.compositionExpanded = compositionExpanded
 		self.componentsExpanded = componentsExpanded
+		self.audioMixGroupsExpanded = audioMixGroupsExpanded
 		self.scenePlaybackExpanded = scenePlaybackExpanded
 		self.layerDataExpanded = layerDataExpanded
+		self.materialsExpanded = materialsExpanded
 	}
 }
 

@@ -177,7 +177,6 @@ public struct InspectorFeature {
 		case primComponentsLoaded([InspectorComponentSummary])
 		case primTransformEdited(SwiftUsdShell.USDTransformData)
 		case persistPrimTransformRequested(URL, primPath: String, transform: SwiftUsdShell.USDTransformData)
-		case primTransformPersisted
 		case primTransformPersistFailed(String)
 		case setMaterialBindingRequested(materialPath: String?)
 		case setMaterialBindingStrengthRequested(SwiftUsdShell.USDMaterialBindingStrength)
@@ -341,14 +340,11 @@ public struct InspectorFeature {
 				return .run { [sceneInspector] send in
 					do {
 						try await sceneInspector.setPrimTransform(url, primPath, transform)
-						await send(.primTransformPersisted)
+						await send(.primTransformSaveSucceeded)
 					} catch {
 						await send(.primTransformPersistFailed(error.localizedDescription))
 					}
 				}
-
-			case .primTransformPersisted:
-				return .none
 
 			case .primTransformPersistFailed(let message):
 				state.errorMessage = message

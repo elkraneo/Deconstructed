@@ -1,5 +1,7 @@
 import ComposableArchitecture
 import InspectorFeature
+import InspectorModels
+import Sharing
 import SwiftUI
 import SwiftUsdShell
 import simd
@@ -103,6 +105,7 @@ public struct AudioMixerComponentEntry: Identifiable, Equatable, Sendable {
 public struct InspectorView: View {
 	private let store: StoreOf<InspectorFeature>
 	private let onOpenAudioMixer: () -> Void
+	@Shared(.inspectorDisclosureState) private var disclosureState
 
 	public init(
 		store: StoreOf<InspectorFeature>,
@@ -110,6 +113,13 @@ public struct InspectorView: View {
 	) {
 		self.store = store
 		self.onOpenAudioMixer = onOpenAudioMixer
+	}
+
+	private func disclosure(_ keyPath: WritableKeyPath<InspectorDisclosureState, Bool>) -> Binding<Bool> {
+		Binding(
+			get: { disclosureState[keyPath: keyPath] },
+			set: { newValue in $disclosureState.withLock { $0[keyPath: keyPath] = newValue } }
+		)
 	}
 
 	public var body: some View {
@@ -122,28 +132,32 @@ public struct InspectorView: View {
 				LabeledContent("Path", value: selected.path)
 
 				if let summary = store.primSummary {
-					Section("Prim") {
+					DisclosureGroup(isExpanded: disclosure(\.primDataExpanded)) {
 						LabeledContent("Type", value: summary.typeName?.rawValue ?? "—")
 						LabeledContent("Active", value: summary.isActive ? "Yes" : "No")
 						LabeledContent("Visibility", value: summary.visibility?.rawValue ?? "—")
 						LabeledContent("Purpose", value: summary.purpose?.rawValue ?? "—")
 						LabeledContent("Kind", value: summary.kind?.rawValue ?? "—")
+					} label: {
+						Text("Prim").font(.headline)
 					}
 
 					if !summary.attributes.isEmpty {
-						Section("Authored Attributes") {
+						DisclosureGroup(isExpanded: disclosure(\.primAttributesExpanded)) {
 							ForEach(summary.attributes, id: \.name) { attribute in
 								LabeledContent(
 									attribute.name.rawValue,
 									value: attribute.value?.displayDescription ?? "—"
 								)
 							}
+						} label: {
+							Text("Authored Attributes").font(.headline)
 						}
 					}
 				}
 
 				if let transform = store.primTransform {
-					Section("Transform") {
+					DisclosureGroup(isExpanded: disclosure(\.transformExpanded)) {
 						TransformVectorEditor(label: "Position", vector: transform.position) { newValue in
 							store.send(.primTransformEdited(updateTransform(transform, position: newValue)))
 						}
@@ -153,11 +167,13 @@ public struct InspectorView: View {
 						TransformVectorEditor(label: "Scale", vector: transform.scale) { newValue in
 							store.send(.primTransformEdited(updateTransform(transform, scale: newValue)))
 						}
+					} label: {
+						Text("Transform").font(.headline)
 					}
 				}
 
 				if let binding = store.materialBinding {
-					Section("Material Binding") {
+					DisclosureGroup(isExpanded: disclosure(\.materialBindingsExpanded)) {
 						LabeledContent("Effective", value: binding.effectiveMaterialPath?.rawValue ?? "—")
 						if let source = binding.bindingSourcePrimPath {
 							LabeledContent("Inherited From", value: source.rawValue)
@@ -190,18 +206,22 @@ public struct InspectorView: View {
 								Text(strength.displayName).tag(strength)
 							}
 						}
+					} label: {
+						Text("Material Binding").font(.headline)
 					}
 
 					if !store.materialProperties.isEmpty {
-						Section("Material Properties") {
+						DisclosureGroup(isExpanded: disclosure(\.materialPropertiesExpanded)) {
 							ForEach(store.materialProperties, id: \.name) { property in
 								LabeledContent(property.name, value: describe(property.value))
 							}
+						} label: {
+							Text("Material Properties").font(.headline)
 						}
 					}
 				}
 
-				Section("References") {
+				DisclosureGroup(isExpanded: disclosure(\.referencesExpanded)) {
 					if store.primReferences.isEmpty {
 						Text("No authored references")
 							.foregroundStyle(.secondary)
@@ -225,10 +245,12 @@ public struct InspectorView: View {
 					AddReferenceRow { reference in
 						store.send(.addReferenceRequested(reference))
 					}
+				} label: {
+					Text("References").font(.headline)
 				}
 
 				if !store.primVariantSets.isEmpty {
-					Section("Variants") {
+					DisclosureGroup(isExpanded: disclosure(\.variantsExpanded)) {
 						ForEach(store.primVariantSets) { variantSet in
 							Picker(
 								variantSet.name.rawValue,
@@ -248,22 +270,26 @@ public struct InspectorView: View {
 								}
 							}
 						}
+					} label: {
+						Text("Variants").font(.headline)
 					}
 				}
 
 				if !store.primCompositionArcs.isEmpty {
-					Section("Composition") {
+					DisclosureGroup(isExpanded: disclosure(\.compositionExpanded)) {
 						ForEach(Array(store.primCompositionArcs.enumerated()), id: \.offset) { _, arc in
 							LabeledContent(
 								arc.kind.rawValue.capitalized,
 								value: arc.assetPath?.rawValue ?? arc.primPath?.rawValue ?? "—"
 							)
 						}
+					} label: {
+						Text("Composition").font(.headline)
 					}
 				}
 
 				if !store.primComponents.isEmpty {
-					Section("Components") {
+					DisclosureGroup(isExpanded: disclosure(\.componentsExpanded)) {
 						ForEach(store.primComponents) { component in
 							DisclosureGroup {
 								LabeledContent("Type", value: component.typeName)
@@ -285,15 +311,19 @@ public struct InspectorView: View {
 								LabeledContent(component.name, value: component.typeName)
 							}
 						}
+					} label: {
+						Text("Components").font(.headline)
 					}
 				}
 
 				let audioMixComponents = store.primComponents.filter { $0.typeName == "RealityKit.AudioMixGroups" }
 				if !audioMixComponents.isEmpty {
-					Section("Audio Mix Groups") {
+					DisclosureGroup(isExpanded: disclosure(\.audioMixGroupsExpanded)) {
 						ForEach(audioMixComponents) { component in
 							LabeledContent(component.name, value: component.path)
 						}
+					} label: {
+						Text("Audio Mix Groups").font(.headline)
 					}
 				}
 			} else {
@@ -301,18 +331,22 @@ public struct InspectorView: View {
 					.foregroundStyle(.secondary)
 
 				if let layer = store.layerData {
-					Section("Stage") {
+					DisclosureGroup(isExpanded: disclosure(\.layerDataExpanded)) {
 						LabeledContent("Up Axis", value: layer.upAxis.rawValue)
 						LabeledContent("Meters Per Unit", value: String(format: "%g", layer.metersPerUnit))
 						LabeledContent("Default Prim", value: layer.defaultPrim ?? "—")
+					} label: {
+						Text("Stage").font(.headline)
 					}
 				}
 
 				if !store.availableMaterials.isEmpty {
-					Section("Materials") {
+					DisclosureGroup(isExpanded: disclosure(\.materialsExpanded)) {
 						ForEach(store.availableMaterials) { material in
 							LabeledContent(material.name, value: material.path.rawValue)
 						}
+					} label: {
+						Text("Materials").font(.headline)
 					}
 				}
 			}
