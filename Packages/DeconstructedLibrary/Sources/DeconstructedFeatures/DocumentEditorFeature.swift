@@ -672,12 +672,20 @@ public struct DocumentEditorFeature {
 				}
 
 				// Keep thumbnails/scene graph in sync after inspector-authored USD edits.
+				// Also reload the viewport here: applyLiveTransform gives instant
+				// feedback when the entity is already mapped, but for prims authored
+				// in this session (newly-inserted primitives, etc.) the viewport's
+				// path→entity map may not yet include the path, so the live update
+				// silently no-ops. A camera-preserving reload after the debounced
+				// save guarantees disk truth ends up on screen.
 				if case .primTransformSaveSucceeded = inspectorAction,
 					case .scene(let tabID) = state.selectedTab,
 					let tab = state.openScenes[id: tabID]
 				{
-					// Do not reload the viewport here. The live update already happened.
-					return .send(.projectBrowser(.sceneModified(tab.fileURL)))
+					return .merge(
+						.send(.projectBrowser(.sceneModified(tab.fileURL))),
+						.send(.viewport(.loadRequested(commandID: uuid(), url: tab.fileURL, preserveCamera: true)))
+					)
 				}
 				return .none
 
