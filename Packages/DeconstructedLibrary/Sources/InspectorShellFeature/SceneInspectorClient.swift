@@ -128,10 +128,17 @@ public struct SceneInspectorClient: Sendable {
 
 extension SceneInspectorClient: DependencyKey {
 	/// Default live value. The shell runtime installs the OpenUSD-backed
-	/// implementation at app startup; see `DeconstructedShellRuntime`.
-	public static let liveValue: SceneInspectorClient = SceneInspectorClient()
+	/// implementation at app startup via
+	/// `prepareDependencies { $0.sceneInspector = .live }` in `AppFeature`.
+	///
+	/// IMPORTANT: If you see empty inspector data everywhere (no prims, no
+	/// transforms, writes silently no-op'ing), `AppFeature.liveDependenciesInstalled`
+	/// is not installing this override. Every shell-runtime adapter that
+	/// crosses the SwiftUsdShell boundary MUST be installed there — see
+	/// AGENTS.md "Shell-Runtime Dependency Installation".
+	public static var liveValue: SceneInspectorClient { SceneInspectorClient() }
 
-	public static let previewValue: SceneInspectorClient = SceneInspectorClient(
+	public static var previewValue: SceneInspectorClient { SceneInspectorClient(
 		stageMetadata: { _ in
 			SwiftUsdShell.USDStageMetadata(
 				upAxis: SwiftUsdShell.USDToken("Y"),
@@ -142,7 +149,7 @@ extension SceneInspectorClient: DependencyKey {
 		primTransform: { _, _ in
 			SwiftUsdShell.USDTransformData()
 		}
-	)
+	) }
 }
 
 extension DependencyValues {

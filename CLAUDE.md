@@ -70,6 +70,14 @@ Rule of thumb:
 - workflows, heuristics, packaging, conversion, and repair do not belong in `SwiftUsdShell` or `USDOperations`
 - avoid reintroducing dependencies on `USDTools` or legacy advanced modules into the public build path
 
+## Shell-Runtime Dependency Installation
+
+Any `@Dependency`-backed client whose live implementation lives in `DeconstructedShellRuntime` (because it needs Cxx/OpenUSD) MUST be installed in `AppFeature.liveDependenciesInstalled` via `prepareDependencies`. The `liveValue` defined in the shell-feature target is a stub.
+
+If the install is missed, the stub silently no-ops (or throws `runtimeUnavailable`), and writes appear to succeed while reads return empty data. This has bitten us twice (SceneInspectorClient, SceneEditClient). Prefer **throwing** stubs over no-op stubs so the failure surfaces loudly.
+
+When adding a new client following this pattern, the install line in `AppFeature` belongs in the same commit as the `+Live.swift` adapter. See `AGENTS.md` § "Shell-Runtime Dependency Installation" for the full pattern.
+
 ## Key Files
 
 - `DeconstructedApp.swift` - App entry, scenes

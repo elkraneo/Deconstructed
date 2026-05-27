@@ -92,6 +92,50 @@ Rules:
 
 See `Docs/SwiftUsdShell-Boundary-Manifesto.md` before changing USD package dependencies or migrating DTOs.
 
+## Shell-Runtime Dependency Installation
+
+This is a recurring footgun. Read this section before adding any new `@Dependency`-backed client that lives behind the SwiftUsdShell boundary.
+
+### The pattern
+
+Targets that do not link OpenUSD (e.g. `InspectorShellFeature`, `SceneGraphFeature`) declare a `DependencyKey` whose `liveValue` is a **safe stub**:
+
+- `SceneInspectorClient.liveValue` returns empty data (`{ _ in [] }`, etc.)
+- `SceneEditClient.liveValue` throws `runtimeUnavailable`
+
+The real OpenUSD-backed implementation lives in `DeconstructedShellRuntime` as a `static let live` extension (e.g. `SceneInspectorClient+Live.swift`, `SceneEditClient+Live.swift`). It is installed at app startup by `AppFeature.liveDependenciesInstalled`:
+
+```swift
+private static let liveDependenciesInstalled: Bool = {
+    prepareDependencies {
+        $0.sceneInspector = .live
+        $0.sceneEditClient = .live
+        // ← add new shell-runtime clients HERE
+    }
+    return true
+}()
+```
+
+### The footgun
+
+If you add a new shell-runtime client (interface in a non-Cxx target + `+Live.swift` in `DeconstructedShellRuntime`) and forget to wire `prepareDependencies`, the app will silently use the stub:
+
+- A stub that **throws** surfaces as a user-visible error ("OpenUSD scene editing runtime is not available.") — that's how the SceneEditClient bug was found.
+- A stub that **no-ops** is worse: writes appear to succeed, reads return empty data, and the bug looks like "the inspector is broken" rather than "the dependency isn't installed."
+
+### The rule
+
+When you add a new client following the SwiftUsdShell pattern:
+
+1. Define the interface + safe stub `liveValue` in the shell-feature target. Prefer **throwing** stubs over **silently empty** ones — the runtime will fail loudly when the install is missed.
+2. Add a `+Live.swift` adapter in `DeconstructedShellRuntime` that exposes a `static let live` (or `static var live`).
+3. **Install it in `AppFeature.liveDependenciesInstalled`.** Same commit as steps 1–2.
+4. Reference this section in the client's `liveValue` docstring so anyone tracing "why is data empty?" finds the install requirement.
+
+Use `static var` computed properties for `liveValue` / `testValue` / `previewValue` (per pfw-dependencies guidance), not `static let`.
+
+Never put a client behind `@Dependency` whose live implementation requires Cxx but whose `liveValue` is reached at runtime — that's the exact stub-failure trap.
+
 ## Reference Implementation
 
 Analyze this real RCP project for format details:
