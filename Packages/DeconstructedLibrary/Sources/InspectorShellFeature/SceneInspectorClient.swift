@@ -28,6 +28,9 @@ public struct SceneInspectorClient: Sendable {
 	public var deleteComponent: @Sendable (_ url: URL, _ componentPath: String) async throws -> Void
 	public var addPrimReference: @Sendable (_ url: URL, _ primPath: String, _ reference: SwiftUsdShell.USDReference) async throws -> Void
 	public var removePrimReference: @Sendable (_ url: URL, _ primPath: String, _ reference: SwiftUsdShell.USDReference) async throws -> Void
+	public var setDefaultPrim: @Sendable (_ url: URL, _ primPath: String) async throws -> Void
+	public var setMetersPerUnit: @Sendable (_ url: URL, _ value: Double) async throws -> Void
+	public var setUpAxis: @Sendable (_ url: URL, _ axis: String) async throws -> Void
 
 	public init(
 		stageMetadata: @escaping @Sendable (_ url: URL) async -> SwiftUsdShell.USDStageMetadata = { _ in
@@ -67,7 +70,10 @@ public struct SceneInspectorClient: Sendable {
 		setComponentActive: @escaping @Sendable (_ url: URL, _ componentPath: String, _ isActive: Bool) async throws -> Void = { _, _, _ in },
 		deleteComponent: @escaping @Sendable (_ url: URL, _ componentPath: String) async throws -> Void = { _, _ in },
 		addPrimReference: @escaping @Sendable (_ url: URL, _ primPath: String, _ reference: SwiftUsdShell.USDReference) async throws -> Void = { _, _, _ in },
-		removePrimReference: @escaping @Sendable (_ url: URL, _ primPath: String, _ reference: SwiftUsdShell.USDReference) async throws -> Void = { _, _, _ in }
+		removePrimReference: @escaping @Sendable (_ url: URL, _ primPath: String, _ reference: SwiftUsdShell.USDReference) async throws -> Void = { _, _, _ in },
+		setDefaultPrim: @escaping @Sendable (_ url: URL, _ primPath: String) async throws -> Void = { _, _ in },
+		setMetersPerUnit: @escaping @Sendable (_ url: URL, _ value: Double) async throws -> Void = { _, _ in },
+		setUpAxis: @escaping @Sendable (_ url: URL, _ axis: String) async throws -> Void = { _, _ in }
 	) {
 		self.stageMetadata = stageMetadata
 		self.primTransform = primTransform
@@ -87,6 +93,9 @@ public struct SceneInspectorClient: Sendable {
 		self.deleteComponent = deleteComponent
 		self.addPrimReference = addPrimReference
 		self.removePrimReference = removePrimReference
+		self.setDefaultPrim = setDefaultPrim
+		self.setMetersPerUnit = setMetersPerUnit
+		self.setUpAxis = setUpAxis
 	}
 }
 

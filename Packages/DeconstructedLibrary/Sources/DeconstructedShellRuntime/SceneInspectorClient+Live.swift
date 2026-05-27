@@ -66,6 +66,15 @@ extension SceneInspectorClient {
 		},
 		removePrimReference: { url, primPath, reference in
 			try DeconstructedShellRuntime.removePrimReference(url: url, primPath: primPath, reference: reference)
+		},
+		setDefaultPrim: { url, primPath in
+			try DeconstructedShellRuntime.setDefaultPrim(url: url, primPath: primPath)
+		},
+		setMetersPerUnit: { url, value in
+			try DeconstructedShellRuntime.setMetersPerUnit(url: url, value: value)
+		},
+		setUpAxis: { url, axis in
+			try DeconstructedShellRuntime.setUpAxis(url: url, axis: axis)
 		}
 	)
 }

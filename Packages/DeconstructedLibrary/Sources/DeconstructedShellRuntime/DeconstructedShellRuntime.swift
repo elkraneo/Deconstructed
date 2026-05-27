@@ -451,6 +451,20 @@ public enum DeconstructedShellRuntime {
 		)
 	}
 
+	// MARK: - Stage Metadata Writes
+
+	public static func setDefaultPrim(url: URL, primPath: String) throws {
+		try DeconstructedUSDInterop.setDefaultPrim(url: url, primPath: primPath)
+	}
+
+	public static func setMetersPerUnit(url: URL, value: Double) throws {
+		try DeconstructedUSDInterop.setMetersPerUnit(url: url, value: value)
+	}
+
+	public static func setUpAxis(url: URL, axis: String) throws {
+		try DeconstructedUSDInterop.setUpAxis(url: url, axis: axis)
+	}
+
 	// MARK: - Material Edits
 
 	/// Executes a material edit request.

@@ -340,9 +340,48 @@ public struct InspectorView: View {
 
 				if let layer = store.layerData {
 					DisclosureGroup(isExpanded: disclosure(\.layerDataExpanded)) {
-						LabeledContent("Up Axis", value: layer.upAxis.rawValue)
-						LabeledContent("Meters Per Unit", value: String(format: "%g", layer.metersPerUnit))
-						LabeledContent("Default Prim", value: layer.defaultPrim ?? "—")
+						Picker(
+							"Up Axis",
+							selection: Binding(
+								get: { layer.upAxis.rawValue },
+								set: { store.send(.setUpAxisRequested($0)) }
+							)
+						) {
+							Text("Y").tag("Y")
+							Text("Z").tag("Z")
+						}
+
+						LabeledContent("Meters Per Unit") {
+							TextField(
+								"",
+								value: Binding(
+									get: { layer.metersPerUnit },
+									set: { store.send(.setMetersPerUnitRequested($0)) }
+								),
+								format: .number.precision(.fractionLength(0...4))
+							)
+							.textFieldStyle(.roundedBorder)
+							.frame(minWidth: 80)
+						}
+
+						Picker(
+							"Default Prim",
+							selection: Binding(
+								get: { layer.defaultPrim ?? "" },
+								set: { newValue in
+									if !newValue.isEmpty {
+										store.send(.setDefaultPrimRequested(newValue))
+									}
+								}
+							)
+						) {
+							if layer.defaultPrim == nil {
+								Text("—").tag("")
+							}
+							ForEach(layer.availablePrims, id: \.self) { prim in
+								Text(prim).tag(prim)
+							}
+						}
 					} label: {
 						Text("Stage").font(.headline)
 					}

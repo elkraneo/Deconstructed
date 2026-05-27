@@ -189,6 +189,10 @@ public struct InspectorFeature {
 		case addReferenceRequested(SwiftUsdShell.USDReference)
 		case removeReferenceRequested(SwiftUsdShell.USDReference)
 		case referenceWriteFailed(String)
+		case setDefaultPrimRequested(String)
+		case setMetersPerUnitRequested(Double)
+		case setUpAxisRequested(String)
+		case stageMetadataWriteFailed(String)
 		case setMaterialBindingSucceeded
 		case setMaterialBindingStrengthSucceeded
 		case primReferencesEditSucceeded
@@ -461,6 +465,43 @@ public struct InspectorFeature {
 				}
 
 			case .referenceWriteFailed(let message):
+				state.errorMessage = message
+				return .none
+
+			case .setDefaultPrimRequested(let primPath):
+				guard let url = state.sceneURL else { return .none }
+				return .run { [sceneInspector] send in
+					do {
+						try await sceneInspector.setDefaultPrim(url, primPath)
+						await send(.loadSceneMetadataRequested(url))
+					} catch {
+						await send(.stageMetadataWriteFailed(error.localizedDescription))
+					}
+				}
+
+			case .setMetersPerUnitRequested(let value):
+				guard let url = state.sceneURL else { return .none }
+				return .run { [sceneInspector] send in
+					do {
+						try await sceneInspector.setMetersPerUnit(url, value)
+						await send(.loadSceneMetadataRequested(url))
+					} catch {
+						await send(.stageMetadataWriteFailed(error.localizedDescription))
+					}
+				}
+
+			case .setUpAxisRequested(let axis):
+				guard let url = state.sceneURL else { return .none }
+				return .run { [sceneInspector] send in
+					do {
+						try await sceneInspector.setUpAxis(url, axis)
+						await send(.loadSceneMetadataRequested(url))
+					} catch {
+						await send(.stageMetadataWriteFailed(error.localizedDescription))
+					}
+				}
+
+			case .stageMetadataWriteFailed(let message):
 				state.errorMessage = message
 				return .none
 
