@@ -202,6 +202,7 @@ public struct InspectorFeature {
 			attributeName: String,
 			valueLiteral: String
 		)
+		case setComponentParameterSucceeded(componentPath: String)
 		case componentParameterWriteFailed(String)
 		case addComponentRequested(componentName: String, componentIdentifier: String)
 		case addComponentWriteFailed(String)
@@ -524,11 +525,15 @@ public struct InspectorFeature {
 				return .run { [sceneInspector] send in
 					do {
 						try await sceneInspector.setComponentParameter(url, componentPath, attributeType, attributeName, valueLiteral)
+						await send(.setComponentParameterSucceeded(componentPath: componentPath))
 						await send(.loadPrimComponentsRequested(url, primPath: primPath))
 					} catch {
 						await send(.componentParameterWriteFailed(error.localizedDescription))
 					}
 				}
+
+			case .setComponentParameterSucceeded:
+				return .none
 
 			case .componentParameterWriteFailed(let message):
 				state.errorMessage = message

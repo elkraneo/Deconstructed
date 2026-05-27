@@ -994,9 +994,21 @@ public struct InspectorView: View {
 	}
 
 	public var body: some View {
-		ScrollView {
-			content
-				.padding()
+		VStack(spacing: 0) {
+			ScrollView {
+				content
+					.padding()
+			}
+
+			if store.selectedNodeID != nil {
+				Divider()
+				AddComponentRow { name, identifier in
+					store.send(.addComponentRequested(componentName: name, componentIdentifier: identifier))
+				}
+				.padding(.horizontal, 12)
+				.padding(.vertical, 8)
+				.background(.thinMaterial)
+			}
 		}
 	}
 
@@ -1188,9 +1200,6 @@ public struct InspectorView: View {
 								onOpenAudioMixer: onOpenAudioMixer
 							)
 						}
-					}
-					AddComponentRow { name, identifier in
-						store.send(.addComponentRequested(componentName: name, componentIdentifier: identifier))
 					}
 				} label: {
 					Text("Components").font(.headline)

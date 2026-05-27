@@ -659,6 +659,18 @@ public struct DocumentEditorFeature {
 					)
 				}
 
+				// Component parameter edits (e.g. HierarchicalFade.opacity, MeshSorting.depthPass)
+				// need a camera-preserving viewport reload so the visual updates.
+				if case .setComponentParameterSucceeded = inspectorAction,
+				   case .scene(let tabID) = state.selectedTab,
+				   let tab = state.openScenes[id: tabID]
+				{
+					return .merge(
+						.send(.projectBrowser(.sceneModified(tab.fileURL))),
+						.send(.viewport(.loadRequested(commandID: uuid(), url: tab.fileURL, preserveCamera: true)))
+					)
+				}
+
 				// Keep thumbnails/scene graph in sync after inspector-authored USD edits.
 				if case .primTransformSaveSucceeded = inspectorAction,
 					case .scene(let tabID) = state.selectedTab,
