@@ -40,6 +40,32 @@ public struct SceneLayerData: Equatable, Sendable {
 	}
 }
 
+public struct ShellScenePlaybackData: Equatable, Sendable {
+	public var startTimeCode: Double
+	public var endTimeCode: Double
+	public var timeCodesPerSecond: Double
+	public var autoPlay: Bool?
+	public var animationTrackCount: Int
+
+	public init(
+		startTimeCode: Double = 0,
+		endTimeCode: Double = 0,
+		timeCodesPerSecond: Double = 24,
+		autoPlay: Bool? = nil,
+		animationTrackCount: Int = 0
+	) {
+		self.startTimeCode = startTimeCode
+		self.endTimeCode = endTimeCode
+		self.timeCodesPerSecond = timeCodesPerSecond
+		self.autoPlay = autoPlay
+		self.animationTrackCount = animationTrackCount
+	}
+
+	public var hasTimeline: Bool {
+		endTimeCode > startTimeCode || animationTrackCount > 0
+	}
+}
+
 public struct InspectorAuthoredAttribute: Equatable, Sendable, Identifiable {
 	public var id: String { name }
 	public var name: String
@@ -114,6 +140,10 @@ public struct InspectorFeature {
 		public var componentAuthoredAttributesByPath: [String: [InspectorAuthoredAttribute]]
 		public var componentDescendantAttributesByPath: [String: [ComponentDescendantAttributes]]
 		public var meshSortingGroupMembers: [String]
+		public var playbackData: ShellScenePlaybackData?
+		public var playbackCurrentTime: Double
+		public var isPlaying: Bool
+		public var playbackSpeed: Double
 		public var errorMessage: String?
 
 		public init(
@@ -133,6 +163,10 @@ public struct InspectorFeature {
 			componentAuthoredAttributesByPath: [String: [InspectorAuthoredAttribute]] = [:],
 			componentDescendantAttributesByPath: [String: [ComponentDescendantAttributes]] = [:],
 			meshSortingGroupMembers: [String] = [],
+			playbackData: ShellScenePlaybackData? = nil,
+			playbackCurrentTime: Double = 0,
+			isPlaying: Bool = false,
+			playbackSpeed: Double = 1,
 			errorMessage: String? = nil
 		) {
 			self.sceneURL = sceneURL
@@ -151,6 +185,10 @@ public struct InspectorFeature {
 			self.componentAuthoredAttributesByPath = componentAuthoredAttributesByPath
 			self.componentDescendantAttributesByPath = componentDescendantAttributesByPath
 			self.meshSortingGroupMembers = meshSortingGroupMembers
+			self.playbackData = playbackData
+			self.playbackCurrentTime = playbackCurrentTime
+			self.isPlaying = isPlaying
+			self.playbackSpeed = playbackSpeed
 			self.errorMessage = errorMessage
 		}
 
@@ -202,6 +240,10 @@ public struct InspectorFeature {
 		case removeAnimationLibraryResourceRequested(componentPath: String, resourcePrimPath: String)
 		case removeAnimationLibraryResourceSucceeded(componentPath: String)
 		case removeAnimationLibraryResourceFailed(String)
+		case playbackPlayPauseRequested
+		case playbackStopRequested
+		case playbackScrubRequested(time: Double, isEditing: Bool)
+		case playbackTick(deltaSeconds: Double)
 		case primTransformEdited(SwiftUsdShell.USDTransformData)
 		case persistPrimTransformRequested(URL, primPath: String, transform: SwiftUsdShell.USDTransformData)
 		case primTransformPersistFailed(String)
@@ -257,6 +299,18 @@ public struct InspectorFeature {
 
 	private enum CancelID: Hashable {
 		case persistTransform
+		case playbackTicker
+	}
+
+	private func startPlaybackTickerEffect() -> Effect<Action> {
+		.run { [clock] send in
+			let interval: Duration = .milliseconds(33)
+			let deltaSeconds = 0.033
+			for await _ in clock.timer(interval: interval) {
+				await send(.playbackTick(deltaSeconds: deltaSeconds))
+			}
+		}
+		.cancellable(id: CancelID.playbackTicker, cancelInFlight: true)
 	}
 
 	@Dependency(\.sceneInspector) var sceneInspector
@@ -711,7 +765,20 @@ public struct InspectorFeature {
 					metersPerUnit: metadata.metersPerUnit ?? 1,
 					upAxis: upAxis
 				)
-				return .none
+				let playback = ShellScenePlaybackData(
+					startTimeCode: metadata.startTimeCode ?? 0,
+					endTimeCode: metadata.endTimeCode ?? 0,
+					timeCodesPerSecond: metadata.timeCodesPerSecond ?? 24,
+					autoPlay: metadata.autoPlay,
+					animationTrackCount: metadata.animationTracks.count
+				)
+				state.playbackData = playback
+				state.playbackCurrentTime = playback.startTimeCode
+				let shouldAutoPlay = (playback.autoPlay ?? false) && playback.hasTimeline
+				state.isPlaying = shouldAutoPlay
+				return shouldAutoPlay
+					? startPlaybackTickerEffect()
+					: .cancel(id: CancelID.playbackTicker)
 
 			case .setRawComponentAttributeRequested:
 				state.errorMessage = "Inspector editing requires the SwiftUsdShell runtime adapter."
@@ -797,6 +864,45 @@ public struct InspectorFeature {
 
 			case .removeAnimationLibraryResourceFailed(let message):
 				state.errorMessage = "Failed to remove animation resource: \(message)"
+				return .none
+
+			case .playbackPlayPauseRequested:
+				guard let playback = state.playbackData, playback.hasTimeline else { return .none }
+				state.isPlaying.toggle()
+				if state.isPlaying {
+					if state.playbackCurrentTime >= playback.endTimeCode {
+						state.playbackCurrentTime = playback.startTimeCode
+					}
+					return startPlaybackTickerEffect()
+				} else {
+					return .cancel(id: CancelID.playbackTicker)
+				}
+
+			case .playbackStopRequested:
+				state.isPlaying = false
+				state.playbackCurrentTime = state.playbackData?.startTimeCode ?? 0
+				return .cancel(id: CancelID.playbackTicker)
+
+			case .playbackScrubRequested(let time, let isEditing):
+				guard let playback = state.playbackData else { return .none }
+				let clamped = min(max(time, playback.startTimeCode), playback.endTimeCode)
+				state.playbackCurrentTime = clamped
+				if isEditing && state.isPlaying {
+					state.isPlaying = false
+					return .cancel(id: CancelID.playbackTicker)
+				}
+				return .none
+
+			case .playbackTick(let deltaSeconds):
+				guard let playback = state.playbackData, state.isPlaying else { return .none }
+				let advance = deltaSeconds * playback.timeCodesPerSecond * state.playbackSpeed
+				let next = state.playbackCurrentTime + advance
+				if next >= playback.endTimeCode {
+					state.playbackCurrentTime = playback.endTimeCode
+					state.isPlaying = false
+					return .cancel(id: CancelID.playbackTicker)
+				}
+				state.playbackCurrentTime = next
 				return .none
 
 			case .setMaterialBindingSucceeded,

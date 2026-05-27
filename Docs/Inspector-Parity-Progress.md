@@ -54,7 +54,7 @@ These touch the same shell-feature + runtime + interop files; do them in one swe
 
 ## Phase 4 — Scene Playback section
 
-- [ ] **P4-A** Port `ScenePlaybackSection` from orphan (`InspectorUI/InspectorView.swift:3872`) into shell. Needs:
+- [x] **P4-A** Port `ScenePlaybackSection` from orphan (`InspectorUI/InspectorView.swift:3872`) into shell. Needs:
 	- Shell state: `playbackData: ScenePlaybackData?`, `playbackCurrentTime: Double`, `isPlaying: Bool`, `playbackSpeed: Double` (model already exists in `InspectorModels.ScenePlaybackData`).
 	- New actions: `playbackPlayPauseRequested`, `playbackStopRequested`, `playbackScrubRequested(time:isEditing:)`.
 	- Stage metadata RPC must surface `startTimeCode` / `endTimeCode` / `timeCodesPerSecond` / `autoPlay` — likely already in `SwiftUsdShell.USDStageMetadata`. Verify and wire.

@@ -1895,6 +1895,75 @@ private func currentDepthPass(in summary: SwiftUsdShell.USDPrimSummary?) -> Stri
 	return trimmed
 }
 
+private struct ScenePlaybackSection: View {
+	let playback: ShellScenePlaybackData
+	let isPlaying: Bool
+	let currentTime: Double
+	let onPlayPause: () -> Void
+	let onStop: () -> Void
+	let onScrub: (Double, Bool) -> Void
+
+	private var isEnabled: Bool { playback.hasTimeline }
+	private var startTime: Double { playback.startTimeCode }
+	private var endTime: Double { max(playback.endTimeCode, startTime) }
+	private var fps: Double {
+		playback.timeCodesPerSecond > 0 ? playback.timeCodesPerSecond : 24
+	}
+
+	private func formatFrame(_ time: Double) -> String {
+		String(format: "%.0f", time * fps)
+	}
+
+	var body: some View {
+		VStack(alignment: .leading, spacing: 10) {
+			HStack(spacing: 10) {
+				Button(action: onPlayPause) {
+					Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+						.font(.system(size: 12, weight: .semibold))
+						.frame(width: 18, height: 18)
+				}
+				.buttonStyle(.plain)
+
+				Button(action: onStop) {
+					Image(systemName: "stop.fill")
+						.font(.system(size: 10, weight: .semibold))
+						.frame(width: 18, height: 18)
+				}
+				.buttonStyle(.plain)
+
+				VStack(spacing: 2) {
+					Slider(
+						value: Binding(
+							get: { currentTime },
+							set: { onScrub($0, false) }
+						),
+						in: startTime...max(startTime + 0.001, endTime),
+						onEditingChanged: { isEditing in
+							onScrub(currentTime, isEditing)
+						}
+					)
+					.controlSize(.small)
+
+					HStack {
+						Text(formatFrame(currentTime))
+						Spacer()
+						Text(formatFrame(endTime))
+					}
+					.font(.caption2.monospacedDigit())
+					.foregroundStyle(.secondary)
+				}
+			}
+			.disabled(!isEnabled)
+
+			if !isEnabled {
+				Text("No timeline range found in the USD.")
+					.font(.caption2)
+					.foregroundStyle(.secondary)
+			}
+		}
+	}
+}
+
 private struct MeshSortingGroupSection: View {
 	let depthPass: String
 	let members: [String]
@@ -2681,6 +2750,23 @@ public struct InspectorView: View {
 			} else {
 				Text("No selection")
 					.foregroundStyle(.secondary)
+
+				if let playback = store.playbackData {
+					DisclosureGroup(isExpanded: disclosure(\.scenePlaybackExpanded)) {
+						ScenePlaybackSection(
+							playback: playback,
+							isPlaying: store.isPlaying,
+							currentTime: store.playbackCurrentTime,
+							onPlayPause: { store.send(.playbackPlayPauseRequested) },
+							onStop: { store.send(.playbackStopRequested) },
+							onScrub: { time, isEditing in
+								store.send(.playbackScrubRequested(time: time, isEditing: isEditing))
+							}
+						)
+					} label: {
+						Text("Scene Playback").font(.headline)
+					}
+				}
 
 				if let layer = store.layerData {
 					DisclosureGroup(isExpanded: disclosure(\.layerDataExpanded)) {
