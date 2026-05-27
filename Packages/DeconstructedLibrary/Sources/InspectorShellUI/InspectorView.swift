@@ -131,6 +131,26 @@ private struct ComponentEditorRow: View {
 				component: component,
 				onParameterChange: onDescendantChange
 			)
+		case "RCP.BehaviorsContainer":
+			BehaviorsEditor(
+				component: component,
+				onParameterChange: onDescendantChange
+			)
+		case "RealityKit.RigidBody", "RealityKit.PhysicsBody":
+			PhysicsBodyEditor(
+				component: component,
+				onParameterChange: onDescendantChange
+			)
+		case "RealityKit.VFXEmitter":
+			ParticleEmitterEditor(
+				component: component,
+				onParameterChange: onDescendantChange
+			)
+		case "RealityKit.CustomDockingRegion":
+			CustomDockingRegionEditor(
+				component: component,
+				onParameterChange: onDescendantChange
+			)
 		default:
 			if !component.descendants.isEmpty {
 				GenericDescendantEditor(
@@ -519,6 +539,482 @@ private struct AnimationLibraryEditor: View {
 				.buttonStyle(.plain)
 				.disabled(selectedResourcePath == nil)
 
+				Spacer()
+			}
+		}
+	}
+}
+
+// MARK: - Behaviors Editor
+
+private struct BehaviorsEditor: View {
+	let component: InspectorComponentSummary
+	let onParameterChange: (_ targetPrimPath: String, _ attributeType: String, _ attributeName: String, _ valueLiteral: String) -> Void
+
+	private struct BehaviorModel: Identifiable {
+		let id: String
+		let path: String
+		let title: String
+		let triggerPath: String?
+		let triggerType: String?
+		let colliders: [String]
+		let actionPath: String?
+		let actionType: String?
+		let notificationIdentifier: String?
+	}
+
+	private let triggerTypes = ["TapGesture", "Collide", "AddedToScene", "Notification"]
+	private let actionTypes = ["PlayTimeline"]
+
+	private func triggerLabel(_ type: String) -> String {
+		switch type {
+		case "TapGesture": return "On Tap"
+		case "Collide": return "On Collide"
+		case "AddedToScene": return "On Added"
+		case "Notification": return "On Notification"
+		default: return type
+		}
+	}
+
+	private func parseColliderCSV(_ input: String) -> [String] {
+		input
+			.replacingOccurrences(of: "<", with: "")
+			.replacingOccurrences(of: ">", with: "")
+			.split(separator: ",", omittingEmptySubsequences: true)
+			.map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+			.filter { !$0.isEmpty }
+	}
+
+	private func formatColliderTargets(_ paths: [String]) -> String {
+		let targets = paths.map { "<\($0)>" }
+		switch targets.count {
+		case 0: return "None"
+		case 1: return targets[0]
+		default: return "[\(targets.joined(separator: ", "))]"
+		}
+	}
+
+	private func parseBehaviors() -> [BehaviorModel] {
+		var drafts: [String: BehaviorModel] = [:]
+		var order: [String] = []
+		for descendant in component.descendants {
+			let p = descendant.path
+			let (behaviorPath, kind): (String, String) = {
+				if p.hasSuffix("/Trigger") { return (String(p.dropLast("/Trigger".count)), "trigger") }
+				if p.hasSuffix("/Action") { return (String(p.dropLast("/Action".count)), "action") }
+				return (p, "behavior")
+			}()
+			let attrs = Dictionary(uniqueKeysWithValues: descendant.authoredAttributes.map { ($0.name, $0.value) })
+			if drafts[behaviorPath] == nil {
+				let title = behaviorPath.split(separator: "/").last.map(String.init) ?? descendant.name
+				drafts[behaviorPath] = BehaviorModel(
+					id: behaviorPath, path: behaviorPath, title: title,
+					triggerPath: nil, triggerType: nil, colliders: [],
+					actionPath: nil, actionType: nil, notificationIdentifier: nil
+				)
+				order.append(behaviorPath)
+			}
+			guard var m = drafts[behaviorPath] else { continue }
+			switch kind {
+			case "trigger":
+				let tt = stripUSDQuotes(attrs["info:id"] ?? "")
+				let cols = parseColliderCSV(attrs["colliders"] ?? "")
+				let id = stripUSDQuotes(attrs["identifier"] ?? "")
+				m = BehaviorModel(id: m.id, path: m.path, title: m.title,
+					triggerPath: p, triggerType: tt.isEmpty ? "TapGesture" : tt,
+					colliders: cols, actionPath: m.actionPath, actionType: m.actionType,
+					notificationIdentifier: id.isEmpty ? nil : id)
+			case "action":
+				let at = stripUSDQuotes(attrs["info:id"] ?? "")
+				m = BehaviorModel(id: m.id, path: m.path, title: m.title,
+					triggerPath: m.triggerPath, triggerType: m.triggerType, colliders: m.colliders,
+					actionPath: p, actionType: at.isEmpty ? "PlayTimeline" : at,
+					notificationIdentifier: m.notificationIdentifier)
+			default: break
+			}
+			drafts[behaviorPath] = m
+		}
+		return order.compactMap { drafts[$0] }
+	}
+
+	var body: some View {
+		let behaviors = parseBehaviors()
+		VStack(alignment: .leading, spacing: 8) {
+			if behaviors.isEmpty {
+				Text("No behaviors authored yet.").font(.system(size: 11)).foregroundStyle(.secondary)
+			} else {
+				ForEach(behaviors) { behavior in
+					VStack(alignment: .leading, spacing: 6) {
+						Text(behavior.title).font(.system(size: 11, weight: .semibold))
+						if let triggerPath = behavior.triggerPath {
+							LabeledContent("Trigger") {
+								Picker("", selection: Binding(
+									get: { behavior.triggerType ?? "TapGesture" },
+									set: { onParameterChange(triggerPath, "token", "info:id", quoteUSDString($0)) }
+								)) {
+									ForEach(triggerTypes, id: \.self) { t in Text(triggerLabel(t)).tag(t) }
+								}
+								.labelsHidden()
+							}
+							if behavior.triggerType == "Collide" {
+								LabeledContent("Colliders") {
+									TextField("/Root/A, /Root/B", text: Binding(
+										get: { behavior.colliders.joined(separator: ", ") },
+										set: { onParameterChange(triggerPath, "rel", "colliders", formatColliderTargets(parseColliderCSV($0))) }
+									))
+									.textFieldStyle(.roundedBorder)
+								}
+							}
+							if behavior.triggerType == "Notification" {
+								LabeledContent("Identifier") {
+									TextField("", text: Binding(
+										get: { behavior.notificationIdentifier ?? "" },
+										set: { onParameterChange(triggerPath, "string", "identifier", quoteUSDString($0)) }
+									))
+									.textFieldStyle(.roundedBorder)
+								}
+							}
+						}
+						if let actionPath = behavior.actionPath {
+							LabeledContent("Action") {
+								Picker("", selection: Binding(
+									get: { behavior.actionType ?? "PlayTimeline" },
+									set: { onParameterChange(actionPath, "token", "info:id", quoteUSDString($0)) }
+								)) {
+									ForEach(actionTypes, id: \.self) { a in Text(a).tag(a) }
+								}
+								.labelsHidden()
+							}
+						}
+					}
+					.padding(8)
+					.background(.quaternary.opacity(0.35))
+					.clipShape(RoundedRectangle(cornerRadius: 6))
+				}
+			}
+
+			// NOTE: Creating new behavior prims requires runtime support that's not
+			// yet wired through the shell. The Add menu writes a placeholder
+			// `_addBehavior` attribute on the component path — the adapter currently
+			// no-ops on unknown attribute names, so this is purely an intent signal
+			// until the runtime gains a real createBehavior endpoint.
+			Menu {
+				ForEach(triggerTypes, id: \.self) { t in
+					Button("Add \(triggerLabel(t))") {
+						onParameterChange(component.path, "string", "_addBehavior", quoteUSDString(t))
+					}
+				}
+			} label: {
+				Label("Add Behavior", systemImage: "plus.circle")
+					.font(.system(size: 11, weight: .semibold))
+			}
+			.menuStyle(.borderlessButton)
+		}
+	}
+}
+
+// MARK: - Physics Body Editor
+
+private struct PhysicsBodyEditor: View {
+	let component: InspectorComponentSummary
+	let onParameterChange: (_ targetPrimPath: String, _ attributeType: String, _ attributeName: String, _ valueLiteral: String) -> Void
+
+	@State private var materialExpanded = true
+	@State private var massExpanded = true
+	@State private var centerOfMassExpanded = false
+	@State private var lockingExpanded = false
+
+	private func value(_ name: String) -> String? {
+		component.authoredAttributes.first { $0.name == name }?.value
+	}
+
+	private func parseVec3(_ s: String?) -> SIMD3<Double> {
+		guard let s else { return .zero }
+		let parts = s.trimmingCharacters(in: CharacterSet(charactersIn: "() "))
+			.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+		guard parts.count == 3, let x = Double(parts[0]), let y = Double(parts[1]), let z = Double(parts[2]) else { return .zero }
+		return SIMD3(x, y, z)
+	}
+
+	private func parseQuat(_ s: String?) -> SIMD4<Double> {
+		guard let s else { return SIMD4(0, 0, 0, 1) }
+		let parts = s.trimmingCharacters(in: CharacterSet(charactersIn: "() "))
+			.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+		guard parts.count == 4, let x = Double(parts[0]), let y = Double(parts[1]), let z = Double(parts[2]), let w = Double(parts[3]) else { return SIMD4(0, 0, 0, 1) }
+		return SIMD4(x, y, z, w)
+	}
+
+	private func scalarField(_ name: String, type: String, label: String) -> some View {
+		LabeledContent(label) {
+			TextField("", value: Binding(
+				get: { Double(value(name) ?? "0") ?? 0 },
+				set: { onParameterChange(component.path, type, name, String($0)) }
+			), format: .number.precision(.fractionLength(0...3)))
+			.textFieldStyle(.roundedBorder)
+			.frame(width: 90)
+		}
+	}
+
+	private func lockToggle(_ name: String) -> Binding<Bool> {
+		Binding(
+			get: { value(name).flatMap(parseBool) ?? false },
+			set: { onParameterChange(component.path, "bool", name, $0 ? "true" : "false") }
+		)
+	}
+
+	var body: some View {
+		VStack(alignment: .leading, spacing: 0) {
+			PhysicsSubsection(title: "Physics Material", isExpanded: $materialExpanded) {
+				scalarField("staticFriction", type: "float", label: "Static Friction")
+				scalarField("dynamicFriction", type: "float", label: "Dynamic Friction")
+				scalarField("restitution", type: "float", label: "Restitution")
+			}
+			PhysicsSubsection(title: "Mass Properties", isExpanded: $massExpanded) {
+				scalarField("mass", type: "float", label: "Mass (kg)")
+				PhysicsVector3Row(label: "Inertia", unit: "kg·m²", value: parseVec3(value("inertia"))) { v in
+					onParameterChange(component.path, "float3", "inertia", String(format: "(%.3g, %.3g, %.3g)", v.x, v.y, v.z))
+				}
+				PhysicsSubsection(title: "Center of Mass", isExpanded: $centerOfMassExpanded) {
+					PhysicsVector3Row(label: "Position", unit: "m", value: parseVec3(value("centerOfMass"))) { v in
+						onParameterChange(component.path, "float3", "centerOfMass", String(format: "(%.3g, %.3g, %.3g)", v.x, v.y, v.z))
+					}
+					PhysicsQuatRow(label: "Orientation", value: parseQuat(value("centerOfMassOrientation"))) { v in
+						onParameterChange(component.path, "quatf", "centerOfMassOrientation", String(format: "(%.3g, %.3g, %.3g, %.3g)", v.x, v.y, v.z, v.w))
+					}
+				}
+			}
+			PhysicsSubsection(title: "Movement Locking", isExpanded: $lockingExpanded) {
+				LabeledContent("Translation") {
+					HStack(spacing: 12) {
+						Toggle("X", isOn: lockToggle("lockTranslationX"))
+						Toggle("Y", isOn: lockToggle("lockTranslationY"))
+						Toggle("Z", isOn: lockToggle("lockTranslationZ"))
+					}
+				}
+				LabeledContent("Rotation") {
+					HStack(spacing: 12) {
+						Toggle("X", isOn: lockToggle("lockRotationX"))
+						Toggle("Y", isOn: lockToggle("lockRotationY"))
+						Toggle("Z", isOn: lockToggle("lockRotationZ"))
+					}
+				}
+			}
+		}
+	}
+}
+
+private struct PhysicsSubsection<Content: View>: View {
+	let title: String
+	@Binding var isExpanded: Bool
+	@ViewBuilder let content: () -> Content
+
+	var body: some View {
+		VStack(alignment: .leading, spacing: 6) {
+			Button {
+				isExpanded.toggle()
+			} label: {
+				HStack(spacing: 6) {
+					Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+						.font(.system(size: 9)).foregroundStyle(.secondary)
+					Text(title).font(.system(size: 11, weight: .semibold))
+					Spacer()
+				}
+			}
+			.buttonStyle(.plain)
+			if isExpanded { content() }
+		}
+		.padding(.vertical, 4)
+	}
+}
+
+private struct PhysicsVector3Row: View {
+	let label: String
+	let unit: String?
+	let value: SIMD3<Double>
+	let onChange: (SIMD3<Double>) -> Void
+
+	var body: some View {
+		LabeledContent(unit.map { "\(label) (\($0))" } ?? label) {
+			HStack(spacing: 6) {
+				PhysicsAxis(label: "X", value: value.x) { onChange(SIMD3($0, value.y, value.z)) }
+				PhysicsAxis(label: "Y", value: value.y) { onChange(SIMD3(value.x, $0, value.z)) }
+				PhysicsAxis(label: "Z", value: value.z) { onChange(SIMD3(value.x, value.y, $0)) }
+			}
+		}
+	}
+}
+
+private struct PhysicsQuatRow: View {
+	let label: String
+	let value: SIMD4<Double>
+	let onChange: (SIMD4<Double>) -> Void
+
+	var body: some View {
+		LabeledContent(label) {
+			HStack(spacing: 6) {
+				PhysicsAxis(label: "X", value: value.x) { onChange(SIMD4($0, value.y, value.z, value.w)) }
+				PhysicsAxis(label: "Y", value: value.y) { onChange(SIMD4(value.x, $0, value.z, value.w)) }
+				PhysicsAxis(label: "Z", value: value.z) { onChange(SIMD4(value.x, value.y, $0, value.w)) }
+				PhysicsAxis(label: "W", value: value.w) { onChange(SIMD4(value.x, value.y, value.z, $0)) }
+			}
+		}
+	}
+}
+
+private struct PhysicsAxis: View {
+	let label: String
+	let value: Double
+	let onChange: (Double) -> Void
+
+	var body: some View {
+		VStack(spacing: 2) {
+			Text(label).font(.system(size: 9)).foregroundStyle(.secondary)
+			TextField("", value: Binding(get: { value }, set: onChange),
+				format: .number.precision(.fractionLength(0...3)))
+				.textFieldStyle(.roundedBorder)
+				.frame(width: 44)
+		}
+	}
+}
+
+// MARK: - Particle Emitter Editor
+
+private struct ParticleEmitterEditor: View {
+	let component: InspectorComponentSummary
+	let onParameterChange: (_ targetPrimPath: String, _ attributeType: String, _ attributeName: String, _ valueLiteral: String) -> Void
+
+	private var currentStateValue: String? {
+		component.authoredAttributes.first { $0.name == "currentState" }?.value
+	}
+
+	private var mainEmitter: [ComponentDescendantAttributes] {
+		component.descendants.filter { $0.name.lowercased().contains("main") }
+	}
+
+	private var spawnedEmitter: [ComponentDescendantAttributes] {
+		component.descendants.filter { $0.name.lowercased().contains("spawn") }
+	}
+
+	var body: some View {
+		VStack(alignment: .leading, spacing: 10) {
+			LabeledContent("Current State") {
+				Picker("", selection: Binding(
+					get: { stripUSDQuotes(currentStateValue ?? "Idle") },
+					set: { onParameterChange(component.path, "token", "currentState", quoteUSDString($0)) }
+				)) {
+					Text("Idle").tag("Idle")
+					Text("Playing").tag("Playing")
+					Text("Paused").tag("Paused")
+				}
+				.labelsHidden()
+				.frame(width: 120)
+			}
+
+			if !mainEmitter.isEmpty {
+				emitterGroup(title: "Main Emitter", descendants: mainEmitter)
+			}
+			if !spawnedEmitter.isEmpty {
+				emitterGroup(title: "Spawned Emitter", descendants: spawnedEmitter)
+			}
+		}
+	}
+
+	@ViewBuilder
+	private func emitterGroup(title: String, descendants: [ComponentDescendantAttributes]) -> some View {
+		VStack(alignment: .leading, spacing: 6) {
+			Text(title).font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
+			ForEach(descendants) { descendant in
+				ForEach(descendant.authoredAttributes.filter { $0.name != "info:id" }) { attribute in
+					inferredEditor(for: attribute, path: descendant.path)
+				}
+			}
+		}
+		.padding(8)
+		.background(.quaternary.opacity(0.35))
+		.clipShape(RoundedRectangle(cornerRadius: 6))
+	}
+
+	@ViewBuilder
+	private func inferredEditor(for attribute: InspectorAuthoredAttribute, path: String) -> some View {
+		if let bool = parseBool(attribute.value) {
+			Toggle(attribute.name, isOn: Binding(
+				get: { bool },
+				set: { onParameterChange(path, "bool", attribute.name, $0 ? "true" : "false") }
+			))
+		} else if let n = Double(attribute.value.trimmingCharacters(in: .whitespacesAndNewlines)) {
+			LabeledContent(attribute.name) {
+				TextField("", value: Binding(get: { n }, set: { onParameterChange(path, "double", attribute.name, String($0)) }),
+					format: .number.precision(.fractionLength(0...4)))
+					.textFieldStyle(.roundedBorder)
+					.frame(minWidth: 80)
+			}
+		} else {
+			LabeledContent(attribute.name) {
+				TextField("", text: Binding(
+					get: { stripUSDQuotes(attribute.value) },
+					set: { onParameterChange(path, "string", attribute.name, quoteUSDString($0)) }
+				))
+				.textFieldStyle(.roundedBorder)
+			}
+		}
+	}
+}
+
+// MARK: - Custom Docking Region Editor
+
+private struct CustomDockingRegionEditor: View {
+	let component: InspectorComponentSummary
+	let onParameterChange: (_ targetPrimPath: String, _ attributeType: String, _ attributeName: String, _ valueLiteral: String) -> Void
+
+	private func value(_ name: String) -> String? {
+		component.authoredAttributes.first { $0.name == name }?.value
+	}
+
+	private var widthValue: Double {
+		value("width").flatMap(Double.init) ?? 240
+	}
+
+	private var previewVideoLabel: String {
+		guard let raw = value("previewVideo") else { return "None" }
+		let unquoted = stripUSDQuotes(raw)
+		if unquoted.isEmpty { return "None" }
+		return unquoted.split(separator: "/").last.map(String.init) ?? unquoted
+	}
+
+	private func chooseVideo() -> URL? {
+		let panel = NSOpenPanel()
+		panel.canChooseDirectories = false
+		panel.canChooseFiles = true
+		panel.allowsMultipleSelection = false
+		panel.allowedContentTypes = [.movie, .mpeg4Movie, .quickTimeMovie]
+		panel.prompt = "Choose"
+		return panel.runModal() == .OK ? panel.url : nil
+	}
+
+	var body: some View {
+		VStack(alignment: .leading, spacing: 10) {
+			LabeledContent("Width (cm)") {
+				TextField("", value: Binding(
+					get: { widthValue },
+					set: { onParameterChange(component.path, "float", "width", String($0)) }
+				), format: .number.precision(.fractionLength(0...3)))
+				.textFieldStyle(.roundedBorder)
+				.frame(width: 90)
+			}
+			LabeledContent("Preview Video") {
+				Text(previewVideoLabel).font(.system(size: 11))
+			}
+			HStack(spacing: 10) {
+				Button("Choose…") {
+					guard let url = chooseVideo() else { return }
+					onParameterChange(component.path, "asset", "previewVideo", quoteUSDString(url.path))
+				}
+				.buttonStyle(.borderless)
+				Button("Clear") {
+					onParameterChange(component.path, "asset", "previewVideo", "\"\"")
+				}
+				.buttonStyle(.borderless)
+				.disabled(previewVideoLabel == "None")
 				Spacer()
 			}
 		}
