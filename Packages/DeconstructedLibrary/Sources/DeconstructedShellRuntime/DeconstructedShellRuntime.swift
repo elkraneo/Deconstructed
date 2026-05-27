@@ -369,6 +369,52 @@ public enum DeconstructedShellRuntime {
 		return collected
 	}
 
+	// MARK: - Mesh Sorting Group Members
+
+	/// Returns the prim paths whose `MeshSorting` RealityKit component points
+	/// at `groupPrimPath` via the `meshSortingGroupPath` relationship. Mirrors
+	/// the orphan inspector's `loadMeshSortingGroupMembers` walk using only
+	/// open-source `DeconstructedUSDInterop` APIs.
+	public static func meshSortingGroupMembers(
+		url: URL,
+		groupPrimPath: String,
+		candidatePrimPaths: [String]
+	) -> [String] {
+		var members: [String] = []
+		for primPath in candidatePrimPaths {
+			let components = DeconstructedUSDInterop.listRealityKitComponentPrims(
+				url: url,
+				parentPrimPath: primPath
+			)
+			for component in components where component.primName == "MeshSorting" {
+				let attrs = DeconstructedUSDInterop.getPrimAttributes(
+					url: url,
+					primPath: component.path
+				)?.authoredAttributes ?? []
+				let raw = attrs.first { $0.name == "meshSortingGroupPath" }?.value ?? ""
+				let target = parseMeshSortingGroupTarget(raw)
+				if target == groupPrimPath {
+					members.append(primPath)
+				}
+			}
+		}
+		return Array(Set(members)).sorted()
+	}
+
+	private static func parseMeshSortingGroupTarget(_ raw: String) -> String {
+		var trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+		if trimmed.hasPrefix("["), trimmed.hasSuffix("]"), trimmed.count >= 2 {
+			trimmed = String(trimmed.dropFirst().dropLast())
+				.split(separator: ",")
+				.first
+				.map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) } ?? ""
+		}
+		if trimmed.hasPrefix("<"), trimmed.hasSuffix(">"), trimmed.count >= 2 {
+			return String(trimmed.dropFirst().dropLast())
+		}
+		return trimmed
+	}
+
 	// MARK: - Transform Write
 
 	/// Writes a prim's local transform. Bridges the SwiftUsdShell

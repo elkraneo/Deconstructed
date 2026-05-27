@@ -113,6 +113,7 @@ public struct InspectorFeature {
 		public var primComponents: [InspectorComponentSummary]
 		public var componentAuthoredAttributesByPath: [String: [InspectorAuthoredAttribute]]
 		public var componentDescendantAttributesByPath: [String: [ComponentDescendantAttributes]]
+		public var meshSortingGroupMembers: [String]
 		public var errorMessage: String?
 
 		public init(
@@ -131,6 +132,7 @@ public struct InspectorFeature {
 			primComponents: [InspectorComponentSummary] = [],
 			componentAuthoredAttributesByPath: [String: [InspectorAuthoredAttribute]] = [:],
 			componentDescendantAttributesByPath: [String: [ComponentDescendantAttributes]] = [:],
+			meshSortingGroupMembers: [String] = [],
 			errorMessage: String? = nil
 		) {
 			self.sceneURL = sceneURL
@@ -148,6 +150,7 @@ public struct InspectorFeature {
 			self.primComponents = primComponents
 			self.componentAuthoredAttributesByPath = componentAuthoredAttributesByPath
 			self.componentDescendantAttributesByPath = componentDescendantAttributesByPath
+			self.meshSortingGroupMembers = meshSortingGroupMembers
 			self.errorMessage = errorMessage
 		}
 
@@ -185,6 +188,8 @@ public struct InspectorFeature {
 		case primCompositionArcsLoaded([SwiftUsdShell.USDCompositionArcSummary])
 		case loadPrimComponentsRequested(URL, primPath: String)
 		case primComponentsLoaded([InspectorComponentSummary])
+		case loadMeshSortingGroupMembersRequested(URL, groupPrimPath: String, candidatePrimPaths: [String])
+		case meshSortingGroupMembersLoaded([String])
 		case primTransformEdited(SwiftUsdShell.USDTransformData)
 		case persistPrimTransformRequested(URL, primPath: String, transform: SwiftUsdShell.USDTransformData)
 		case primTransformPersistFailed(String)
@@ -280,18 +285,28 @@ public struct InspectorFeature {
 				state.primVariantSets = []
 				state.primCompositionArcs = []
 				state.primComponents = []
+				state.meshSortingGroupMembers = []
 				guard let id, let url = state.sceneURL else {
 					return .none
 				}
-				return .merge(
+				var effects: [Effect<Action>] = [
 					.send(.loadPrimTransformRequested(url, primPath: id)),
 					.send(.loadMaterialBindingRequested(url, primPath: id)),
 					.send(.loadPrimReferencesRequested(url, primPath: id)),
 					.send(.loadPrimVariantSetsRequested(url, primPath: id)),
 					.send(.loadPrimSummaryRequested(url, primPath: id)),
 					.send(.loadPrimCompositionArcsRequested(url, primPath: id)),
-					.send(.loadPrimComponentsRequested(url, primPath: id))
-				)
+					.send(.loadPrimComponentsRequested(url, primPath: id)),
+				]
+				if state.selectedNode?.typeName == "RealityKitMeshSortingGroup" {
+					let candidatePaths = flattenPrimPaths(state.sceneNodes)
+					effects.append(.send(.loadMeshSortingGroupMembersRequested(
+						url,
+						groupPrimPath: id,
+						candidatePrimPaths: candidatePaths
+					)))
+				}
+				return .merge(effects)
 
 			case .loadPrimTransformRequested(let url, let primPath):
 				return .run { [sceneInspector] send in
@@ -347,6 +362,16 @@ public struct InspectorFeature {
 
 			case .primComponentsLoaded(let components):
 				state.primComponents = components
+				return .none
+
+			case .loadMeshSortingGroupMembersRequested(let url, let groupPath, let candidates):
+				return .run { [sceneInspector] send in
+					let members = await sceneInspector.meshSortingGroupMembers(url, groupPath, candidates)
+					await send(.meshSortingGroupMembersLoaded(members))
+				}
+
+			case .meshSortingGroupMembersLoaded(let members):
+				state.meshSortingGroupMembers = members
 				return .none
 
 			case .primTransformEdited(let transform):

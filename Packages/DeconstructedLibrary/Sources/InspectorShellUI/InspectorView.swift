@@ -1873,6 +1873,65 @@ private struct CustomDockingRegionEditor: View {
 
 // MARK: - Generic Descendant Editor
 
+private func currentDepthPass(in summary: SwiftUsdShell.USDPrimSummary?) -> String {
+	guard let summary else { return "" }
+	let value = summary.attributes
+		.first { $0.name.rawValue == "depthPass" }?
+		.value?.displayDescription ?? ""
+	let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+	if trimmed.hasPrefix("\""), trimmed.hasSuffix("\""), trimmed.count >= 2 {
+		return String(trimmed.dropFirst().dropLast())
+	}
+	return trimmed
+}
+
+private struct MeshSortingGroupSection: View {
+	let depthPass: String
+	let members: [String]
+	let onDepthPassChanged: (String) -> Void
+
+	var body: some View {
+		VStack(alignment: .leading, spacing: 12) {
+			LabeledContent("Depth Pass") {
+				Picker(
+					"",
+					selection: Binding(
+						get: { depthPass },
+						set: onDepthPassChanged
+					)
+				) {
+					Text("None").tag("")
+					Text("Pre Pass").tag("prePass")
+					Text("Post Pass").tag("postPass")
+				}
+				.labelsHidden()
+				.pickerStyle(.menu)
+			}
+
+			VStack(alignment: .leading, spacing: 6) {
+				Text("Members")
+					.font(.system(size: 11, weight: .semibold))
+					.foregroundStyle(.secondary)
+				if members.isEmpty {
+					Text("No members assigned.")
+						.font(.system(size: 11))
+						.foregroundStyle(.secondary)
+				} else {
+					ForEach(members, id: \.self) { member in
+						Text(member)
+							.font(.system(size: 11))
+							.textSelection(.enabled)
+					}
+				}
+			}
+			.padding(8)
+			.frame(maxWidth: .infinity, alignment: .leading)
+			.background(.quaternary.opacity(0.4))
+			.clipShape(RoundedRectangle(cornerRadius: 8))
+		}
+	}
+}
+
 private struct GenericDescendantEditor: View {
 	let descendants: [ComponentDescendantAttributes]
 	let onParameterChange: (_ targetPrimPath: String, _ attributeType: String, _ attributeName: String, _ valueLiteral: String) -> Void
@@ -2390,6 +2449,25 @@ public struct InspectorView: View {
 						} label: {
 							Text("Authored Attributes").font(.headline)
 						}
+					}
+				}
+
+				if selected.typeName == "RealityKitMeshSortingGroup" {
+					DisclosureGroup(isExpanded: disclosure(\.meshSortingGroupExpanded)) {
+						MeshSortingGroupSection(
+							depthPass: currentDepthPass(in: store.primSummary),
+							members: store.meshSortingGroupMembers,
+							onDepthPassChanged: { newValue in
+								store.send(.setComponentParameterRequested(
+									componentPath: selected.path,
+									attributeType: "token",
+									attributeName: "depthPass",
+									valueLiteral: newValue.isEmpty ? "" : "\"\(newValue)\""
+								))
+							}
+						)
+					} label: {
+						Text("Model Sorting Group").font(.headline)
 					}
 				}
 

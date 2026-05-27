@@ -17,6 +17,7 @@ public struct InspectorDisclosureState: Equatable, Sendable {
 	public var scenePlaybackExpanded: Bool
 	public var layerDataExpanded: Bool
 	public var materialsExpanded: Bool
+	public var meshSortingGroupExpanded: Bool
 
 	public init(
 		primDataExpanded: Bool = true,
@@ -31,7 +32,8 @@ public struct InspectorDisclosureState: Equatable, Sendable {
 		audioMixGroupsExpanded: Bool = false,
 		scenePlaybackExpanded: Bool = true,
 		layerDataExpanded: Bool = true,
-		materialsExpanded: Bool = true
+		materialsExpanded: Bool = true,
+		meshSortingGroupExpanded: Bool = true
 	) {
 		self.primDataExpanded = primDataExpanded
 		self.primAttributesExpanded = primAttributesExpanded
@@ -46,6 +48,7 @@ public struct InspectorDisclosureState: Equatable, Sendable {
 		self.scenePlaybackExpanded = scenePlaybackExpanded
 		self.layerDataExpanded = layerDataExpanded
 		self.materialsExpanded = materialsExpanded
+		self.meshSortingGroupExpanded = meshSortingGroupExpanded
 	}
 }
 

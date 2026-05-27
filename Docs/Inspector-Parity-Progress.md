@@ -32,7 +32,7 @@ Never `cd Packages/DeconstructedLibrary/ && swift build`.
 ## Phase 2 — UI-only ports
 
 - [x] **P2-A** Audio Mix Groups inline expose. **LANDED.** Added inline + per-group "Choose…" (NSOpenPanel UTType.audio). Today `addAudioMixGroupRequested` / `assignAudioMixGroupResourceRequested` are reachable only via the side-panel `AudioMixerPanel`. Expose them inline on `InlineAudioMixGroupsEditor` (Choose…/Add Mix Group buttons) — both actions already exist in `InspectorShellFeature`. Edits limited to `InspectorShellUI/InspectorView.swift` + the call site at `ComponentEditorRow.descendantEditor` / `InspectorView.body`.
-- [ ] **P2-B** Mesh Sorting Group section. Adds `MeshSortingGroupSection` (Depth Pass picker: None / prePass / postPass + members list) when `selectedNode.typeName == "RealityKitMeshSortingGroup"`. Requires:
+- [x] **P2-B** Mesh Sorting Group section. **LANDED.** New `meshSortingGroupMembers` client endpoint + runtime walker; UI gated on `typeName == "RealityKitMeshSortingGroup"`. Depth Pass writes via existing `setComponentParameterRequested`. Adds `MeshSortingGroupSection` (Depth Pass picker: None / prePass / postPass + members list) when `selectedNode.typeName == "RealityKitMeshSortingGroup"`. Requires:
 	- shell state field `meshSortingGroupMembers: [String]` (already exists in orphan store as `store.meshSortingGroupMembers`)
 	- new action `setMeshSortingGroupDepthPassRequested(String)` — write `depthPass` token attribute via existing `setComponentParameter` flow on the selected prim.
 	- Members are USD `class` relationship targets — query through new `SceneInspectorClient` endpoint OR derive from `primSummary` if attribute is already exposed. Investigate first.

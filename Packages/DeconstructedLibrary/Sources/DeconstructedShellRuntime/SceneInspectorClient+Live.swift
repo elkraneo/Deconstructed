@@ -92,6 +92,13 @@ extension SceneInspectorClient {
 				componentName: componentName,
 				componentIdentifier: componentIdentifier
 			)
+		},
+		meshSortingGroupMembers: { url, groupPrimPath, candidatePrimPaths in
+			DeconstructedShellRuntime.meshSortingGroupMembers(
+				url: url,
+				groupPrimPath: groupPrimPath,
+				candidatePrimPaths: candidatePrimPaths
+			)
 		}
 	)
 }
