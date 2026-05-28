@@ -41,9 +41,9 @@ let package = Package(
 	dependencies: [
 		.package(url: "https://github.com/pointfreeco/swift-composable-architecture", from: "1.25.5"),
 		.package(url: "https://github.com/pointfreeco/swift-sharing", from: "2.8.0"),
-		.package(url: "https://github.com/Reality2713/USDInterop", from: "0.1.21"),
 		.package(url: "https://github.com/reality2713/StageView.git", exact: "0.3.24"),
-		.package(url: "https://github.com/Reality2713/SwiftUsdShell.git", exact: "0.3.72"),
+		.package(url: "https://github.com/Reality2713/SwiftUsd-binaries.git", exact: "0.3.124-macos-arm64.2"),
+		.package(url: "https://github.com/Reality2713/SwiftUsdShell-binaries.git", exact: "0.3.124-macos-arm64.2"),
 	],
 	targets: [
 		.target(
@@ -188,10 +188,8 @@ let package = Package(
 			name: "DeconstructedUSDInterop",
 			dependencies: [
 				"DeconstructedModels",
-				.product(name: "USDInterop", package: "USDInterop"),
-				.product(name: "USDOperations", package: "USDInterop"),
-				.product(name: "USDInterfaces", package: "USDInterop"),
-				.product(name: "USDInteropCxx", package: "USDInterop"),
+				.product(name: "SwiftUsdShell", package: "SwiftUsdShell-binaries"),
+				.product(name: "SwiftUsdShellOpenUSD", package: "SwiftUsdShell-binaries"),
 			],
 			path: "Packages/DeconstructedLibrary/Sources/DeconstructedUSDInterop",
 			swiftSettings: [.interoperabilityMode(.Cxx)]
@@ -203,9 +201,8 @@ let package = Package(
 					"DeconstructedUSDInterop",
 					"DeconstructedModels",
 					"SceneGraphClients",
-					.product(name: "SwiftUsdShell", package: "SwiftUsdShell"),
-					.product(name: "USDOperations", package: "USDInterop"),
-					.product(name: "USDInterfaces", package: "USDInterop"),
+					.product(name: "SwiftUsdShell", package: "SwiftUsdShell-binaries"),
+					.product(name: "SwiftUsdShellOpenUSD", package: "SwiftUsdShell-binaries"),
 				],
 				path: "Packages/DeconstructedLibrary/Sources/DeconstructedShellRuntime",
 				swiftSettings: [.interoperabilityMode(.Cxx)]
@@ -222,7 +219,7 @@ let package = Package(
 			dependencies: [
 				"SceneGraphModels",
 				.product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
-				.product(name: "SwiftUsdShell", package: "SwiftUsdShell"),
+				.product(name: "SwiftUsdShell", package: "SwiftUsdShell-binaries"),
 			],
 			path: "Packages/DeconstructedLibrary/Sources/InspectorShellFeature"
 		),

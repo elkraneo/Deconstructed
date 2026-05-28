@@ -108,19 +108,12 @@ let package = Package(
 			url: "https://github.com/pointfreeco/swift-sharing",
 			from: "2.8.0"
 		),
-		// Keep USDInterop pinned to avoid SwiftPM conflicts between transitive requirements.
-		//
-		// .package(url: "https://github.com/Reality2713/USDInterop", revision: "9a51edd955db053813d8467d088d07639d7aa46c"),
-		// .package(
-		// 	url: "https://github.com/Reality2713/USDInterop",
-		// 	revision: "9a51edd955db053813d8467d088d07639d7aa46c"
-		// ),
-		.package(
-			url: "https://github.com/Reality2713/USDInterop",
-			from: "0.1.21"
-		),
+		// USDInterop is archived; replaced by SwiftUsdShellOpenUSD via the
+		// SwiftUsdShell-binaries / SwiftUsd-binaries binary distribution.
+		// See Docs/USDInterop-Sunset-Migration.md.
 		.package(url: "https://github.com/reality2713/StageView.git", exact: "0.3.24"),
-		.package(url: "https://github.com/Reality2713/SwiftUsdShell.git", exact: "0.3.72"),
+		.package(url: "https://github.com/Reality2713/SwiftUsd-binaries.git", exact: "0.3.124-macos-arm64.2"),
+		.package(url: "https://github.com/Reality2713/SwiftUsdShell-binaries.git", exact: "0.3.124-macos-arm64.2"),
 	],
 	targets: [
 		// Targets are the basic building blocks of a package, defining a module or a test suite.
@@ -293,10 +286,8 @@ let package = Package(
 			name: "DeconstructedUSDInterop",
 			dependencies: [
 				"DeconstructedModels",
-				.product(name: "USDInterfaces", package: "USDInterop"),
-				.product(name: "USDOperations", package: "USDInterop"),
-				.product(name: "USDInterop", package: "USDInterop"),
-				.product(name: "USDInteropCxx", package: "USDInterop"),
+				.product(name: "SwiftUsdShell", package: "SwiftUsdShell-binaries"),
+				.product(name: "SwiftUsdShellOpenUSD", package: "SwiftUsdShell-binaries"),
 			],
 			swiftSettings: [
 				.interoperabilityMode(.Cxx),
@@ -310,9 +301,8 @@ let package = Package(
 					"DeconstructedUSDInterop",
 					"DeconstructedModels",
 					"SceneGraphClients",
-					.product(name: "SwiftUsdShell", package: "SwiftUsdShell"),
-					.product(name: "USDOperations", package: "USDInterop"),
-					.product(name: "USDInterfaces", package: "USDInterop"),
+					.product(name: "SwiftUsdShell", package: "SwiftUsdShell-binaries"),
+					.product(name: "SwiftUsdShellOpenUSD", package: "SwiftUsdShell-binaries"),
 				],
 				swiftSettings: [
 					.interoperabilityMode(.Cxx)
@@ -332,7 +322,7 @@ let package = Package(
 					name: "ComposableArchitecture",
 					package: "swift-composable-architecture"
 				),
-				.product(name: "SwiftUsdShell", package: "SwiftUsdShell"),
+				.product(name: "SwiftUsdShell", package: "SwiftUsdShell-binaries"),
 			],
 			path: "Sources/InspectorShellFeature"
 		),
