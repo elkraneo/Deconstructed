@@ -2,13 +2,15 @@ import CxxStdlib
 import DeconstructedModels
 import Foundation
 @_implementationOnly import OpenUSD
-import USDInterfaces
-import USDInterop
-import USDOperations
+import SwiftUsdShell
+import SwiftUsdShellOpenUSD
 
 // Local aliases for OpenUSD imported C++ symbols.
 // Keep these fileprivate so OpenUSD internals never leak into the module API.
-fileprivate typealias pxr = pxrInternal_v0_26_3__pxrReserved__
+// The version-stamped namespace must match the binary OpenUSD distribution
+// (SwiftUsd-binaries 0.3.124 ships pxr v0_26_5). The re-exported `pxr` alias
+// cannot be used for member-type lookups, so we reference the namespace directly.
+fileprivate typealias pxr = pxrInternal_v0_26_5__pxrReserved__
 fileprivate typealias UsdStage = pxr.UsdStage
 fileprivate typealias SdfPath = pxr.SdfPath
 fileprivate typealias SdfPathVector = pxr.SdfPathVector
@@ -122,71 +124,82 @@ public struct RealityKitComponentPrimInfo: Sendable, Hashable {
 }
 
 public enum DeconstructedUSDInterop {
-	private static let operationsClient = USDOperationsClient()
+	/// Shared `OpenUSDStageRuntime` instance. The class is `Sendable` and
+	/// all calls take by-value `USDStageURL` / `USDPath` arguments, so a
+	/// single instance is safe across static methods.
+	private static let runtime = OpenUSDStageRuntime()
 
 	// MARK: - Materials
 
-	public static func allMaterials(url: URL) -> [USDMaterialInfo] {
-		operationsClient.allMaterials(url: url)
+	public static func allMaterials(url: URL) -> [SwiftUsdShell.USDMaterialSummary] {
+		(try? runtime.materialSummaries(stage: SwiftUsdShell.USDStageURL(url))) ?? []
 	}
 
 	public static func materialBinding(url: URL, primPath: String) -> String? {
-		operationsClient.materialBinding(url: url, path: primPath)
+		guard let info = try? runtime.primMaterialBinding(
+			stage: SwiftUsdShell.USDStageURL(url),
+			primPath: SwiftUsdShell.USDPath(primPath)
+		) else { return nil }
+		return info.authoredMaterialPath?.rawValue ?? info.effectiveMaterialPath?.rawValue
 	}
 
 	public static func setMaterialBinding(
 		url: URL,
 		primPath: String,
-		materialPath: String,
-		editTarget: USDLayerEditTarget = .rootLayer
+		materialPath: String
 	) throws {
-		try operationsClient.setMaterialBinding(
-			url: url,
-			primPath: primPath,
-			materialPath: materialPath,
-			editTarget: editTarget
-		)
+		try performEdit(.bindMaterial(
+			stageURL: SwiftUsdShell.USDStageURL(url),
+			primPath: SwiftUsdShell.USDPath(primPath),
+			materialPath: SwiftUsdShell.USDPath(materialPath),
+			strength: .fallbackStrength
+		))
 	}
 
 	public static func clearMaterialBinding(
 		url: URL,
-		primPath: String,
-		editTarget: USDLayerEditTarget = .rootLayer
+		primPath: String
 	) throws {
-		try operationsClient.clearMaterialBinding(
-			url: url,
-			primPath: primPath,
-			editTarget: editTarget
-		)
+		try performEdit(.blockAttribute(
+			stageURL: SwiftUsdShell.USDStageURL(url),
+			primPath: SwiftUsdShell.USDPath(primPath),
+			attributeName: SwiftUsdShell.USDToken("material:binding")
+		))
 	}
 
-	public static func materialBindingStrength(url: URL, primPath: String) -> USDMaterialBindingStrength? {
-		operationsClient.materialBindingStrength(url: url, path: primPath)
+	public static func materialBindingStrength(url: URL, primPath: String) -> SwiftUsdShell.USDMaterialBindingStrength? {
+		guard let info = try? runtime.primMaterialBinding(
+			stage: SwiftUsdShell.USDStageURL(url),
+			primPath: SwiftUsdShell.USDPath(primPath)
+		) else { return nil }
+		return info.bindingStrength
 	}
 
 	public static func setMaterialBindingStrength(
 		url: URL,
 		primPath: String,
-		strength: USDMaterialBindingStrength,
-		editTarget: USDLayerEditTarget = .rootLayer
+		strength: SwiftUsdShell.USDMaterialBindingStrength
 	) throws {
-		try operationsClient.setMaterialBindingStrength(
-			url: url,
-			primPath: primPath,
-			strength: strength,
-			editTarget: editTarget
-		)
+		try performEdit(.setMaterialBindingStrength(
+			stageURL: SwiftUsdShell.USDStageURL(url),
+			primPath: SwiftUsdShell.USDPath(primPath),
+			strength: strength
+		))
 	}
 
 	public static func setDefaultPrim(url: URL, primPath: String) throws {
-		try operationsClient.setDefaultPrim(url: url, primPath: primPath)
+		try performEdit(.setDefaultPrim(
+			stageURL: SwiftUsdShell.USDStageURL(url),
+			primPath: SwiftUsdShell.USDPath(primPath)
+		))
 	}
 
 	public static func applySchema(url: URL, primPath: String, schema: SchemaSpec) throws {
-		_ = url
-		_ = primPath
-		_ = schema
-		throw DeconstructedUSDInteropError.notImplemented
+		try performEdit(.applySchema(
+			stageURL: SwiftUsdShell.USDStageURL(url),
+			primPath: SwiftUsdShell.USDPath(primPath),
+			schemaName: SwiftUsdShell.USDToken(schema.identifier)
+		))
 	}
 
 	public static func editHierarchy(url: URL, edits: [EditOp]) throws {
@@ -210,12 +223,12 @@ public enum DeconstructedUSDInterop {
 		primitiveType: USDPrimitiveType,
 		name: String? = nil
 	) throws -> String {
-		let primName = try name ?? generateUniqueName(
+		let primName = name ?? generateUniqueName(
 			url: url,
 			parentPath: parentPath,
 			baseName: primitiveType.displayName
 		)
-		return try operationsClient.createPrim(
+		return try createPrimDirect(
 			url: url,
 			parentPath: parentPath,
 			name: primName,
@@ -237,12 +250,12 @@ public enum DeconstructedUSDInterop {
 		structuralType: USDStructuralType,
 		name: String? = nil
 	) throws -> String {
-		let primName = try name ?? generateUniqueName(
+		let primName = name ?? generateUniqueName(
 			url: url,
 			parentPath: parentPath,
 			baseName: structuralType.displayName
 		)
-		return try operationsClient.createPrim(
+		return try createPrimDirect(
 			url: url,
 			parentPath: parentPath,
 			name: primName,
@@ -255,14 +268,8 @@ public enum DeconstructedUSDInterop {
 		url: URL,
 		parentPath: String,
 		baseName: String
-	) throws -> String {
-		let existingNames: Set<String>
-		do {
-			existingNames = Set(try operationsClient.existingPrimNames(url: url, parentPath: parentPath))
-		} catch {
-			// If we can't get existing names (e.g., parent doesn't exist), use base name
-			return baseName
-		}
+	) -> String {
+		let existingNames = Set(listChildPrims(url: url, parentPrimPath: parentPath).map { $0.primName })
 
 		if !existingNames.contains(baseName) {
 			return baseName
@@ -276,123 +283,163 @@ public enum DeconstructedUSDInterop {
 		return "\(baseName)_\(suffix)"
 	}
 
-	/// Compute scene bounds by iterating mesh points.
-	/// Returns scene bounds for camera framing.
-	public static func getSceneBounds(url: URL) throws -> USDSceneBounds {
-		operationsClient.sceneBounds(url: url)
-			?? USDSceneBounds(min: .zero, max: .zero, center: .zero, maxExtent: 0)
+	/// Compute scene bounds via direct OpenUSD geometry traversal. The binary
+	/// `OpenUSDStageRuntime` does not expose a `sceneBounds(_:)` reader, so
+	/// callers receive a zero-bounds value until that surface lands. Camera
+	/// framing falls back to a default extent in that case.
+	public static func getSceneBounds(url: URL) throws -> SwiftUsdShell.USDSceneBounds {
+		_ = url
+		return SwiftUsdShell.USDSceneBounds(
+			min: .zero,
+			max: .zero,
+			center: .zero,
+			maxExtent: 0
+		)
 	}
 
-	/// Returns the scene graph JSON produced by the low-level interop layer.
+	/// Returns the scene graph as JSON. Currently unimplemented under the
+	/// binary slice — the previous `USDInteropStage.sceneGraphJSON` lived on
+	/// the open `USDInterop` runtime, which is no longer in the build graph.
 	public static func sceneGraphJSON(url: URL) -> String? {
-		USDInteropStage.sceneGraphJSON(url: url)
+		_ = url
+		return nil
 	}
 
-	/// Exports USDA text from the low-level interop layer.
+	/// Exports USDA text by reading the root layer file directly. Sufficient
+	/// for `.usda` scenes (Reality Composer Pro's authoring format); binary
+	/// `.usdc` stages are not converted by this stop-gap.
 	public static func exportUSDA(url: URL) -> String? {
-		USDInteropStage.exportUSDA(url: url)
+		try? String(contentsOf: url, encoding: .utf8)
 	}
 
 	/// Retrieves stage metadata including layer data properties.
 	/// Returns USDStageMetadata containing defaultPrim, metersPerUnit, upAxis, etc.
-	public static func getStageMetadata(url: URL) -> USDStageMetadata {
-		return operationsClient.stageMetadata(url: url)
+	public static func getStageMetadata(url: URL) -> SwiftUsdShell.USDStageMetadata {
+		(try? runtime.stageMetadata(stageURL: SwiftUsdShell.USDStageURL(url))) ?? SwiftUsdShell.USDStageMetadata()
 	}
 
-	/// Retrieves key prim attributes for inspection.
+	/// Retrieves a summary of a prim's authored state (path, type, attributes,
+	/// relationships, visibility/purpose/kind metadata).
 	public static func getPrimAttributes(
 		url: URL,
 		primPath: String
-	) -> USDPrimAttributes? {
-		operationsClient.primAttributes(url: url, path: primPath)
+	) -> SwiftUsdShell.USDPrimSummary? {
+		try? runtime.primSummary(
+			stage: SwiftUsdShell.USDStageURL(url),
+			primPath: SwiftUsdShell.USDPath(primPath)
+		)
 	}
 
 	public static func getPrimTransform(
 		url: URL,
 		primPath: String
-	) -> USDTransformData? {
-		operationsClient.primTransform(url: url, path: primPath)
+	) -> SwiftUsdShell.USDTransformData? {
+		try? runtime.primTransformData(
+			stage: SwiftUsdShell.USDStageURL(url),
+			primPath: SwiftUsdShell.USDPath(primPath)
+		)
 	}
 
 	public static func getPrimReferences(
 		url: URL,
 		primPath: String
-	) -> [USDReference] {
-		operationsClient.primReferences(url: url, path: primPath)
+	) -> [SwiftUsdShell.USDReference] {
+		(try? runtime.primReferences(
+			stage: SwiftUsdShell.USDStageURL(url),
+			primPath: SwiftUsdShell.USDPath(primPath)
+		)) ?? []
 	}
 
 	public static func listPrimVariantSets(
 		url: URL,
 		primPath: String
-	) throws -> [USDVariantSetDescriptor] {
-		try operationsClient.listVariantSets(url: url, scope: .prim(path: primPath))
+	) throws -> [SwiftUsdShell.USDVariantSetSummary] {
+		try runtime.variantDescriptors(
+			stage: SwiftUsdShell.USDStageURL(url),
+			primPath: SwiftUsdShell.USDPath(primPath)
+		)
 	}
 
 	public static func setPrimVariantSelection(
 		url: URL,
 		primPath: String,
 		setName: String,
-		selectionId: String?,
-		editTarget: USDLayerEditTarget = .rootLayer,
-		persist: Bool = true
+		selectionId: String?
 	) throws {
-		let request = USDVariantSelectionRequest(
-			scope: .prim(path: primPath),
-			setName: setName,
-			selectionId: selectionId
-		)
-		let variantTarget: USDVariantEditTarget =
-			editTarget == .sessionLayer ? .sessionLayer : .rootLayer
-		try operationsClient.applyVariantSelection(
-			url: url,
-			request: request,
-			editTarget: variantTarget,
-			persist: persist
-		)
+		try performEdit(.setVariantSelection(
+			stageURL: SwiftUsdShell.USDStageURL(url),
+			primPath: SwiftUsdShell.USDPath(primPath),
+			setName: SwiftUsdShell.USDToken(setName),
+			selectionId: selectionId.map { SwiftUsdShell.USDToken($0) }
+		))
 	}
 
 	public static func addPrimReference(
 		url: URL,
 		primPath: String,
-		reference: USDReference,
-		editTarget: USDLayerEditTarget = .rootLayer
+		reference: SwiftUsdShell.USDReference
 	) throws {
-		try operationsClient.addReference(
-			url: url,
-			primPath: primPath,
-			reference: reference,
-			editTarget: editTarget
+		try runtime.addReference(
+			stage: SwiftUsdShell.USDStageURL(url),
+			primPath: SwiftUsdShell.USDPath(primPath),
+			reference: reference
 		)
 	}
 
 	public static func removePrimReference(
 		url: URL,
 		primPath: String,
-		reference: USDReference,
-		editTarget: USDLayerEditTarget = .rootLayer
+		reference: SwiftUsdShell.USDReference
 	) throws {
-		try operationsClient.removeReference(
-			url: url,
-			primPath: primPath,
-			reference: reference,
-			editTarget: editTarget
+		try runtime.removeReference(
+			stage: SwiftUsdShell.USDStageURL(url),
+			primPath: SwiftUsdShell.USDPath(primPath),
+			reference: reference
 		)
 	}
 
 	public static func setPrimTransform(
 		url: URL,
 		primPath: String,
-		transform: USDTransformData
+		transform: SwiftUsdShell.USDTransformData
 	) throws {
-		try operationsClient.setPrimTransform(url: url, path: primPath, transform: transform)
+		try performEdit(.setPrimTransform(
+			stageURL: SwiftUsdShell.USDStageURL(url),
+			primPath: SwiftUsdShell.USDPath(primPath),
+			transform: transform,
+			options: SwiftUsdShell.USDTransformEditOptions()
+		))
 	}
 	/// Sets the metersPerUnit metadata for the stage.
 	public static func setMetersPerUnit(url: URL, value: Double) throws {
-		try operationsClient.setMetersPerUnit(url: url, value: value)
+		try performEdit(.setMetersPerUnit(
+			stageURL: SwiftUsdShell.USDStageURL(url),
+			value: value
+		))
 	}
 	/// Sets the upAxis metadata for the stage.
 	public static func setUpAxis(url: URL, axis: String) throws {
-		try operationsClient.setUpAxis(url: url, axis: axis)
+		try performEdit(.setUpAxis(
+			stageURL: SwiftUsdShell.USDStageURL(url),
+			axis: SwiftUsdShell.USDToken(axis)
+		))
+	}
+
+	/// Synchronous bridge for `OpenUSDStageRuntime.edit(_:)`. The runtime
+	/// surface is `async throws`; this helper lets the legacy `throws` API
+	/// stay sync without rippling `async` through every caller. Safe because
+	/// `OpenUSDStageRuntime` is `Sendable` and does not depend on the
+	/// MainActor for its internal work.
+	private static func performEdit(_ request: SwiftUsdShell.USDEditRequest) throws {
+		let semaphore = DispatchSemaphore(value: 0)
+		nonisolated(unsafe) var resultError: Error?
+		Task.detached {
+			do { _ = try await runtime.edit(request) }
+			catch { resultError = error }
+			semaphore.signal()
+		}
+		semaphore.wait()
+		if let resultError { throw resultError }
 	}
 
 	// These RealityKit/component authoring APIs are intentionally app-local.
@@ -751,7 +798,7 @@ public enum DeconstructedUSDInterop {
 		url: URL,
 		primPath: String
 	) throws {
-		try operationsClient.deletePrim(url: url, primPath: primPath)
+		try deletePrim(url: url, primPath: primPath)
 	}
 
 	public static func setRealityKitComponentActive(
@@ -1219,6 +1266,39 @@ private func insertRealityKitComponent(
 	updatedLines.insert(contentsOf: componentBlock, at: insertionLineIndex)
 	let updated = updatedLines.joined(separator: "\n")
 	return source.hasSuffix("\n") ? updated + "\n" : updated
+}
+
+/// Defines a typed prim at `parentPath/name` using direct OpenUSD Cxx APIs.
+/// Used by `createPrimitive` / `createStructural` because the binary
+/// `OpenUSDStageRuntime` does not currently expose a `createPrim` write.
+private func createPrimDirect(
+	url: URL,
+	parentPath: String,
+	name: String,
+	typeName: String
+) throws -> String {
+	let stagePtr = UsdStage.Open(std.string(url.path), UsdStage.InitialLoadSet.LoadAll)
+	guard stagePtr._isNonnull() else {
+		throw DeconstructedUSDInteropError.stageOpenFailed(url)
+	}
+	let stage = OpenUSD.Overlay.Dereference(stagePtr)
+	let normalizedParent = parentPath == "/" ? "" : parentPath
+	let fullPath = "\(normalizedParent)/\(name)"
+	let primPath = SdfPath(std.string(fullPath))
+	let typeToken = TfToken(std.string(typeName))
+	let prim = stage.DefinePrim(primPath, typeToken)
+	guard prim.IsValid() else {
+		throw DeconstructedUSDInteropError.createPrimFailed(path: fullPath, typeName: typeName)
+	}
+	let rootLayerHandle = stage.GetRootLayer()
+	guard Bool(rootLayerHandle) else {
+		throw DeconstructedUSDInteropError.rootLayerMissing(url)
+	}
+	let rootLayer = OpenUSD.Overlay.Dereference(rootLayerHandle)
+	guard rootLayer.Save(false) else {
+		throw DeconstructedUSDInteropError.saveFailed(url)
+	}
+	return fullPath
 }
 
 private func setPrimActive(
