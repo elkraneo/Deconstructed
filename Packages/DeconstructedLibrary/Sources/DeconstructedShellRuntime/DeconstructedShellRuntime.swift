@@ -2,8 +2,7 @@ import DeconstructedUSDInterop
 import Foundation
 import InspectorFeature
 import SwiftUsdShell
-import USDInterfaces
-import USDOperations
+import SwiftUsdShellOpenUSD
 
 /// Runtime boundary for SwiftUsdShell value types.
 ///
@@ -64,32 +63,9 @@ public enum DeconstructedShellRuntime {
 	///   - primPath: The path to the prim
 	/// - Returns: A summary of the prim, or nil if the prim doesn't exist
 	public static func primSummary(url: URL, primPath: String) -> SwiftUsdShell.USDPrimSummary? {
-		guard let raw = USDOperationsClient().primAttributes(url: url, path: primPath) else {
-			return nil
-		}
-
-		let attributeSummaries = raw.authoredAttributes.map { attr -> SwiftUsdShell.USDAttributeSummary in
-			SwiftUsdShell.USDAttributeSummary(
-				name: SwiftUsdShell.USDToken(attr.name),
-				typeName: "",
-				value: parseUSDAttributeValue(attr.value),
-				isAuthored: true,
-				hasValue: !attr.value.isEmpty && attr.value != "(authored)",
-				timeSampleCount: 0,
-				timeSamples: [.default]
-			)
-		}
-
-		return SwiftUsdShell.USDPrimSummary(
-			path: SwiftUsdShell.USDPath(raw.primPath),
-			name: SwiftUsdShell.USDToken(raw.primName),
-			typeName: raw.typeName.isEmpty ? nil : SwiftUsdShell.USDToken(raw.typeName),
-			isActive: raw.isActive,
-			visibility: raw.visibility.isEmpty ? nil : SwiftUsdShell.USDToken(raw.visibility),
-			purpose: raw.purpose.isEmpty ? nil : SwiftUsdShell.USDToken(raw.purpose),
-			kind: raw.kind.isEmpty ? nil : SwiftUsdShell.USDToken(raw.kind),
-			attributes: attributeSummaries,
-			relationships: []
+		try? runtime.primSummary(
+			stage: SwiftUsdShell.USDStageURL(url),
+			primPath: SwiftUsdShell.USDPath(primPath)
 		)
 	}
 
@@ -126,19 +102,7 @@ public enum DeconstructedShellRuntime {
 	/// - Parameter url: The URL of the USD file
 	/// - Returns: The stage metadata
 	public static func stageMetadata(url: URL) -> SwiftUsdShell.USDStageMetadata {
-		let raw = USDOperationsClient().stageMetadata(url: url)
-		return SwiftUsdShell.USDStageMetadata(
-			upAxis: raw.upAxis.map { SwiftUsdShell.USDToken($0) },
-			metersPerUnit: raw.metersPerUnit,
-			defaultPrimName: raw.defaultPrimName.map { SwiftUsdShell.USDToken($0) },
-			autoPlay: raw.autoPlay,
-			playbackMode: raw.playbackMode,
-			timeCodesPerSecond: raw.timeCodesPerSecond,
-			startTimeCode: raw.startTimeCode,
-			endTimeCode: raw.endTimeCode,
-			animationTracks: raw.animationTracks.map { SwiftUsdShell.USDPath($0) },
-			availableCameras: raw.availableCameras.map { SwiftUsdShell.USDPath($0) }
-		)
+		(try? runtime.stageMetadata(stageURL: SwiftUsdShell.USDStageURL(url))) ?? SwiftUsdShell.USDStageMetadata()
 	}
 
 	// MARK: - Prim Transform
@@ -154,14 +118,9 @@ public enum DeconstructedShellRuntime {
 	///   - url: The URL of the USD file
 	///   - primPath: The path to the prim
 	public static func primTransform(url: URL, primPath: String) -> SwiftUsdShell.USDTransformData? {
-		guard let raw = USDOperationsClient().primTransform(url: url, path: primPath) else {
-			return nil
-		}
-		return SwiftUsdShell.USDTransformData(
-			position: raw.position,
-			rotationDegrees: raw.rotationDegrees,
-			orientation: nil,
-			scale: raw.scale
+		try? runtime.primTransformData(
+			stage: SwiftUsdShell.USDStageURL(url),
+			primPath: SwiftUsdShell.USDPath(primPath)
 		)
 	}
 
@@ -170,24 +129,7 @@ public enum DeconstructedShellRuntime {
 	/// Returns the list of `Material` prims authored on the stage, mapped to
 	/// the pure-Swift `SwiftUsdShell.USDMaterialSummary` DTO.
 	public static func allMaterials(url: URL) -> [SwiftUsdShell.USDMaterialSummary] {
-		USDOperationsClient().allMaterials(url: url).map { info in
-			SwiftUsdShell.USDMaterialSummary(
-				path: SwiftUsdShell.USDPath(info.path),
-				name: info.name,
-				materialType: bridgeMaterialSummaryType(info.materialType)
-			)
-		}
-	}
-
-	private static func bridgeMaterialSummaryType(
-		_ raw: USDInterfaces.USDMaterialInfo.MaterialType
-	) -> SwiftUsdShell.USDMaterialSummaryType {
-		switch raw {
-		case .previewSurface: return .usdPreviewSurface
-		case .materialX: return .materialX
-		case .unknown: return .unknown
-		@unknown default: return .unknown
-		}
+		(try? runtime.materialSummaries(stage: SwiftUsdShell.USDStageURL(url))) ?? []
 	}
 
 	// MARK: - Material Properties
@@ -205,16 +147,22 @@ public enum DeconstructedShellRuntime {
 	public static func materialProperties(
 		url: URL, materialPath: String
 	) -> [SwiftUsdShell.USDMaterialPropertySummary] {
-		let client = USDOperationsClient()
+		let stageURL = SwiftUsdShell.USDStageURL(url)
 		var summaries: [SwiftUsdShell.USDMaterialPropertySummary] = []
 
-		if let materialAttrs = client.primAttributes(url: url, path: materialPath) {
-			for attr in materialAttrs.authoredAttributes {
+		if let materialSummary = try? runtime.primSummary(
+			stage: stageURL,
+			primPath: SwiftUsdShell.USDPath(materialPath)
+		) {
+			for attr in materialSummary.attributes where attr.isAuthored {
 				summaries.append(
 					SwiftUsdShell.USDMaterialPropertySummary(
-						name: attr.name,
+						name: attr.name.rawValue,
 						propertyType: .unsupported,
-						value: .unsupported(typeName: "", valueDescription: attr.value)
+						value: .unsupported(
+							typeName: attr.typeName,
+							valueDescription: attr.value?.usdaLiteral ?? ""
+						)
 					)
 				)
 			}
@@ -222,15 +170,21 @@ public enum DeconstructedShellRuntime {
 
 		let children = DeconstructedUSDInterop.listChildPrims(url: url, parentPrimPath: materialPath)
 		for child in children {
-			guard let shaderAttrs = client.primAttributes(url: url, path: child.path) else {
+			guard let shaderSummary = try? runtime.primSummary(
+				stage: stageURL,
+				primPath: SwiftUsdShell.USDPath(child.path)
+			) else {
 				continue
 			}
-			for attr in shaderAttrs.authoredAttributes {
+			for attr in shaderSummary.attributes where attr.isAuthored {
 				summaries.append(
 					SwiftUsdShell.USDMaterialPropertySummary(
-						name: "\(child.primName).\(attr.name)",
+						name: "\(child.primName).\(attr.name.rawValue)",
 						propertyType: .unsupported,
-						value: .unsupported(typeName: child.typeName ?? "", valueDescription: attr.value)
+						value: .unsupported(
+							typeName: child.typeName ?? "",
+							valueDescription: attr.value?.usdaLiteral ?? ""
+						)
 					)
 				)
 			}
@@ -246,13 +200,9 @@ public enum DeconstructedShellRuntime {
 	///
 	/// Returns `nil` when the stage cannot be opened.
 	public static func materialBinding(url: URL, primPath: String) -> SwiftUsdShell.USDMaterialBindingInfo? {
-		let raw = USDOperationsClient().materialBindingDetails(url: url, path: primPath)
-		return SwiftUsdShell.USDMaterialBindingInfo(
-			selectedPrimPath: SwiftUsdShell.USDPath(raw.selectedPrimPath),
-			effectiveMaterialPath: raw.effectiveMaterialPath.map { SwiftUsdShell.USDPath($0) },
-			authoredMaterialPath: raw.authoredMaterialPath.map { SwiftUsdShell.USDPath($0) },
-			bindingSourcePrimPath: raw.bindingSourcePrimPath.map { SwiftUsdShell.USDPath($0) },
-			bindingStrength: raw.bindingStrength.flatMap { SwiftUsdShell.USDMaterialBindingStrength(rawValue: $0.rawValue) }
+		try? runtime.primMaterialBinding(
+			stage: SwiftUsdShell.USDStageURL(url),
+			primPath: SwiftUsdShell.USDPath(primPath)
 		)
 	}
 
@@ -261,9 +211,10 @@ public enum DeconstructedShellRuntime {
 	/// Returns the references composed onto a prim, mapped to the
 	/// pure-Swift SwiftUsdShell DTO.
 	public static func primReferences(url: URL, primPath: String) -> [SwiftUsdShell.USDReference] {
-		USDOperationsClient().primReferences(url: url, path: primPath).map { ref in
-			SwiftUsdShell.USDReference(assetPath: ref.assetPath, primPath: ref.primPath)
-		}
+		(try? runtime.primReferences(
+			stage: SwiftUsdShell.USDStageURL(url),
+			primPath: SwiftUsdShell.USDPath(primPath)
+		)) ?? []
 	}
 
 	// MARK: - Variant Sets
@@ -271,15 +222,10 @@ public enum DeconstructedShellRuntime {
 	/// Returns the variant sets authored on a prim, mapped to
 	/// `SwiftUsdShell.USDVariantSetSummary`.
 	public static func primVariantSets(url: URL, primPath: String) -> [SwiftUsdShell.USDVariantSetSummary] {
-		let descriptors = (try? USDOperationsClient().listVariantSets(url: url, scope: .prim(path: primPath))) ?? []
-		return descriptors.map { descriptor in
-			SwiftUsdShell.USDVariantSetSummary(
-				name: SwiftUsdShell.USDToken(descriptor.name),
-				choices: descriptor.options.map { SwiftUsdShell.USDToken($0.id) },
-				selection: descriptor.selectedOptionId.map { SwiftUsdShell.USDToken($0) },
-				hasAuthoredSelection: descriptor.selectedOptionId != nil
-			)
-		}
+		(try? runtime.variantDescriptors(
+			stage: SwiftUsdShell.USDStageURL(url),
+			primPath: SwiftUsdShell.USDPath(primPath)
+		)) ?? []
 	}
 
 	// MARK: - Composition Arcs
@@ -291,26 +237,13 @@ public enum DeconstructedShellRuntime {
 	/// arcs collapse onto `.reference` with `isInternal = true` (lossy by
 	/// design — refine when shell models the full enum).
 	public static func primCompositionArcs(url: URL, primPath: String) -> [SwiftUsdShell.USDCompositionArcSummary] {
-		guard let provenance = USDOperationsClient().primProvenance(url: url, path: primPath) else {
-			return []
-		}
-		return provenance.sites.map { site -> SwiftUsdShell.USDCompositionArcSummary in
-			let kind: SwiftUsdShell.USDCompositionArcKind = site.kind == .payload ? .payload : .reference
-			let isInternal: Bool
-			switch site.kind {
-			case .reference, .payload: isInternal = false
-			case .localLayer, .sublayer, .inherits, .specializes, .variant, .unknown: isInternal = true
-			@unknown default: isInternal = true
-			}
-			let assetPath = site.layerRealPath ?? site.layerIdentifier
-			return SwiftUsdShell.USDCompositionArcSummary(
-				kind: kind,
-				assetPath: SwiftUsdShell.USDAssetPath(assetPath),
-				primPath: site.specPath.map { SwiftUsdShell.USDPath($0) },
-				layerOffset: nil,
-				isInternal: isInternal
-			)
-		}
+		// `OpenUSDStageRuntime` does not currently expose composition-arc
+		// provenance; the binary slice migration favours `primReferences`
+		// for the common case and otherwise returns no arcs. Refine when
+		// the runtime grows a `primProvenance`-style read.
+		_ = url
+		_ = primPath
+		return []
 	}
 
 	// MARK: - Prim Components
@@ -459,12 +392,7 @@ public enum DeconstructedShellRuntime {
 		primPath: String,
 		transform: SwiftUsdShell.USDTransformData
 	) throws {
-		let raw = USDInterfaces.USDTransformData(
-			position: transform.position,
-			rotationDegrees: transform.rotationDegrees,
-			scale: transform.scale
-		)
-		try DeconstructedUSDInterop.setPrimTransform(url: url, primPath: primPath, transform: raw)
+		try DeconstructedUSDInterop.setPrimTransform(url: url, primPath: primPath, transform: transform)
 	}
 
 	// MARK: - Material Binding Write
@@ -489,14 +417,7 @@ public enum DeconstructedShellRuntime {
 		primPath: String,
 		strength: SwiftUsdShell.USDMaterialBindingStrength
 	) throws {
-		let raw = bridgeBindingStrengthOut(strength)
-		try DeconstructedUSDInterop.setMaterialBindingStrength(url: url, primPath: primPath, strength: raw)
-	}
-
-	private static func bridgeBindingStrengthOut(
-		_ shell: SwiftUsdShell.USDMaterialBindingStrength
-	) -> USDInterfaces.USDMaterialBindingStrength {
-		USDInterfaces.USDMaterialBindingStrength(rawValue: shell.rawValue) ?? .fallbackStrength
+		try DeconstructedUSDInterop.setMaterialBindingStrength(url: url, primPath: primPath, strength: strength)
 	}
 
 	// MARK: - Variant Selection Write
@@ -546,7 +467,7 @@ public enum DeconstructedShellRuntime {
 		try DeconstructedUSDInterop.addPrimReference(
 			url: url,
 			primPath: primPath,
-			reference: USDInterfaces.USDReference(assetPath: reference.assetPath, primPath: reference.primPath)
+			reference: reference
 		)
 	}
 
@@ -558,7 +479,7 @@ public enum DeconstructedShellRuntime {
 		try DeconstructedUSDInterop.removePrimReference(
 			url: url,
 			primPath: primPath,
-			reference: USDInterfaces.USDReference(assetPath: reference.assetPath, primPath: reference.primPath)
+			reference: reference
 		)
 	}
 
@@ -643,52 +564,12 @@ public enum DeconstructedShellRuntime {
 
 	// MARK: - Private Helpers
 
+	/// Shared `OpenUSDStageRuntime` used for all binary-slice reads. The class
+	/// is `Sendable` and stage URLs are passed by-value, so a single instance
+	/// is safe to share across calls.
+	private static let runtime = OpenUSDStageRuntime()
+
 	private static let stageCache = StageHandleCache()
-
-	private static func parseUSDAttributeValue(_ value: String) -> SwiftUsdShell.USDValue? {
-		// Try to parse the value string into appropriate types
-		if let boolValue = parseBool(from: value) {
-			return .bool(boolValue)
-		} else if let intValue = parseInt(from: value) {
-			return .int(intValue)
-		} else if let doubleValue = parseDouble(from: value) {
-			return .double(doubleValue)
-		} else if let arrayValues = parseArray(from: value) {
-			return .array(arrayValues)
-		} else if let vector3 = parseVector3(from: value) {
-			return .vector3(SwiftUsdShell.USDVector3(x: vector3.x, y: vector3.y, z: vector3.z))
-		} else if value.contains("@") && value.count > 2 {
-			// Asset path: @path@
-			let inner = value.dropFirst().dropLast()
-			return .assetPath(SwiftUsdShell.USDAssetPath(String(inner)))
-		} else if value.starts(with: "<") && value.hasSuffix(">") {
-			// Relationship target
-			let inner = value.dropFirst().dropLast()
-			return .string(String(inner))
-		}
-
-		// Default to string
-		return .string(value)
-	}
-
-	private static func inferTypeName(from value: String) -> String {
-		if value.contains("GfVec3d") || value.contains("GfVec3f") || parseVector3(from: value) != nil {
-			return "float3"
-		} else if value.contains("GfVec2d") || value.contains("GfVec2f") {
-			return "float2"
-		} else if parseBool(from: value) != nil {
-			return "bool"
-		} else if parseInt(from: value) != nil {
-			return "int"
-		} else if parseDouble(from: value) != nil && !value.contains(".") {
-			return "float"
-		} else if value.contains("[") && value.contains("]") {
-			return "array"
-		} else if value.contains("@") {
-			return "asset"
-		}
-		return "string"
-	}
 
 	private static func parseBool(from value: String) -> Bool? {
 		let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -698,69 +579,6 @@ public enum DeconstructedShellRuntime {
 			return false
 		}
 		return nil
-	}
-
-	private static func parseInt(from value: String) -> Int64? {
-		let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-			.replacingOccurrences(of: "GfVec3d", with: "")
-			.replacingOccurrences(of: "GfVec3f", with: "")
-			.replacingOccurrences(of: "(", with: "")
-			.replacingOccurrences(of: ")", with: "")
-			.replacingOccurrences(of: "[", with: "")
-			.replacingOccurrences(of: "]", with: "")
-		return Int64(trimmed)
-	}
-
-	private static func parseDouble(from value: String) -> Double? {
-		let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-		return Double(trimmed)
-	}
-
-	private static func parseVector3(from value: String) -> (x: Double, y: Double, z: Double)? {
-		let pattern = #"[0-9.-]+"#
-		guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
-
-		let nsRange = NSRange(value.startIndex..<value.endIndex, in: value)
-		let matches = regex.matches(in: value, options: [], range: nsRange)
-
-		let numbers = matches.compactMap { match -> Double? in
-			guard let range = Range(match.range, in: value) else { return nil }
-			return Double(String(value[range]))
-		}
-
-		guard numbers.count >= 3 else { return nil }
-		return (x: numbers[0], y: numbers[1], z: numbers[2])
-	}
-
-	private static func parseArray(from value: String) -> [SwiftUsdShell.USDValue]? {
-		guard value.hasPrefix("[") && value.hasSuffix("]") else { return nil }
-
-		let inner = String(value.dropFirst().dropLast())
-		let trimmed = inner.trimmingCharacters(in: .whitespacesAndNewlines)
-
-		guard !trimmed.isEmpty else { return [] }
-
-		if trimmed.contains("("), trimmed.contains(")") {
-			let pattern = #"\([^)]+\)"#
-			guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
-			let nsRange = NSRange(trimmed.startIndex..<trimmed.endIndex, in: trimmed)
-			return regex.matches(in: trimmed, range: nsRange).compactMap { match in
-				guard let range = Range(match.range, in: trimmed),
-				      let vector = parseVector3(from: String(trimmed[range]))
-				else { return nil }
-				return .vector3(SwiftUsdShell.USDVector3(x: vector.x, y: vector.y, z: vector.z))
-			}
-		}
-
-		let elements = trimmed.split(separator: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-
-		if parseBool(from: elements[0]) != nil {
-			return elements.map { .bool(parseBool(from: $0) ?? false) }
-		} else if parseDouble(from: elements[0]) != nil {
-			return elements.map { .double(parseDouble(from: $0) ?? 0) }
-		}
-
-		return elements.map { .string($0) }
 	}
 
 	private static func buildPrimTreeNode(from node: ParsedPrim) -> SwiftUsdShell.USDPrimTree {

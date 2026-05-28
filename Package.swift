@@ -188,6 +188,7 @@ let package = Package(
 			name: "DeconstructedUSDInterop",
 			dependencies: [
 				"DeconstructedModels",
+				.product(name: "OpenUSD", package: "SwiftUsd-binaries"),
 				.product(name: "SwiftUsdShell", package: "SwiftUsdShell-binaries"),
 				.product(name: "SwiftUsdShellOpenUSD", package: "SwiftUsdShell-binaries"),
 			],

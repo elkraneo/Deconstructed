@@ -1,5 +1,5 @@
 {
-  "originHash" : "a926d84e23435ab8805e6caa4c024acb468e079c367fb87b1100860b3811e3dc",
+  "originHash" : "0895546c983ff0b79fa99f314e021665dec7c31122f4f408898f50c9b141d3b0",
   "pins" : [
     {
       "identity" : "combine-schedulers",
@@ -128,30 +128,21 @@
       }
     },
     {
-      "identity" : "swiftusd",
+      "identity" : "swiftusd-binaries",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/Reality2713/SwiftUsd.git",
+      "location" : "https://github.com/Reality2713/SwiftUsd-binaries.git",
       "state" : {
-        "revision" : "a1f0eb414c2af4da6229c6ef2f8ba4c2a3d64c76",
-        "version" : "6.1.0-preflight.6"
+        "revision" : "6e7455f78105738a29380676f26f20a10f6addff",
+        "version" : "0.3.124-macos-arm64.2"
       }
     },
     {
-      "identity" : "swiftusdshell",
+      "identity" : "swiftusdshell-binaries",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/Reality2713/SwiftUsdShell.git",
+      "location" : "https://github.com/Reality2713/SwiftUsdShell-binaries.git",
       "state" : {
-        "revision" : "e80d60b69ad33cb20bcd6f274ebb2b5b674ed8f2",
-        "version" : "0.3.72"
-      }
-    },
-    {
-      "identity" : "usdinterop",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/Reality2713/USDInterop",
-      "state" : {
-        "revision" : "580f90d0596a45be9ea5028b1b66447cba085a15",
-        "version" : "0.1.21"
+        "revision" : "b58162b51bc9e2e175ff054ecb3301f2d8109f80",
+        "version" : "0.3.124-macos-arm64.2"
       }
     },
     {
