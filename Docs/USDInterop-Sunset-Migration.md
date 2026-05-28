@@ -61,37 +61,77 @@ This file already calls OpenUSD directly via Cxx interop (`UsdStage.Open`, `SdfP
 
 ## Phased plan
 
-### Phase 0 — Setup
-- [x] Confirm SwiftUsdShellOpenUSD API surface covers our needs (done — see `*.swiftinterface`).
-- [ ] Create a dedicated worktree (`feature/usdinterop-sunset`) so the migration progresses without blocking `main`.
-- [ ] Save this plan in `Docs/USDInterop-Sunset-Migration.md` (this file).
+### Phase 0 — Setup ✅
+- [x] Confirm SwiftUsdShellOpenUSD API surface covers our needs (read swiftinterface).
+- [x] Create dedicated worktree at `.claude/worktrees/usdinterop-sunset` on branch `worktree-usdinterop-sunset` (rebased onto `feature/swift-usd-shell-migration`).
+- [x] Save this plan.
+- [x] **Atomic manifest swap committed as `e1589f1`.** Root + inner manifests now consume `SwiftUsd-binaries` + `SwiftUsdShell-binaries`; `Reality2713/USDInterop` is dropped. Build is intentionally broken at this commit — subsequent commits port the source.
 
-### Phase 1 — Migration code (no manifest swap yet)
-- [ ] In the worktree: stage a parallel adapter file under `DeconstructedShellRuntime/` that implements every public static currently in `DeconstructedShellRuntime.swift` using `OpenUSDStageRuntime`. Don't replace the existing file yet — write side-by-side, gated by a Swift conditional compile flag (`#if USE_BINARY_OPENUSD`).
-- [ ] Run unit tests / build with the flag flipped to confirm parity.
+### API ground truth (from swiftinterface in `/private/tmp/openusdkit-swiftusdshell-binary-slice/0.3.124-macos-arm64.2/xcframeworks/SwiftUsdShell.xcframework`)
 
-### Phase 2 — DeconstructedUSDInterop port
-- [ ] Same pattern: parallel `+SwiftUsdShell.swift` slice exporting the same public statics, behind the same flag.
-- [ ] Once at 100 % API coverage and tests pass, retire the original.
+```swift
+public struct USDStageURL: ... { public init(_ url: Foundation.URL) }
+public struct USDPath:     ... { public init(_ rawValue: String) }
 
-### Phase 3 — Manifest swap (atomic commit)
-- [ ] Replace `.package(url: "Reality2713/USDInterop", from: "0.1.21")` with:
-  ```
-  .package(url: "https://github.com/Reality2713/SwiftUsd-binaries.git",      exact: "0.3.124-macos-arm64.2"),
-  .package(url: "https://github.com/Reality2713/SwiftUsdShell-binaries.git", exact: "0.3.124-macos-arm64.2"),
-  ```
-- [ ] Update all `.product(name:package:)` references:
-  - `package: "SwiftUsdShell"` → `package: "SwiftUsdShell-binaries"`
-  - `package: "USDInterop"` lines → drop, use `SwiftUsdShellOpenUSD` (from `SwiftUsdShell-binaries`)
-- [ ] Drop the `USDInteropCxx` swiftSettings (binary distribution handles it).
-- [ ] Same change in inner `Packages/DeconstructedLibrary/Package.swift`.
-- [ ] Bring up `swift package resolve` → expect clean.
-- [ ] `swift build` → expect clean.
+// All writes flow through this enum:
+public enum USDEditRequest: ... {
+    case setDefaultPrim(stageURL:, primPath:)
+    case setMetersPerUnit(stageURL:, value:)
+    case setUpAxis(stageURL:, axis: USDToken)
+    case setPrimTransform(stageURL:, primPath:, transform: USDTransformData, options: USDTransformEditOptions)
+    case applySchema(stageURL:, primPath:, schemaName: USDToken)
+    case bindMaterial(stageURL:, primPath:, materialPath:, strength: USDMaterialBindingStrength)
+    case setMaterialBindingStrength(stageURL:, primPath:, strength:)
+    case setVariantSelection(stageURL:, primPath:, setName: USDToken, selectionId: USDToken?)
+    case setActive(stageURL:, primPath:, active: Bool)
+    case blockAttribute(stageURL:, primPath:, attributeName: USDToken)
+    case save(stageURL:)
+    // ...
+}
+
+final public class OpenUSDStageRuntime: Sendable {
+    public init()
+    func edit(_: USDEditRequest) async throws -> USDEditResult
+    func stageMetadata(stageURL:) throws -> USDStageMetadata
+    func primSummary(stage:, primPath:) throws -> USDPrimSummary
+    func primTransformData(stage:, primPath:) throws -> USDTransformData?
+    func primMaterialBinding(stage:, primPath:) throws -> USDMaterialBindingInfo?
+    func materialSummaries(stage:) throws -> [USDMaterialSummary]
+    func primReferences(stage:, primPath:) throws -> [USDReference]
+    func addReference(stage:, primPath:, reference:) throws
+    func removeReference(stage:, primPath:, reference:) throws
+    func variantDescriptors(stage:, primPath:) throws -> [USDVariantSetSummary]
+    // + materialSurfaceShader / attributeValue (for material property reads)
+    // + writeMaterialBindingLayer / writeMaterialUnbindingLayer (session-layer flow)
+}
+```
+
+### Phase 1 — Port DeconstructedShellRuntime ← in progress (worktree, this branch)
+
+Mechanical rewrite, ~14 call sites. Drop the `bridgeMaterial*` / `bridgeReference` helpers — types are unified across `SwiftUsdShell` now.
+
+- [ ] `USDOperationsClient().X(url:, ...)` → `OpenUSDStageRuntime().X(stage: USDStageURL(url), ...)` (most are now `throws`)
+- [ ] Drop `import USDInterfaces` / `import USDOperations`
+- [ ] Replace `USDInterfaces.USDTransformData` / `USDMaterialBindingStrength` / `USDReference` with `SwiftUsdShell.*`
+- [ ] `setMaterialBinding` semantically differs (session-layer vs. in-place) — prefer `runtime.edit(.bindMaterial(...))` to preserve current in-place behavior
+- [ ] `materialProperties(url:, materialPath:)` reshapes — combine `materialSurfaceShader(_:)` + `attributeValue(_:)`
+
+### Phase 2 — Port DeconstructedUSDInterop
+
+~2400 lines of mostly direct Cxx OpenUSD (`UsdStage`, `SdfPath`, `VtValue`, `TfToken`). Those imports come from `SwiftUsd-binaries`' `OpenUSD` target now and should compile unchanged.
+
+- [ ] Drop `import USDInterop` / `import USDOperations` / `import USDInterfaces`
+- [ ] Keep `@_implementationOnly import OpenUSD` (resolves through SwiftUsd-binaries)
+- [ ] Replace `operationsClient` singleton with `OpenUSDStageRuntime` adapter
+- [ ] Audit each Cxx interop call for SDK-version drift
+
+### Phase 3 — Land
+
+When Phase 1 + 2 done: `swift build --target InspectorUI` must complete with no OpenUSD source compile. Expected ~6–10s (matches prior binary-slice timing in `Docs/Inspector-Parity-Progress.md`-era tests). Then merge `worktree-usdinterop-sunset` back into `feature/swift-usd-shell-migration`.
 
 ### Phase 4 — Cleanup
-- [ ] Delete orphan `InspectorUI/` directory tree if dead.
-- [ ] Update `AGENTS.md` and `CLAUDE.md` to reflect the new dep structure (drop USDInterop references, add SwiftUsdShellOpenUSD).
-- [ ] Update `Docs/SwiftUsdShell-Boundary-Manifesto.md` to reflect the new ground truth.
+- [ ] Delete `Packages/DeconstructedLibrary/Sources/InspectorUI/`, `.../InspectorFeature/` (orphan; user confirmed deletion in Phase 4).
+- [ ] Refresh `AGENTS.md`, `CLAUDE.md`, `Docs/SwiftUsdShell-Boundary-Manifesto.md` to drop `USDInterop` references.
 
 ## Why a worktree
 
@@ -102,12 +142,15 @@ The migration code in Phase 1–2 will be partially broken at intermediate commi
 
 ## Resume-from-interruption
 
-If interrupted: branch = `feature/usdinterop-sunset` (TBD; create when starting). Check `git diff main..feature/usdinterop-sunset --stat` to see progress. The migration is done when:
+Worktree lives at `.claude/worktrees/usdinterop-sunset` on branch `worktree-usdinterop-sunset`. `feature/swift-usd-shell-migration` is unaffected — keep using it for parity work.
 
-1. `git grep -l "import USDInterop\|import USDOperations\|import USDInterfaces\|import USDInteropCxx" Packages/` returns nothing under active sources.
-2. `swift build --target InspectorUI` completes under ~10s (binary-slice timing).
-3. `find .build/arm64-apple-macosx/debug -name "OpenUSD.build" -newer Package.resolved` returns empty after a fresh resolve.
+Pick-up steps:
+1. `cd .claude/worktrees/usdinterop-sunset && git log --oneline -5` to see current state.
+2. Latest landed commit: `e1589f1 [WIP] Swap manifests to SwiftUsd-binaries + SwiftUsdShell-binaries`. Graph resolves; source files still import old modules → build is intentionally broken.
+3. Next file to port: `Packages/DeconstructedLibrary/Sources/DeconstructedShellRuntime/DeconstructedShellRuntime.swift` (14 call sites — see API mapping table above).
+4. Then `Packages/DeconstructedLibrary/Sources/DeconstructedUSDInterop/DeconstructedUSDInterop.swift` (~2400 lines, mostly direct Cxx OpenUSD that should compile unchanged).
+5. Done when `swift build --target InspectorUI` succeeds AND `find .build/arm64-apple-macosx/debug -name "OpenUSD.build" -newer Package.resolved` is empty.
 
 ## Estimate
 
-Realistically a multi-day effort. Each call site in DeconstructedShellRuntime is mechanical (~10 min); DeconstructedUSDInterop is closer to ~2 days because each Cxx routine needs validation that the binary OpenUSD headers match the SDK we currently link.
+Multi-day. Each call site in DeconstructedShellRuntime is mechanical (~10 min for the 14 reads/writes); DeconstructedUSDInterop is closer to ~2 days because each Cxx routine needs validation against the binary OpenUSD headers.
