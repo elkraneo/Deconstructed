@@ -320,14 +320,23 @@ public enum DeconstructedUSDInterop {
 
 	/// Retrieves a summary of a prim's authored state (path, type, attributes,
 	/// relationships, visibility/purpose/kind metadata).
+	/// Returns a prim's authored attributes as raw USDA-literal `(name, value)`
+	/// pairs. Inspector code parses these literals directly (e.g. `0.25`,
+	/// `<\(path)>`, `@asset@`), so we read them from the USDA text rather than
+	/// `OpenUSDStageRuntime.primSummary`, whose structured `USDValue` would lose
+	/// the raw literal form the downstream parsers depend on. Same open-source
+	/// text-walker approach as `listChildPrims`.
 	public static func getPrimAttributes(
 		url: URL,
 		primPath: String
-	) -> SwiftUsdShell.USDPrimSummary? {
-		try? runtime.primSummary(
-			stage: SwiftUsdShell.USDStageURL(url),
-			primPath: SwiftUsdShell.USDPath(primPath)
-		)
+	) -> USDAPrimAttributes? {
+		guard url.pathExtension.lowercased() == "usda",
+		      let source = try? String(contentsOf: url, encoding: .utf8)
+		else {
+			return nil
+		}
+		let authored = parseAuthoredAttributesFromUSDA(source: source, primPath: primPath)
+		return USDAPrimAttributes(primPath: primPath, authoredAttributes: authored)
 	}
 
 	public static func getPrimTransform(
@@ -1653,6 +1662,89 @@ private func parsePrimDeclarationLine(_ line: String) -> ParsedPrimDeclaration? 
 		primName: primName,
 		metadataText: metadataText
 	)
+}
+
+/// A prim's authored attributes as raw USDA-literal strings, mirroring the
+/// shape the inspector previously consumed from `USDInterop.USDPrimAttributes`.
+public struct USDAPrimAttributes: Sendable, Hashable {
+	public struct Attribute: Sendable, Hashable {
+		public let name: String
+		public let value: String
+		public init(name: String, value: String) {
+			self.name = name
+			self.value = value
+		}
+	}
+	public let primPath: String
+	public let authoredAttributes: [Attribute]
+	public init(primPath: String, authoredAttributes: [Attribute]) {
+		self.primPath = primPath
+		self.authoredAttributes = authoredAttributes
+	}
+}
+
+/// Walks a USDA layer and returns the authored attribute `(name, value)` pairs
+/// declared directly on `primPath` (not its descendants). Values are the raw
+/// literal text to the right of `=`, trimmed; multi-line bracketed values are
+/// joined onto one line.
+private func parseAuthoredAttributesFromUSDA(
+	source: String,
+	primPath: String
+) -> [USDAPrimAttributes.Attribute] {
+	let attrRegex = try? NSRegularExpression(
+		pattern: #"^\s*(?:uniform\s+|custom\s+)*[A-Za-z0-9_:\[\]]+\s+([A-Za-z_][A-Za-z0-9_:]*)\s*=\s*(.*)$"#
+	)
+	guard let attrRegex else { return [] }
+
+	let lines = source.split(whereSeparator: \.isNewline).map(String.init)
+	var stack: [USDAPrimContext] = []
+	var pending: USDAPrimContext?
+	var inTarget = false
+	var attributes: [USDAPrimAttributes.Attribute] = []
+
+	for line in lines {
+		if let declaration = parsePrimDeclarationLine(line) {
+			let path = if let parent = stack.last?.path {
+				"\(parent)/\(declaration.primName)"
+			} else {
+				"/\(declaration.primName)"
+			}
+			let context = USDAPrimContext(path: path, indent: declaration.indent)
+			if line.contains("{") {
+				stack.append(context)
+				inTarget = context.path == primPath
+			} else {
+				pending = context
+			}
+		}
+
+		if line.contains("{"), let pendingContext = pending {
+			stack.append(pendingContext)
+			inTarget = pendingContext.path == primPath
+			pending = nil
+		}
+
+		if inTarget {
+			let nsLine = line as NSString
+			if let match = attrRegex.firstMatch(in: line, range: NSRange(location: 0, length: nsLine.length)),
+			   match.numberOfRanges > 2 {
+				let name = nsLine.substring(with: match.range(at: 1))
+				let value = nsLine.substring(with: match.range(at: 2))
+					.trimmingCharacters(in: .whitespaces)
+				attributes.append(.init(name: name, value: value))
+			}
+		}
+
+		let closingCount = line.filter { $0 == "}" }.count
+		if closingCount > 0 {
+			for _ in 0..<closingCount {
+				_ = stack.popLast()
+			}
+			inTarget = stack.last?.path == primPath
+		}
+	}
+
+	return attributes
 }
 
 private func parseChildPrimsFromUSDA(

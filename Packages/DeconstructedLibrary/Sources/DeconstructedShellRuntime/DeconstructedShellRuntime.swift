@@ -530,38 +530,6 @@ public enum DeconstructedShellRuntime {
 		)
 	}
 
-	// MARK: - Material Edits
-
-	/// Executes a material edit request.
-	///
-	/// `SwiftUsdShell` 0.3.x intentionally models the stable request/result
-	/// contract only. Planning policy such as branch analysis and conversion
-	/// strategy belongs in this runtime or the application layer.
-	///
-	/// - Parameter request: The edit to execute
-	/// - Returns: The result of the edit
-	/// - Throws: If the edit cannot be executed
-	public static func executeMaterialEdit(request: SwiftUsdShell.USDMaterialEditRequest) throws -> SwiftUsdShell.USDMaterialEditResult {
-		switch request.operation {
-		case .setTexture:
-			// For now, we only support basic texture setting
-			// A full implementation would need to handle:
-			// - Material surface output detection
-			// - Asset path resolution
-			// - Layer editing
-			throw ShellRuntimeError.notImplemented("Texture setting not yet implemented")
-
-		case .clearTexture:
-			throw ShellRuntimeError.notImplemented("Texture clearing not yet implemented")
-
-		case .setValue:
-			throw ShellRuntimeError.notImplemented("Value setting not yet implemented")
-
-		case .clearValue:
-			throw ShellRuntimeError.notImplemented("Value clearing not yet implemented")
-		}
-	}
-
 	// MARK: - Private Helpers
 
 	/// Shared `OpenUSDStageRuntime` used for all binary-slice reads. The class
