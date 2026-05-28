@@ -42,8 +42,8 @@ let package = Package(
 		.package(url: "https://github.com/pointfreeco/swift-composable-architecture", from: "1.25.5"),
 		.package(url: "https://github.com/pointfreeco/swift-sharing", from: "2.8.0"),
 		.package(url: "https://github.com/reality2713/StageView.git", exact: "0.3.24"),
-		.package(url: "https://github.com/Reality2713/SwiftUsd-binaries.git", exact: "0.3.124-macos-arm64.2"),
-		.package(url: "https://github.com/Reality2713/SwiftUsdShell-binaries.git", exact: "0.3.124-macos-arm64.2"),
+		.package(url: "https://github.com/Reality2713/SwiftUsd-binaries.git", exact: "0.3.125-macos-arm64.1"),
+		.package(url: "https://github.com/Reality2713/SwiftUsdShell-binaries.git", exact: "0.3.125-macos-arm64.1"),
 	],
 	targets: [
 		.target(

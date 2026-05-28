@@ -112,8 +112,8 @@ let package = Package(
 		// SwiftUsdShell-binaries / SwiftUsd-binaries binary distribution.
 		// See Docs/USDInterop-Sunset-Migration.md.
 		.package(url: "https://github.com/reality2713/StageView.git", exact: "0.3.24"),
-		.package(url: "https://github.com/Reality2713/SwiftUsd-binaries.git", exact: "0.3.124-macos-arm64.2"),
-		.package(url: "https://github.com/Reality2713/SwiftUsdShell-binaries.git", exact: "0.3.124-macos-arm64.2"),
+		.package(url: "https://github.com/Reality2713/SwiftUsd-binaries.git", exact: "0.3.125-macos-arm64.1"),
+		.package(url: "https://github.com/Reality2713/SwiftUsdShell-binaries.git", exact: "0.3.125-macos-arm64.1"),
 	],
 	targets: [
 		// Targets are the basic building blocks of a package, defining a module or a test suite.
