@@ -272,7 +272,7 @@ private struct ComponentParameterEditor: View {
 			LabeledContent(unit.map { "\(parameter.label) (\($0))" } ?? parameter.label) {
 				TextField("", value: Binding(
 					get: { value },
-					set: { onChange("double", String($0)) }
+					set: { onChange("float", String($0)) }
 				), format: .number.precision(.fractionLength(0...4)))
 				.textFieldStyle(.roundedBorder)
 				.frame(minWidth: 80)

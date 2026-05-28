@@ -1385,9 +1385,16 @@ private func setComponentParameterWithUSDMutation(
 	}
 
 	guard didAuthor else {
-		throw DeconstructedUSDInteropError.componentAuthoringFailed(
-			reason: "Failed to set \(attributeName) on \(componentPrimPath)."
-		)
+		// attr.Set returns false when the requested VtValue type doesn't match
+		// the attribute's authored type (e.g. trying to write Float to an
+		// existing Double opacity attribute, or vice versa). Returning false
+		// instead of throwing lets the caller fall back to the text mutator,
+		// which rewrites the attribute type prefix in the USDA layer so the
+		// caller's intended type wins. RealityKit's USD reader is type-strict
+		// on certain RealityKitComponent fields (HierarchicalFade.opacity is
+		// authored as `float` by RCP; a `double` value is silently skipped),
+		// so this fallback is what keeps the visual update working.
+		return false
 	}
 	let rootLayerHandle = stage.GetRootLayer()
 	guard Bool(rootLayerHandle) else {
