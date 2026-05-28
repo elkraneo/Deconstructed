@@ -369,9 +369,10 @@ let package = Package(
 			name: "DeconstructedShellRuntimeTests",
 			dependencies: [
 				"DeconstructedShellRuntime",
-				.product(name: "SwiftUsdShell", package: "SwiftUsdShell"),
+				.product(name: "SwiftUsdShell", package: "SwiftUsdShell-binaries"),
 			],
 			swiftSettings: [
+				.interoperabilityMode(.Cxx)
 			]
 		),
 	],
