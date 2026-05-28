@@ -192,7 +192,12 @@ private func insertionParentPath(selectedNodeID: SceneNode.ID?, nodes: [SceneNod
 		if let defaultPrim = nodes.first {
 			return defaultPrim.path
 		}
-		return "/"
+		// Nothing loaded yet (insertion clicked during scene reload).
+		// Use the RCP convention /Root container rather than "/", which
+		// would author the new prim at the layer root and bypass the
+		// document's defaultPrim — exactly the bug that puts a fresh
+		// Cone at /Cone instead of /Root/Cone.
+		return "/Root"
 	}
 
 	// Find the selected node and check if it's a container type
@@ -212,7 +217,7 @@ private func insertionParentPath(selectedNodeID: SceneNode.ID?, nodes: [SceneNod
 	if let defaultPrim = nodes.first {
 		return defaultPrim.path
 	}
-	return "/"
+	return "/Root"
 }
 
 private func findNode(id: SceneNode.ID, in nodes: [SceneNode]) -> SceneNode? {
