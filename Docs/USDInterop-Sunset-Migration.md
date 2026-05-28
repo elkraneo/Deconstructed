@@ -154,3 +154,43 @@ Pick-up steps:
 ## Estimate
 
 Multi-day. Each call site in DeconstructedShellRuntime is mechanical (~10 min for the 14 reads/writes); DeconstructedUSDInterop is closer to ~2 days because each Cxx routine needs validation against the binary OpenUSD headers.
+
+---
+
+## STATUS: Phases 1–3 COMPLETE (binary build green)
+
+The full app library (`DeconstructedUI`) and entire package build against the
+binary slice with **zero OpenUSD source compilation**.
+
+Commits on `worktree-usdinterop-sunset`:
+- `e1589f1` manifest swap to SwiftUsd-binaries + SwiftUsdShell-binaries
+- `c3c4963` port DeconstructedShellRuntime to OpenUSDStageRuntime
+- (port) DeconstructedUSDInterop to binary OpenUSD (pxr **v0_26_5**, via the
+  re-exported namespace — the version is stamped in the binary, see header note)
+- (fix) raw-string `getPrimAttributes` via new `parseAuthoredAttributesFromUSDA`
+  USDA text walker; dropped dead `executeMaterialEdit` stub
+
+Verified:
+- `swift build` (whole package) → Build complete
+- `swift build --target DeconstructedUI` → 21.7s cold
+- `swift build --target InspectorUI` → 7.4s
+- no `OpenUSD.build` / `SwiftUsd*.build` dirs in `.build/arm64-apple-macosx/debug`
+- no `import USDInterop/USDOperations/USDInterfaces` in active shell sources
+
+### Gotchas found vs. the plan
+1. **pxr namespace version**: binary OpenUSD ships `pxrInternal_v0_26_5__pxrReserved__`,
+   not `v0_26_3`. The re-exported `pxr` alias can't be used for member-type
+   lookups, so the file aliases the versioned namespace directly. If the binary
+   bumps OpenUSD again, update the one `fileprivate typealias pxr = ...` line.
+2. **getPrimAttributes shape**: must return raw USDA-literal strings (inspector
+   parses them), NOT `primSummary`'s structured `USDValue`. Reimplemented with a
+   text walker.
+3. **executeMaterialEdit**: referenced `USDMaterialEditRequest/Result` that don't
+   exist in the binary SwiftUsdShell. It was an unused all-`notImplemented` stub —
+   deleted.
+
+### Remaining (Phase 4 — cleanup, optional)
+- Delete orphan `Sources/InspectorUI/` + `Sources/InspectorFeature/` (still import
+  USDInterfaces but are NOT in the active build graph — they're dead dirs).
+- Refresh AGENTS.md / CLAUDE.md / boundary manifesto.
+- Merge `worktree-usdinterop-sunset` → `feature/swift-usd-shell-migration`.
