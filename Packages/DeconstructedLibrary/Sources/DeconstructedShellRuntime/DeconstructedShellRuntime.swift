@@ -147,44 +147,31 @@ public enum DeconstructedShellRuntime {
 	public static func materialProperties(
 		url: URL, materialPath: String
 	) -> [SwiftUsdShell.USDMaterialPropertySummary] {
-		let stageURL = SwiftUsdShell.USDStageURL(url)
 		var summaries: [SwiftUsdShell.USDMaterialPropertySummary] = []
 
-		if let materialSummary = try? runtime.primSummary(
-			stage: stageURL,
-			primPath: SwiftUsdShell.USDPath(materialPath)
-		) {
-			for attr in materialSummary.attributes where attr.isAuthored {
-				summaries.append(
-					SwiftUsdShell.USDMaterialPropertySummary(
-						name: attr.name.rawValue,
-						propertyType: .unsupported,
-						value: .unsupported(
-							typeName: attr.typeName,
-							valueDescription: attr.value?.usdaLiteral ?? ""
-						)
-					)
+		// Read authored attributes as raw USDA-literal strings via the open-source
+		// text walker rather than `runtime.primSummary().attributes[].value`. This
+		// keeps the displayed value text consistent with the rest of the inspector
+		// (which parses raw literals) and avoids depending on `USDValue` rendering
+		// helpers whose availability can drift between binary slice versions.
+		for attr in DeconstructedUSDInterop.getPrimAttributes(url: url, primPath: materialPath)?.authoredAttributes ?? [] {
+			summaries.append(
+				SwiftUsdShell.USDMaterialPropertySummary(
+					name: attr.name,
+					propertyType: .unsupported,
+					value: .unsupported(typeName: "", valueDescription: attr.value)
 				)
-			}
+			)
 		}
 
 		let children = DeconstructedUSDInterop.listChildPrims(url: url, parentPrimPath: materialPath)
 		for child in children {
-			guard let shaderSummary = try? runtime.primSummary(
-				stage: stageURL,
-				primPath: SwiftUsdShell.USDPath(child.path)
-			) else {
-				continue
-			}
-			for attr in shaderSummary.attributes where attr.isAuthored {
+			for attr in DeconstructedUSDInterop.getPrimAttributes(url: url, primPath: child.path)?.authoredAttributes ?? [] {
 				summaries.append(
 					SwiftUsdShell.USDMaterialPropertySummary(
-						name: "\(child.primName).\(attr.name.rawValue)",
+						name: "\(child.primName).\(attr.name)",
 						propertyType: .unsupported,
-						value: .unsupported(
-							typeName: child.typeName ?? "",
-							valueDescription: attr.value?.usdaLiteral ?? ""
-						)
+						value: .unsupported(typeName: child.typeName ?? "", valueDescription: attr.value)
 					)
 				)
 			}
