@@ -2402,6 +2402,8 @@ private struct MaterialPropertyRow: View {
 			case let .unsupported(_, description):
 				Text(description).font(.system(size: 11)).foregroundStyle(.secondary)
 					.lineLimit(1).truncationMode(.middle)
+			@unknown default:
+				EmptyView()
 			}
 		}
 	}
