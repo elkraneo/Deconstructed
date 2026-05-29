@@ -546,6 +546,11 @@ public enum DeconstructedShellRuntime {
 		)
 	}
 
+	// NOTE: This parser backs `primTree`, which currently has no callers — the
+	// live scene navigator uses `SceneGraphClient.parseSceneNodes`. It also uses
+	// the old naive `line == "}"` brace handling and only matches `def Type
+	// "Name"` prims. If revived, replace its hand-rolled walk with
+	// `DeconstructedModels.USDAPrimScopeTracker` (see SceneGraphClient).
 	private static func parseStage(url: URL) -> ParsedStage? {
 		guard let text = try? String(contentsOf: url, encoding: .utf8) else { return nil }
 

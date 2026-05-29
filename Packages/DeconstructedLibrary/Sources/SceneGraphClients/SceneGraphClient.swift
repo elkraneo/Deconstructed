@@ -1,4 +1,5 @@
 import ComposableArchitecture
+import DeconstructedModels
 import Foundation
 import SceneGraphModels
 
@@ -59,55 +60,30 @@ private final class SceneNodeBuilder {
 }
 
 private func parseSceneNodes(_ source: String) -> [SceneNode] {
-	let lines = source.split(whereSeparator: \.isNewline)
-
-	let regex = /^(\s*)(def|over|class)\s+(?:([A-Za-z0-9_:]+)\s+)?\"([^\"]+)\"/
-
+	// Robust prim-scope tracking (see USDAPrimScopeTracker): naive brace counting
+	// desyncs on metadata dictionaries (customData = { }, variants = { }) and
+	// mis-nests sibling prims in the navigator.
+	let specifierRegex = /^\s*(def|over|class)\b/
+	var tracker = USDAPrimScopeTracker()
 	var roots: [SceneNodeBuilder] = []
-	var stack: [SceneNodeBuilder] = []
-	var pendingNode: SceneNodeBuilder? = nil
+	var buildersByPath: [String: SceneNodeBuilder] = [:]
 
-	for rawLine in lines {
+	for rawLine in source.split(whereSeparator: \.isNewline) {
 		let line = String(rawLine)
-		let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
-		guard !trimmed.hasPrefix("#") else { continue }
+		let scope = tracker.consume(line)
+		guard let path = scope.declaredPath else { continue }
 
-		if let match = line.firstMatch(of: regex) {
-			let specifierRaw = String(match.output.2)
-			let specifier = SceneNodeSpecifier(rawValue: specifierRaw) ?? .def
-			let typeName = match.output.3.map { String($0) }
-			let name = String(match.output.4)
-			let node = SceneNodeBuilder(name: name, typeName: typeName, specifier: specifier)
+		let specifier = line.firstMatch(of: specifierRegex)
+			.flatMap { SceneNodeSpecifier(rawValue: String($0.output.1)) } ?? .def
+		let name = path.split(separator: "/").last.map(String.init) ?? path
+		let node = SceneNodeBuilder(name: name, typeName: scope.declaredTypeName, specifier: specifier)
 
-			if let parent = stack.last {
-				parent.children.append(node)
-			} else {
-				roots.append(node)
-			}
-
-			if line.contains("{") {
-				stack.append(node)
-				pendingNode = nil
-			} else {
-				pendingNode = node
-			}
+		if let parentPath = scope.activePath, let parent = buildersByPath[parentPath] {
+			parent.children.append(node)
+		} else {
+			roots.append(node)
 		}
-
-		if line.contains("{") && pendingNode != nil {
-			stack.append(pendingNode!)
-			pendingNode = nil
-		}
-
-		if line.contains("}") {
-			let closingCount = line.filter { $0 == "}" }.count
-			if closingCount > 0 {
-				for _ in 0..<closingCount {
-					if !stack.isEmpty {
-						stack.removeLast()
-					}
-				}
-			}
-		}
+		buildersByPath[path] = node
 	}
 
 	return roots.map { buildSceneNode(from: $0, parentPath: "") }
