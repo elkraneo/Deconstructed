@@ -1024,11 +1024,6 @@ private func formatUSDRelationshipTargets(_ primPaths: [String]) -> String {
 	}
 }
 
-private struct USDAPrimContext {
-	let path: String
-	let indent: String
-}
-
 private struct ComponentTemplateLine {
 	let level: Int
 	let text: String
@@ -1183,61 +1178,24 @@ private func insertRealityKitComponent(
 ) throws -> String {
 	let lines = source.split(whereSeparator: \.isNewline).map(String.init)
 	let indentUnit = source.contains("\t") ? "\t" : "    "
-	let declarationRegex = /^(\s*)(def|over|class)\s+(?:([A-Za-z0-9_:]+)\s+)?\"([^\"]+)\"/
 
-	var stack: [USDAPrimContext] = []
-	var pending: USDAPrimContext?
+	var tracker = USDAPrimScopeTracker()
 	var insertionLineIndex: Int?
 	var targetIndent: String?
-	var inTargetPrim = false
 
 	for (index, line) in lines.enumerated() {
-		if let match = line.firstMatch(of: declarationRegex) {
-			let indent = String(match.output.1)
-			let primName = String(match.output.4)
-			let path = if let parent = stack.last?.path {
-				"\(parent)/\(primName)"
-			} else {
-				"/\(primName)"
-			}
-			let context = USDAPrimContext(path: path, indent: indent)
-			if line.contains("{") {
-				stack.append(context)
-				inTargetPrim = context.path == primPath
-				if inTargetPrim {
-					targetIndent = context.indent
-				}
-			} else {
-				pending = context
-			}
+		let scope = tracker.consume(line)
+		if scope.declaredPath == primPath {
+			targetIndent = scope.declaredIndent
 		}
-
-		if line.contains("{"), let pendingContext = pending {
-			stack.append(pendingContext)
-			inTargetPrim = pendingContext.path == primPath
-			if inTargetPrim {
-				targetIndent = pendingContext.indent
-			}
-			pending = nil
-		}
-
-		let closingCount = line.filter { $0 == "}" }.count
-		if closingCount > 0 {
-			for _ in 0..<closingCount {
-				guard let current = stack.last else { break }
-				if current.path == primPath && insertionLineIndex == nil {
-					insertionLineIndex = index
-				}
-				_ = stack.popLast()
-				inTargetPrim = stack.last?.path == primPath
-			}
-		}
-
-		if inTargetPrim,
+		if scope.activePath == primPath,
 		   line.contains("def RealityKitComponent \"\(componentName)\"") {
 			throw DeconstructedUSDInteropError.componentAuthoringFailed(
 				reason: "Component '\(componentName)' already exists on prim \(primPath)."
 			)
+		}
+		if insertionLineIndex == nil, scope.closedPaths.contains(primPath) {
+			insertionLineIndex = index
 		}
 	}
 
@@ -1664,6 +1622,109 @@ private func parsePrimDeclarationLine(_ line: String) -> ParsedPrimDeclaration? 
 	)
 }
 
+/// One line's resolved prim-scope facts, produced by `USDAPrimScopeTracker`.
+private struct USDALineScope {
+	/// Prim whose body directly contains this line's content (`nil` at top level),
+	/// captured *before* this line's own braces are applied — so attribute lines
+	/// resolve to their owning prim and a prim's closing `}` line resolves to that
+	/// same prim (the insertion point).
+	let activePath: String?
+	/// Full path of a prim declared on this line, if any.
+	let declaredPath: String?
+	/// Indentation of a prim declared on this line, if any.
+	let declaredIndent: String?
+	/// Prim paths whose body closes on this line, in close order.
+	let closedPaths: [String]
+}
+
+/// Robust USDA prim-scope tracker.
+///
+/// Naive `{`/`}` counting desyncs the prim path stack because it also counts
+/// braces that belong to `( … )` metadata blocks, dictionary values
+/// (`customData = { … }`, `variants = { … }`), and string literals. When such a
+/// dictionary precedes a sibling prim, every prim after it is assigned the wrong
+/// path (e.g. `/Cone` instead of `/Root/Cone`), which surfaces as
+/// "Target prim not found". This tracker classifies each brace as prim-scope vs.
+/// dictionary/metadata and only the former moves the prim path stack.
+private struct USDAPrimScopeTracker {
+	private enum BraceKind { case prim, dict }
+	private var primStack: [(path: String, indent: String)] = []
+	private var braceStack: [BraceKind] = []
+	private var parenDepth = 0
+	private var pending: (path: String, indent: String)?
+	private var inString: Character?
+	private var lastSignificant: Character = " "
+
+	mutating func consume(_ line: String) -> USDALineScope {
+		let activePath = primStack.last?.path
+		var declaredPath: String?
+		var declaredIndent: String?
+
+		// Declarations only count at prim scope: not inside metadata parens, a
+		// dictionary brace, or a string literal.
+		if parenDepth == 0, braceStack.last != .dict, inString == nil,
+		   let decl = parsePrimDeclarationLine(line) {
+			let path = primStack.last.map { "\($0.path)/\(decl.primName)" } ?? "/\(decl.primName)"
+			pending = (path: path, indent: decl.indent)
+			declaredPath = path
+			declaredIndent = decl.indent
+		}
+
+		var closedPaths: [String] = []
+		for ch in line {
+			if let quote = inString {
+				if ch == quote { inString = nil }
+				continue
+			}
+			switch ch {
+			case "\"", "'":
+				inString = ch
+				lastSignificant = ch
+			case "#":
+				// Comment to end of line; nothing past here affects scope.
+				return USDALineScope(
+					activePath: activePath,
+					declaredPath: declaredPath,
+					declaredIndent: declaredIndent,
+					closedPaths: closedPaths
+				)
+			case "(":
+				parenDepth += 1
+				lastSignificant = ch
+			case ")":
+				if parenDepth > 0 { parenDepth -= 1 }
+				lastSignificant = ch
+			case "{":
+				if parenDepth > 0 || lastSignificant == "=" {
+					braceStack.append(.dict)
+				} else {
+					braceStack.append(.prim)
+					if let pendingPrim = pending {
+						primStack.append(pendingPrim)
+						pending = nil
+					}
+				}
+				lastSignificant = ch
+			case "}":
+				if let kind = braceStack.popLast(), kind == .prim,
+				   let closed = primStack.popLast() {
+					closedPaths.append(closed.path)
+				}
+				lastSignificant = ch
+			default:
+				if !ch.isWhitespace { lastSignificant = ch }
+			}
+		}
+
+		return USDALineScope(
+			activePath: activePath,
+			declaredPath: declaredPath,
+			declaredIndent: declaredIndent,
+			closedPaths: closedPaths
+		)
+	}
+}
+
 /// A prim's authored attributes as raw USDA-literal strings, mirroring the
 /// shape the inspector previously consumed from `USDInterop.USDPrimAttributes`.
 public struct USDAPrimAttributes: Sendable, Hashable {
@@ -1697,34 +1758,12 @@ private func parseAuthoredAttributesFromUSDA(
 	guard let attrRegex else { return [] }
 
 	let lines = source.split(whereSeparator: \.isNewline).map(String.init)
-	var stack: [USDAPrimContext] = []
-	var pending: USDAPrimContext?
-	var inTarget = false
+	var tracker = USDAPrimScopeTracker()
 	var attributes: [USDAPrimAttributes.Attribute] = []
 
 	for line in lines {
-		if let declaration = parsePrimDeclarationLine(line) {
-			let path = if let parent = stack.last?.path {
-				"\(parent)/\(declaration.primName)"
-			} else {
-				"/\(declaration.primName)"
-			}
-			let context = USDAPrimContext(path: path, indent: declaration.indent)
-			if line.contains("{") {
-				stack.append(context)
-				inTarget = context.path == primPath
-			} else {
-				pending = context
-			}
-		}
-
-		if line.contains("{"), let pendingContext = pending {
-			stack.append(pendingContext)
-			inTarget = pendingContext.path == primPath
-			pending = nil
-		}
-
-		if inTarget {
+		let scope = tracker.consume(line)
+		if scope.activePath == primPath {
 			let nsLine = line as NSString
 			if let match = attrRegex.firstMatch(in: line, range: NSRange(location: 0, length: nsLine.length)),
 			   match.numberOfRanges > 2 {
@@ -1733,14 +1772,6 @@ private func parseAuthoredAttributesFromUSDA(
 					.trimmingCharacters(in: .whitespaces)
 				attributes.append(.init(name: name, value: value))
 			}
-		}
-
-		let closingCount = line.filter { $0 == "}" }.count
-		if closingCount > 0 {
-			for _ in 0..<closingCount {
-				_ = stack.popLast()
-			}
-			inTarget = stack.last?.path == primPath
 		}
 	}
 
@@ -1752,46 +1783,21 @@ private func parseChildPrimsFromUSDA(
 	parentPrimPath: String
 ) -> [USDAChildPrimInfo] {
 	let lines = source.split(whereSeparator: \.isNewline).map(String.init)
-	var stack: [USDAPrimContext] = []
-	var pending: USDAPrimContext?
+	var tracker = USDAPrimScopeTracker()
 	var children: [USDAChildPrimInfo] = []
 
 	for line in lines {
-		if let declaration = parsePrimDeclarationLine(line) {
-			let parentPath = stack.last?.path
-			let path = if let parent = parentPath {
-				"\(parent)/\(declaration.primName)"
-			} else {
-				"/\(declaration.primName)"
-			}
-			let context = USDAPrimContext(path: path, indent: declaration.indent)
-			if line.contains("{") {
-				stack.append(context)
-			} else {
-				pending = context
-			}
-
-			if parentPath == parentPrimPath {
-				children.append(
-					USDAChildPrimInfo(
-						path: path,
-						primName: declaration.primName,
-						typeName: declaration.typeName
-					)
+		let scope = tracker.consume(line)
+		if scope.activePath == parentPrimPath,
+		   let childPath = scope.declaredPath,
+		   let declaration = parsePrimDeclarationLine(line) {
+			children.append(
+				USDAChildPrimInfo(
+					path: childPath,
+					primName: declaration.primName,
+					typeName: declaration.typeName
 				)
-			}
-		}
-
-		if line.contains("{"), let pendingContext = pending {
-			stack.append(pendingContext)
-			pending = nil
-		}
-
-		let closingCount = line.filter { $0 == "}" }.count
-		if closingCount > 0 {
-			for _ in 0..<closingCount {
-				_ = stack.popLast()
-			}
+			)
 		}
 	}
 
@@ -1803,30 +1809,20 @@ private func parseRealityKitComponentPrimsFromUSDA(
 	parentPrimPath: String
 ) -> [RealityKitComponentPrimInfo] {
 	let lines = source.split(whereSeparator: \.isNewline).map(String.init)
-	var stack: [USDAPrimContext] = []
-	var pending: USDAPrimContext?
+	var tracker = USDAPrimScopeTracker()
 	var components: [RealityKitComponentPrimInfo] = []
 	var componentIndexByPath: [String: Int] = [:]
 	var pendingComponentPath: String?
 
 	for line in lines {
-		if let declaration = parsePrimDeclarationLine(line) {
-			let parentPath = stack.last?.path
-			let path = if let parent = stack.last?.path {
-				"\(parent)/\(declaration.primName)"
-			} else {
-				"/\(declaration.primName)"
-			}
-			let context = USDAPrimContext(path: path, indent: declaration.indent)
-			if line.contains("{") {
-				stack.append(context)
-			} else {
-				pending = context
-			}
+		let scope = tracker.consume(line)
 
+		if scope.activePath == parentPrimPath,
+		   let path = scope.declaredPath,
+		   let declaration = parsePrimDeclarationLine(line) {
 			let isComponentType = declaration.typeName == "RealityKitComponent"
 				|| declaration.typeName == "RealityKitCustomComponent"
-			if isComponentType, parentPath == parentPrimPath {
+			if isComponentType {
 				let info = RealityKitComponentPrimInfo(
 					path: path,
 					primName: declaration.primName,
@@ -1848,17 +1844,10 @@ private func parseRealityKitComponentPrimsFromUSDA(
 			components[index].isActive = parsedActive
 		}
 
-		if line.contains("{"), let pendingContext = pending {
-			stack.append(pendingContext)
-			pending = nil
-			pendingComponentPath = nil
-		}
-
-		let closingCount = line.filter { $0 == "}" }.count
-		if closingCount > 0 {
-			for _ in 0..<closingCount {
-				_ = stack.popLast()
-			}
+		// Stop scanning a component's metadata for its active flag once we enter
+		// its body or any prim closes on this line.
+		if let componentPath = pendingComponentPath,
+		   scope.activePath == componentPath || !scope.closedPaths.isEmpty {
 			pendingComponentPath = nil
 		}
 	}
@@ -1872,40 +1861,14 @@ private func parseComponentCustomDataAssetFromUSDA(
 	key: String
 ) -> String? {
 	let lines = source.split(whereSeparator: \.isNewline).map(String.init)
-	var stack: [USDAPrimContext] = []
-	var pending: USDAPrimContext?
+	var tracker = USDAPrimScopeTracker()
 
 	for (index, line) in lines.enumerated() {
-		if let declaration = parsePrimDeclarationLine(line) {
-			let path = if let parent = stack.last?.path {
-				"\(parent)/\(declaration.primName)"
-			} else {
-				"/\(declaration.primName)"
-			}
-			let context = USDAPrimContext(path: path, indent: declaration.indent)
-			if line.contains("{") {
-				stack.append(context)
-			} else {
-				pending = context
-			}
-
-			if path == componentPrimPath,
-			   let metadata = parseComponentMetadataBlock(lines: lines, declarationIndex: index)
-			{
-				return parseCustomDataAsset(in: metadata, key: key)
-			}
-		}
-
-		if line.contains("{"), let pendingContext = pending {
-			stack.append(pendingContext)
-			pending = nil
-		}
-
-		let closingCount = line.filter { $0 == "}" }.count
-		if closingCount > 0 {
-			for _ in 0..<closingCount {
-				_ = stack.popLast()
-			}
+		let scope = tracker.consume(line)
+		if scope.declaredPath == componentPrimPath,
+		   let metadata = parseComponentMetadataBlock(lines: lines, declarationIndex: index)
+		{
+			return parseCustomDataAsset(in: metadata, key: key)
 		}
 	}
 
@@ -1918,34 +1881,12 @@ private func parsePrimRelationshipTargetsFromUSDA(
 	relationshipName: String
 ) -> [String] {
 	let lines = source.split(whereSeparator: \.isNewline).map(String.init)
-	var stack: [USDAPrimContext] = []
-	var pending: USDAPrimContext?
-	var inTargetPrim = false
+	var tracker = USDAPrimScopeTracker()
 	var pendingRelationshipLiteral: String?
 
 	for line in lines {
-		if let declaration = parsePrimDeclarationLine(line) {
-			let path = if let parent = stack.last?.path {
-				"\(parent)/\(declaration.primName)"
-			} else {
-				"/\(declaration.primName)"
-			}
-			let context = USDAPrimContext(path: path, indent: declaration.indent)
-			if line.contains("{") {
-				stack.append(context)
-				inTargetPrim = context.path == primPath
-			} else {
-				pending = context
-			}
-		}
-
-		if line.contains("{"), let pendingContext = pending {
-			stack.append(pendingContext)
-			inTargetPrim = pendingContext.path == primPath
-			pending = nil
-		}
-
-		if inTargetPrim {
+		let scope = tracker.consume(line)
+		if scope.activePath == primPath {
 			if var relationLiteral = pendingRelationshipLiteral {
 				relationLiteral.append(" ")
 				relationLiteral.append(line.trimmingCharacters(in: .whitespacesAndNewlines))
@@ -1973,14 +1914,6 @@ private func parsePrimRelationshipTargetsFromUSDA(
 						}
 					}
 				}
-			}
-		}
-
-		let closingCount = line.filter { $0 == "}" }.count
-		if closingCount > 0 {
-			for _ in 0..<closingCount {
-				_ = stack.popLast()
-				inTargetPrim = stack.last?.path == primPath
 			}
 		}
 	}
@@ -2100,59 +2033,24 @@ private func locatePrimDeclarationContext(
 	lines: [String],
 	primPath: String
 ) -> PrimDeclarationContext? {
-	var stack: [USDAPrimContext] = []
-	var pending: USDAPrimContext?
+	var tracker = USDAPrimScopeTracker()
 	for (index, line) in lines.enumerated() {
-		guard let declaration = parsePrimDeclarationLine(line) else {
-			if line.contains("{"), let pendingContext = pending {
-				stack.append(pendingContext)
-				pending = nil
-			}
-			let closingCount = line.filter { $0 == "}" }.count
-			if closingCount > 0 {
-				for _ in 0..<closingCount {
-					_ = stack.popLast()
-				}
-			}
+		let scope = tracker.consume(line)
+		guard scope.declaredPath == primPath,
+		      let declaration = parsePrimDeclarationLine(line) else {
 			continue
 		}
-		let parentPath = stack.last?.path
-		let path = if let parentPath {
-			"\(parentPath)/\(declaration.primName)"
-		} else {
-			"/\(declaration.primName)"
-		}
-		let context = USDAPrimContext(path: path, indent: declaration.indent)
-		let braceIndex = if line.contains("{") {
-			index
-		} else {
-			findOpenBraceLineIndex(lines: lines, startIndex: index) ?? index
-		}
-		if path == primPath {
-			return PrimDeclarationContext(
-				declarationLineIndex: index,
-				openBraceLineIndex: max(braceIndex, index + 1),
-				indent: declaration.indent,
-				keyword: declaration.keyword,
-				typeName: declaration.typeName,
-				primName: declaration.primName
-			)
-		}
-		if line.contains("{") {
-			stack.append(context)
-		} else {
-			pending = context
-		}
-		if line.contains("{"), let pendingContext = pending {
-			stack.append(pendingContext)
-			pending = nil
-		}
-		let closingCount = line.filter { $0 == "}" }.count
-		if closingCount > 0 {
-			for _ in 0..<closingCount {
-				_ = stack.popLast()
-			}
-		}
+		let braceIndex = line.contains("{")
+			? index
+			: (findOpenBraceLineIndex(lines: lines, startIndex: index) ?? index)
+		return PrimDeclarationContext(
+			declarationLineIndex: index,
+			openBraceLineIndex: max(braceIndex, index + 1),
+			indent: declaration.indent,
+			keyword: declaration.keyword,
+			typeName: declaration.typeName,
+			primName: declaration.primName
+		)
 	}
 	return nil
 }
@@ -2330,38 +2228,18 @@ private func updateRealityKitComponentParameterInUSDA(
 		pattern: #"^\s*(?:uniform\s+)?[A-Za-z0-9_:\[\]]+\s+([A-Za-z_][A-Za-z0-9_:]*)\s*="#
 	)
 
-	var stack: [USDAPrimContext] = []
-	var pending: USDAPrimContext?
+	var tracker = USDAPrimScopeTracker()
 	var componentIndent: String?
-	var inTarget = false
 	var insertIndex: Int?
 	var replaceRange: Range<Int>?
 
 	for (index, line) in lines.enumerated() {
-		if let declaration = parsePrimDeclarationLine(line) {
-			let path = if let parent = stack.last?.path {
-				"\(parent)/\(declaration.primName)"
-			} else {
-				"/\(declaration.primName)"
-			}
-			let context = USDAPrimContext(path: path, indent: declaration.indent)
-			if line.contains("{") {
-				stack.append(context)
-				inTarget = context.path == componentPrimPath
-				if inTarget { componentIndent = context.indent }
-			} else {
-				pending = context
-			}
+		let scope = tracker.consume(line)
+		if scope.declaredPath == componentPrimPath {
+			componentIndent = scope.declaredIndent
 		}
 
-		if line.contains("{"), let pendingContext = pending {
-			stack.append(pendingContext)
-			inTarget = pendingContext.path == componentPrimPath
-			if inTarget { componentIndent = pendingContext.indent }
-			pending = nil
-		}
-
-		if inTarget {
+		if scope.activePath == componentPrimPath {
 			let nsLine = line as NSString
 			let range = NSRange(location: 0, length: nsLine.length)
 			if let match = attrRegex.firstMatch(in: line, options: [], range: range),
@@ -2391,16 +2269,8 @@ private func updateRealityKitComponentParameterInUSDA(
 			}
 		}
 
-		let closingCount = line.filter { $0 == "}" }.count
-		if closingCount > 0 {
-			for _ in 0..<closingCount {
-				guard let current = stack.last else { break }
-				if current.path == componentPrimPath && insertIndex == nil {
-					insertIndex = index
-				}
-				_ = stack.popLast()
-				inTarget = stack.last?.path == componentPrimPath
-			}
+		if insertIndex == nil, scope.closedPaths.contains(componentPrimPath) {
+			insertIndex = index
 		}
 	}
 
@@ -2433,34 +2303,12 @@ private func removeRealityKitComponentParameterInUSDA(
 		pattern: #"^\s*(?:uniform\s+)?[A-Za-z0-9_:\[\]]+\s+([A-Za-z_][A-Za-z0-9_:]*)\s*="#
 	)
 
-	var stack: [USDAPrimContext] = []
-	var pending: USDAPrimContext?
-	var inTarget = false
+	var tracker = USDAPrimScopeTracker()
 	var removeIndex: Int?
 
 	for (index, line) in lines.enumerated() {
-		if let declaration = parsePrimDeclarationLine(line) {
-			let path = if let parent = stack.last?.path {
-				"\(parent)/\(declaration.primName)"
-			} else {
-				"/\(declaration.primName)"
-			}
-			let context = USDAPrimContext(path: path, indent: declaration.indent)
-			if line.contains("{") {
-				stack.append(context)
-				inTarget = context.path == componentPrimPath
-			} else {
-				pending = context
-			}
-		}
-
-		if line.contains("{"), let pendingContext = pending {
-			stack.append(pendingContext)
-			inTarget = pendingContext.path == componentPrimPath
-			pending = nil
-		}
-
-		if inTarget {
+		let scope = tracker.consume(line)
+		if scope.activePath == componentPrimPath {
 			let nsLine = line as NSString
 			let range = NSRange(location: 0, length: nsLine.length)
 			if let match = attrRegex.firstMatch(in: line, options: [], range: range),
@@ -2474,14 +2322,6 @@ private func removeRealityKitComponentParameterInUSDA(
 						break
 					}
 				}
-			}
-		}
-
-		let closingCount = line.filter { $0 == "}" }.count
-		if closingCount > 0 {
-			for _ in 0..<closingCount {
-				_ = stack.popLast()
-				inTarget = stack.last?.path == componentPrimPath
 			}
 		}
 	}
@@ -2503,48 +2343,23 @@ private func insertTypedPrimInUSDA(
 ) throws -> String {
 	let lines = source.split(whereSeparator: \.isNewline).map(String.init)
 	let indentUnit = source.contains("\t") ? "\t" : "    "
-	var stack: [USDAPrimContext] = []
-	var pending: USDAPrimContext?
+	var tracker = USDAPrimScopeTracker()
 	var insertionLineIndex: Int?
 	var parentIndent: String?
 	var existingPrimPath: String?
 
 	for (index, line) in lines.enumerated() {
-		if let declaration = parsePrimDeclarationLine(line) {
-			let path = if let parent = stack.last?.path {
-				"\(parent)/\(declaration.primName)"
-			} else {
-				"/\(declaration.primName)"
+		let scope = tracker.consume(line)
+		if let declaredPath = scope.declaredPath {
+			if declaredPath == "\(parentPrimPath)/\(primName)" {
+				existingPrimPath = declaredPath
 			}
-			if path == "\(parentPrimPath)/\(primName)" {
-				existingPrimPath = path
-			}
-			let context = USDAPrimContext(path: path, indent: declaration.indent)
-			if line.contains("{") {
-				stack.append(context)
-				if context.path == parentPrimPath {
-					parentIndent = context.indent
-				}
-			} else {
-				pending = context
+			if declaredPath == parentPrimPath {
+				parentIndent = scope.declaredIndent
 			}
 		}
-		if line.contains("{"), let pendingContext = pending {
-			stack.append(pendingContext)
-			if pendingContext.path == parentPrimPath {
-				parentIndent = pendingContext.indent
-			}
-			pending = nil
-		}
-		let closingCount = line.filter { $0 == "}" }.count
-		if closingCount > 0 {
-			for _ in 0..<closingCount {
-				guard let current = stack.last else { break }
-				if current.path == parentPrimPath && insertionLineIndex == nil {
-					insertionLineIndex = index
-				}
-				_ = stack.popLast()
-			}
+		if insertionLineIndex == nil, scope.closedPaths.contains(parentPrimPath) {
+			insertionLineIndex = index
 		}
 	}
 
