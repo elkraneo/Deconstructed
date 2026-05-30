@@ -189,7 +189,6 @@ let package = Package(
 			dependencies: [
 				"DeconstructedModels",
 				.product(name: "OpenUSD", package: "SwiftUsd-binaries"),
-				.product(name: "SwiftUsdShell", package: "SwiftUsdShell-binaries"),
 				.product(name: "SwiftUsdShellOpenUSD", package: "SwiftUsdShell-binaries"),
 			],
 			path: "Packages/DeconstructedLibrary/Sources/DeconstructedUSDInterop",
@@ -202,7 +201,6 @@ let package = Package(
 					"DeconstructedUSDInterop",
 					"DeconstructedModels",
 					"SceneGraphClients",
-					.product(name: "SwiftUsdShell", package: "SwiftUsdShell-binaries"),
 					.product(name: "SwiftUsdShellOpenUSD", package: "SwiftUsdShell-binaries"),
 				],
 				path: "Packages/DeconstructedLibrary/Sources/DeconstructedShellRuntime",
