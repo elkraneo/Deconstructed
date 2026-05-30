@@ -189,8 +189,17 @@ Verified:
    exist in the binary SwiftUsdShell. It was an unused all-`notImplemented` stub —
    deleted.
 
-### Remaining (Phase 4 — cleanup, optional)
-- Delete orphan `Sources/InspectorUI/` + `Sources/InspectorFeature/` (still import
-  USDInterfaces but are NOT in the active build graph — they're dead dirs).
-- Refresh AGENTS.md / CLAUDE.md / boundary manifesto.
-- Merge `worktree-usdinterop-sunset` → `feature/swift-usd-shell-migration`.
+### Remaining (Phase 4 — cleanup)
+- [x] **Archived `Reality2713/USDInterop` (2026-05-30).** Final tag `v0.1.22`,
+  README redirects to SwiftUsdShell / OpenUSDKit. Also archived the orphaned
+  `USDInteropAdvanced-binaries` (final tag `v0.2.30`). Safety verified across all
+  checked-out first-party repos: only the already-archived `USDTools` still
+  referenced USDInterop.
+- [x] **Refreshed CLAUDE.md / AGENTS.md / boundary manifesto / README** to drop
+  the legacy modules and describe the SwiftUsdShell runtime path.
+- [ ] Delete orphan `Sources/InspectorUI/` + `Sources/InspectorFeature/` (still
+  import USDInterfaces but are NOT in the active build graph — they're dead dirs;
+  the live modules are compiled from `Sources/InspectorShellUI/` +
+  `Sources/InspectorShellFeature/` via the `path:` remap).
+- [ ] Merge `worktree-usdinterop-sunset` → `feature/swift-usd-shell-migration`
+  (if anything in the worktree is still needed; otherwise prune it).

@@ -1,5 +1,11 @@
 # USDOperations Refactor Evaluation
 
+> **Historical (as of 2026-05-30).** `USDOperations` and the rest of the
+> `USDInterop` family are archived and out of the build graph. The runtime path
+> is now `SwiftUsdShellOpenUSD` / `OpenUSDStageRuntime` via `DeconstructedShellRuntime`.
+> Retained as a record of the evaluation that informed that move; not current
+> guidance. See `Docs/USDInterop-Sunset-Migration.md`.
+
 ## Status
 
 - Date: 2026-03-21

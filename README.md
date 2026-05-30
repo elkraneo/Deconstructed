@@ -5,9 +5,7 @@ A macOS document-based application that reverse-engineers [Reality Composer Pro]
 
 > [!IMPORTANT]
 > Deconstructed is developed in the open, and this repository contains the active source code.
-> The public build path does not require `USDTools` or any private USD workflow package.
-> The architectural direction is `SwiftUsdShell` for pure-Swift USD contracts, with OpenUSD-backed runtime work quarantined behind Deconstructed's adapter layer.
-> The current source still uses the public `USDInterop` package family for runtime implementation while that migration is completed.
+> USD work runs on `SwiftUsdShell` (pure-Swift contracts) plus the `SwiftUsdShellOpenUSD` runtime adapter, both consumed as binaries. OpenUSD-backed work is quarantined behind Deconstructed's `DeconstructedShellRuntime` adapter layer. The legacy `USDInterop` / `USDTools` package family is archived and no longer in the build graph.
 > Download the latest packaged macOS app from [Latest Release](https://github.com/elkraneo/Deconstructed/releases/latest), or build from source using the workspace and setup notes below.
 
 ![Deconstructed app interface with multiple scene tabs open. A Bunsen burner model is selected in the scene hierarchy and displayed in the 3D viewport alongside a gray sphere with transform gizmos visible. The right inspector panel shows Transform properties (Position, Rotation, Scale), Material Bindings, Variants, and References sections. The bottom Project Browser displays asset thumbnails including the BunsenBurner.usdz file, scenes, and primitive shapes.](./assets/preview.png)
@@ -36,8 +34,8 @@ A macOS document-based application that reverse-engineers [Reality Composer Pro]
 ### External Dependencies
 
 - **[swift-composable-architecture](https://github.com/pointfreeco/swift-composable-architecture)** - App architecture and reducer composition
-- **[SwiftUsdShell](https://github.com/Reality2713/SwiftUsdShell)** - Intended pure-Swift USD contract boundary for product-facing DTOs and edit requests
-- **[USDInterop](https://github.com/Reality2713/USDInterop)** - Transitional public OpenUSD-backed runtime package family currently used by Deconstructed (`USDInterfaces`, `USDInterop`, `USDInteropCxx`, `USDOperations`)
+- **[SwiftUsdShell-binaries](https://github.com/Reality2713/SwiftUsdShell-binaries)** - Pure-Swift USD contract boundary (`SwiftUsdShell`) and OpenUSD-backed runtime adapter (`SwiftUsdShellOpenUSD`), distributed as binaries
+- **[SwiftUsd-binaries](https://github.com/Reality2713/SwiftUsd-binaries)** - Binary `OpenUSD` product, resolved transitively by `SwiftUsdShell-binaries`
 - **[StageView](https://github.com/reality2713/StageView)** - RealityKit-backed viewport component
 
 ## Build From Source
@@ -57,7 +55,7 @@ Further reading:
 
 - [SwiftUsdShell Boundary Manifesto](./Docs/SwiftUsdShell-Boundary-Manifesto.md)
 - [Local Development (CI-Safe)](./Docs/Local-USD-Development.md)
-- [USDOperations Refactor Evaluation](./Docs/USDOperations-Refactor-Evaluation.md)
+- [USDInterop Sunset Migration](./Docs/USDInterop-Sunset-Migration.md)
 
 ## Project Structure
 

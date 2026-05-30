@@ -26,25 +26,20 @@ Deconstructed should not use `SwiftUsdShell` for:
 
 ## Runtime Boundary
 
-The current runtime boundary remains intentionally split:
+The runtime boundary is:
 
-- `SwiftUsdShell`: pure-Swift public contracts
-- `USDInterop` / `USDOperations` / `USDInterfaces`: transitional public OpenUSD-backed runtime and DTO surface currently used by Deconstructed
-- `DeconstructedUSDInterop`: app-local runtime adapter and RCP-specific open authoring logic
-- `USDTools`: private/internal workflow and value layer, not required by the public Deconstructed build path
+- `SwiftUsdShell`: pure-Swift public contracts (binary)
+- `SwiftUsdShellOpenUSD` / `OpenUSDStageRuntime`: mechanical OpenUSD-backed runtime adapter (binary), driven by the app-local `DeconstructedShellRuntime`
+- `DeconstructedUSDInterop`: app-local runtime adapter and RCP-specific open `.usda` authoring logic
+- archived, out of the build graph: `USDInterop`, `USDOperations`, `USDInterfaces`, `USDInteropCxx`, `USDTools`, `USDInteropAdvanced-binaries`
 
-The intended direction is to move product-facing DTOs and client contracts toward `SwiftUsdShell` when the shapes are equivalent or a deliberate converter exists. Do not blanket-replace `USDInterfaces` types just because a similarly named shell type exists.
+Product-facing DTOs and client contracts are expressed in `SwiftUsdShell`. When a new contract is needed, add it to the shell only when shapes are equivalent or a deliberate converter exists.
 
 ## Current Status
 
-As of 2026-04-28, Deconstructed still imports `USDInterfaces`, `USDOperations`, and `USDInterop` directly for its working runtime path. That is acceptable only as a transition state. It proves the public build is not using private `USDTools`, but it does not yet prove full SwiftUsdShell adoption.
+As of 2026-05-30, the migration off the legacy `USDInterop` family is complete. No compiled Deconstructed source imports `USDInterfaces`, `USDOperations`, `USDInterop`, `USDInteropCxx`, or `USDTools`; the runtime path is `SwiftUsdShell` + `SwiftUsdShellOpenUSD` (binaries) through `DeconstructedShellRuntime`, with `.usda` text authoring in `DeconstructedUSDInterop`. The legacy packages are archived on GitHub.
 
-The next correct proof point is a small, explicit migration:
-
-1. Add `SwiftUsdShell` as a direct public dependency.
-2. Move one neutral app-facing contract to a shell type.
-3. Keep conversion from legacy `USDInterfaces` inside `DeconstructedUSDInterop` or another runtime adapter.
-4. Verify no app feature imports OpenUSD, `USDInteropCxx`, or `USDTools`.
+See `Docs/USDInterop-Sunset-Migration.md` for the migration record and `Docs/SwiftUsdShell-Migration-Regression-Ledger.md` for the parity assessment of the remaining non-blocking gaps.
 
 ## Guardrails
 
@@ -61,7 +56,7 @@ Code review should accept:
 - feature modules depending on `SwiftUsdShell` for neutral contract types
 - runtime adapters converting shell contracts to OpenUSD-backed implementation calls
 - app-local RCP authoring logic that remains open in `DeconstructedUSDInterop`
-- gradual removal of `USDInterfaces` imports when each replacement is explicit and tested
+- keeping the build graph free of the archived legacy modules (`USDInterop`, `USDOperations`, `USDInterfaces`, `USDInteropCxx`, `USDTools`)
 
 ## Practical Test
 

@@ -38,7 +38,7 @@ Reverse-engineer and clone Reality Composer Pro's functionality:
 
 This project has a split identity:
 - **Public open-source repo** (`Deconstructed`) — anyone should be able to clone and build
-- **Separate private workflow repo** (`USDTools`) — may exist locally for internal work, but is not required for the public Deconstructed build path
+- **Local first-party USD checkouts** (e.g. `SwiftUsd`, `SwiftUsdShell`) — may exist locally and be wired through the workspace for internal work, but the public build resolves them from the binary distribution
 
 The root `Package.swift` and inner `Packages/DeconstructedLibrary/Package.swift` declare remote URLs for CI/public consumption. But locally, Xcode resolves dependencies at the **workspace level**, overriding what `Package.swift` says.
 
@@ -49,7 +49,7 @@ The root `Package.swift` and inner `Packages/DeconstructedLibrary/Package.swift`
 This means:
 - `Package.swift` remote URLs are **fallbacks for CI / clean clones only**
 - The inner `DeconstructedLibrary/Package.swift` may reference `branch: "main"` or pinned revisions — **it doesn't matter locally** because the workspace overrides them
-- Editing local first-party package checkouts such as `/Volumes/Plutonian/_Developer/USDInterop` compiles immediately when the workspace is configured to use them
+- Editing local first-party package checkouts such as `/Volumes/Plutonian/_Developer/SwiftUsdShell` compiles immediately when the workspace is configured to use them
 - **You must open `Deconstructed.xcworkspace`**, not the `.xcodeproj`
 
 ### Do NOT Try to Build via `swift build` in Inner Package
@@ -76,19 +76,18 @@ swift build --target ViewportUI
 
 The target split is:
 
-- pure-Swift public contract boundary: `SwiftUsdShell`
-- transitional public OpenUSD runtime family: `USDInterop`, `USDInterfaces`, `USDInteropCxx`, `USDOperations`
-- app-local runtime adapter and open RCP authoring: `DeconstructedUSDInterop`
-- private workflow/value layer, not required for public Deconstructed builds: `USDTools`
+- pure-Swift contract boundary: `SwiftUsdShell` (consumed as a binary)
+- OpenUSD-backed runtime adapter: `SwiftUsdShellOpenUSD` / `OpenUSDStageRuntime` (binary), driven by the app-local `DeconstructedShellRuntime`
+- app-local runtime adapter and open RCP `.usda` authoring: `DeconstructedUSDInterop`
+- **archived, out of the build graph — do not reintroduce:** `USDInterop`, `USDInterfaces`, `USDInteropCxx`, `USDOperations`, `USDTools`, `USDInteropAdvanced-binaries`
 
 Rules:
 
-- product-facing USD DTOs and generic edit contracts should move to `SwiftUsdShell` only when the shapes are equivalent or an explicit converter exists
+- product-facing USD DTOs and generic edit contracts go in `SwiftUsdShell`; add to it only when shapes are equivalent or an explicit converter exists
 - `SwiftUsdShell` is not a runtime; do not use it to claim file loading, rendering, validation, or repair behavior
-- OpenUSD-backed implementation details belong behind `DeconstructedUSDInterop` or another runtime adapter
-- generic scene operations may remain in `USDOperations` during the transition
-- workflows, diagnostics, repair, packaging, conversion, and heuristics do not belong in `SwiftUsdShell` or `USDOperations`
-- do not reintroduce dependencies on `USDTools` or legacy advanced modules into the public Deconstructed build path
+- generic scene reads/writes go through `OpenUSDStageRuntime` (via `DeconstructedShellRuntime`); `.usda` text authoring stays in `DeconstructedUSDInterop`
+- workflows, diagnostics, repair, packaging, conversion, and heuristics belong in the app/domain layer, not in `SwiftUsdShell` or the runtime adapter
+- do not reintroduce dependencies on the archived legacy modules
 
 See `Docs/SwiftUsdShell-Boundary-Manifesto.md` before changing USD package dependencies or migrating DTOs.
 

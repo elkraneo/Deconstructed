@@ -49,26 +49,29 @@ Base/                              <- SPM package (created by RCP for integratio
 
 ## USD Boundary
 
-The open/private USD split is intentional:
+The USD stack is built on SwiftUsdShell. The migration off the legacy
+`USDInterop` family is complete; those packages are archived and out of the
+build graph.
 
-- `SwiftUsdShell` is the intended pure-Swift public contract boundary
-- `USDInterop`, `USDInterfaces`, `USDInteropCxx`, and `USDOperations` are the transitional public OpenUSD-backed runtime family currently used by Deconstructed
-- `DeconstructedUSDInterop` is the app-local adapter and open RCP authoring layer
-- `USDTools` is the private workflow/value layer and must not be required by the public build path
+- `SwiftUsdShell` is the pure-Swift contract boundary (DTOs, requests, results). No C++ types cross it.
+- `SwiftUsdShellOpenUSD` (`OpenUSDStageRuntime`) is the mechanical OpenUSD-backed runtime adapter. Both are consumed as binaries via `SwiftUsd-binaries` + `SwiftUsdShell-binaries`.
+- `DeconstructedShellRuntime` is the app-local runtime layer that drives `OpenUSDStageRuntime` and maps results to SwiftUsdShell DTOs. It is the only place that needs Cxx/OpenUSD via the binary slice.
+- `DeconstructedUSDInterop` is the app-local adapter and open RCP `.usda` text-authoring layer. It stays.
+- **Archived — do not reintroduce:** `USDInterop`, `USDInterfaces`, `USDInteropCxx`, `USDOperations` (the legacy runtime family) and `USDTools` / `USDInteropAdvanced-binaries` (the private advanced layer). No target may depend on them.
 
-For the rationale and current release evaluation, see:
+For the rationale and the completed migration record, see:
 
 - `Docs/SwiftUsdShell-Boundary-Manifesto.md`
-- `Docs/USDOperations-Refactor-Evaluation.md`
-- `Docs/USDOperations-Release-Checklist.md`
+- `Docs/SwiftUsdShell-Migration-Regression-Ledger.md`
+- `Docs/USDInterop-Sunset-Migration.md` (migration complete)
 
 Rule of thumb:
 
-- feature-facing contracts should move toward `SwiftUsdShell` only with explicit semantic equivalence or converters
-- `SwiftUsdShell` is not a runtime and should not be documented as file loading, rendering, validation, or repair infrastructure
-- generic scene operations may remain in `USDOperations` during the transition
-- workflows, heuristics, packaging, conversion, and repair do not belong in `SwiftUsdShell` or `USDOperations`
-- avoid reintroducing dependencies on `USDTools` or legacy advanced modules into the public build path
+- feature-facing contracts live in `SwiftUsdShell`; add to it only with explicit semantic equivalence or converters
+- `SwiftUsdShell` is a contract, not a runtime — do not document it as file loading, rendering, validation, or repair infrastructure
+- generic scene reads/writes go through `OpenUSDStageRuntime` (in `DeconstructedShellRuntime`); `.usda` text authoring stays in `DeconstructedUSDInterop`
+- workflows, heuristics, packaging, conversion, and repair belong in the app/domain layer, not in `SwiftUsdShell` or the runtime adapter
+- do not reintroduce dependencies on the archived legacy modules
 
 ## Shell-Runtime Dependency Installation
 

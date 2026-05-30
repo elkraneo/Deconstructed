@@ -1,5 +1,10 @@
 # USDOperations Split Release Checklist
 
+> **Historical (as of 2026-05-30).** `USDOperations` and the `USDInterop` family
+> are archived and out of the build graph. This checklist described a release
+> path for a module that no longer ships. Retained as a record only; not current
+> guidance. See `Docs/USDInterop-Sunset-Migration.md`.
+
 ## Purpose
 
 This checklist defines the minimum release-hardening work required before treating the `USDOperations` split as complete and broadly releasable.
