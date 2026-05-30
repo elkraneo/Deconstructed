@@ -109,11 +109,11 @@ let package = Package(
 			from: "2.8.0"
 		),
 		// USDInterop is archived; replaced by SwiftUsdShellOpenUSD via the
-		// SwiftUsdShell-binaries / SwiftUsd-binaries binary distribution.
+		// SwiftUsdShell-binaries binary distribution (pulls SwiftUsd-binaries
+		// transitively; Deconstructed no longer depends on OpenUSD directly).
 		// See Docs/USDInterop-Sunset-Migration.md.
 		.package(url: "https://github.com/reality2713/StageView.git", exact: "0.3.24"),
-		.package(url: "https://github.com/Reality2713/SwiftUsd-binaries.git", exact: "0.3.125-macos-arm64.3"),
-		.package(url: "https://github.com/Reality2713/SwiftUsdShell-binaries.git", exact: "0.3.125-macos-arm64.3"),
+		.package(url: "https://github.com/Reality2713/SwiftUsdShell-binaries.git", exact: "0.3.126-macos-arm64.2"),
 	],
 	targets: [
 		// Targets are the basic building blocks of a package, defining a module or a test suite.
@@ -286,7 +286,6 @@ let package = Package(
 			name: "DeconstructedUSDInterop",
 			dependencies: [
 				"DeconstructedModels",
-				.product(name: "OpenUSD", package: "SwiftUsd-binaries"),
 				.product(name: "SwiftUsdShellOpenUSD", package: "SwiftUsdShell-binaries"),
 			],
 			swiftSettings: [

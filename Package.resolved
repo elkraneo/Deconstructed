@@ -1,5 +1,5 @@
 {
-  "originHash" : "5393acd8ab8723123a8ac4eae3c5ce9f396f14c0028f547af17219e55d9b58c9",
+  "originHash" : "aba035590632b48957001b930db4927a978d93a84ebe4232900b84f7c869b89b",
   "pins" : [
     {
       "identity" : "combine-schedulers",
@@ -132,8 +132,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Reality2713/SwiftUsd-binaries.git",
       "state" : {
-        "revision" : "662d40331f098da7bfbdfa0ba82f92694471c6f4",
-        "version" : "0.3.125-macos-arm64.3"
+        "revision" : "8ac27d635dcf305a23859fb82af7bce7d6bc86f9",
+        "version" : "0.3.126-macos-arm64.2"
       }
     },
     {
@@ -141,8 +141,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Reality2713/SwiftUsdShell-binaries.git",
       "state" : {
-        "revision" : "a87e2b54f5095fc9d0544f32bc147498c414e3ee",
-        "version" : "0.3.125-macos-arm64.3"
+        "revision" : "d26800b00f184540edef20383931903d91768b72",
+        "version" : "0.3.126-macos-arm64.2"
       }
     },
     {

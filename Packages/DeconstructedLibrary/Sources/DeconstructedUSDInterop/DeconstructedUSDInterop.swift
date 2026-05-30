@@ -1,30 +1,9 @@
-import CxxStdlib
 import DeconstructedModels
 import Foundation
-@_implementationOnly import OpenUSD
 // SwiftUsdShellOpenUSD re-exports SwiftUsdShell; the contract DTOs come with it.
+// All USD mutation flows through neutral SwiftUsdShell edit atoms via the
+// OpenUSDStageRuntime — this module no longer imports or touches raw OpenUSD / C++.
 import SwiftUsdShellOpenUSD
-
-// Local aliases for OpenUSD imported C++ symbols.
-// Keep these fileprivate so OpenUSD internals never leak into the module API.
-// The version-stamped namespace must match the binary OpenUSD distribution
-// (SwiftUsd-binaries 0.3.124 ships pxr v0_26_5). The re-exported `pxr` alias
-// cannot be used for member-type lookups, so we reference the namespace directly.
-fileprivate typealias pxr = pxrInternal_v0_26_5__pxrReserved__
-fileprivate typealias UsdStage = pxr.UsdStage
-fileprivate typealias SdfPath = pxr.SdfPath
-fileprivate typealias SdfPathVector = pxr.SdfPathVector
-fileprivate typealias TfToken = pxr.TfToken
-fileprivate typealias SdfValueTypeName = pxr.SdfValueTypeName
-fileprivate typealias SdfVariability = pxr.SdfVariability
-fileprivate typealias UsdTimeCode = pxr.UsdTimeCode
-fileprivate typealias VtValue = pxr.VtValue
-fileprivate typealias VtStringArray = pxr.VtStringArray
-fileprivate typealias VtTokenArray = pxr.VtTokenArray
-fileprivate typealias GfVec2f = pxr.GfVec2f
-fileprivate typealias GfVec3f = pxr.GfVec3f
-fileprivate typealias GfQuatf = pxr.GfQuatf
-fileprivate typealias SdfAssetPath = pxr.SdfAssetPath
 
 private enum USDMutationCoordinator {
 	static let lock = NSLock()
@@ -1235,36 +1214,21 @@ private func insertRealityKitComponent(
 	return source.hasSuffix("\n") ? updated + "\n" : updated
 }
 
-/// Defines a typed prim at `parentPath/name` using direct OpenUSD Cxx APIs.
-/// Used by `createPrimitive` / `createStructural` because the binary
-/// `OpenUSDStageRuntime` does not currently expose a `createPrim` write.
+/// Defines a typed prim at `parentPath/name` using the Shell mutation atom.
 private func createPrimDirect(
 	url: URL,
 	parentPath: String,
 	name: String,
 	typeName: String
 ) throws -> String {
-	let stagePtr = UsdStage.Open(std.string(url.path), UsdStage.InitialLoadSet.LoadAll)
-	guard stagePtr._isNonnull() else {
-		throw DeconstructedUSDInteropError.stageOpenFailed(url)
-	}
-	let stage = OpenUSD.Overlay.Dereference(stagePtr)
 	let normalizedParent = parentPath == "/" ? "" : parentPath
 	let fullPath = "\(normalizedParent)/\(name)"
-	let primPath = SdfPath(std.string(fullPath))
-	let typeToken = TfToken(std.string(typeName))
-	let prim = stage.DefinePrim(primPath, typeToken)
-	guard prim.IsValid() else {
-		throw DeconstructedUSDInteropError.createPrimFailed(path: fullPath, typeName: typeName)
-	}
-	let rootLayerHandle = stage.GetRootLayer()
-	guard Bool(rootLayerHandle) else {
-		throw DeconstructedUSDInteropError.rootLayerMissing(url)
-	}
-	let rootLayer = OpenUSD.Overlay.Dereference(rootLayerHandle)
-	guard rootLayer.Save(false) else {
-		throw DeconstructedUSDInteropError.saveFailed(url)
-	}
+	try DeconstructedUSDInterop.performEdit(.definePrim(
+		stageURL: SwiftUsdShell.USDStageURL(url),
+		primPath: SwiftUsdShell.USDPath(fullPath),
+		typeName: SwiftUsdShell.USDToken(typeName)
+	))
+	try DeconstructedUSDInterop.performEdit(.save(stageURL: SwiftUsdShell.USDStageURL(url)))
 	return fullPath
 }
 
@@ -1273,47 +1237,42 @@ private func setPrimActive(
 	primPath: String,
 	isActive: Bool
 ) throws {
-	let stagePtr = UsdStage.Open(std.string(url.path), UsdStage.InitialLoadSet.LoadAll)
-	guard stagePtr._isNonnull() else {
-		throw DeconstructedUSDInteropError.stageOpenFailed(url)
-	}
-	let stage = OpenUSD.Overlay.Dereference(stagePtr)
-	let prim = stage.GetPrimAtPath(SdfPath(std.string(primPath)))
-	guard prim.IsValid() else {
-		throw DeconstructedUSDInteropError.primNotFound(primPath)
-	}
-	prim.SetActive(isActive)
-	let rootLayerHandle = stage.GetRootLayer()
-	guard Bool(rootLayerHandle) else {
-		throw DeconstructedUSDInteropError.rootLayerMissing(url)
-	}
-	let rootLayer = OpenUSD.Overlay.Dereference(rootLayerHandle)
-	guard rootLayer.Save(false) else {
-		throw DeconstructedUSDInteropError.saveFailed(url)
-	}
+	try DeconstructedUSDInterop.performEdit(.setActive(
+		stageURL: SwiftUsdShell.USDStageURL(url),
+		primPath: SwiftUsdShell.USDPath(primPath),
+		active: isActive
+	))
+	try DeconstructedUSDInterop.performEdit(.save(stageURL: SwiftUsdShell.USDStageURL(url)))
 }
 
 private func deletePrim(
 	url: URL,
 	primPath: String
 ) throws {
-	let stagePtr = UsdStage.Open(std.string(url.path), UsdStage.InitialLoadSet.LoadAll)
-	guard stagePtr._isNonnull() else {
-		throw DeconstructedUSDInteropError.stageOpenFailed(url)
-	}
-	let stage = OpenUSD.Overlay.Dereference(stagePtr)
-	let prim = stage.GetPrimAtPath(SdfPath(std.string(primPath)))
-	guard prim.IsValid() else {
-		throw DeconstructedUSDInteropError.primNotFound(primPath)
-	}
-	_ = stage.RemovePrim(SdfPath(std.string(primPath)))
-	let rootLayerHandle = stage.GetRootLayer()
-	guard Bool(rootLayerHandle) else {
-		throw DeconstructedUSDInteropError.rootLayerMissing(url)
-	}
-	let rootLayer = OpenUSD.Overlay.Dereference(rootLayerHandle)
-	guard rootLayer.Save(false) else {
-		throw DeconstructedUSDInteropError.saveFailed(url)
+	try DeconstructedUSDInterop.performEdit(.removePrim(
+		stageURL: SwiftUsdShell.USDStageURL(url),
+		primPath: SwiftUsdShell.USDPath(primPath)
+	))
+	try DeconstructedUSDInterop.performEdit(.save(stageURL: SwiftUsdShell.USDStageURL(url)))
+}
+
+/// Runs a runtime edit that authors (or removes) a component property and
+/// reports whether it stuck. Returns `true` on success. A type mismatch with an
+/// existing authored value (`attributeSetFailed`), or a prim the live USD path
+/// cannot see yet (newly inserted USDA-only prims → `primNotFound`), returns
+/// `false` so the caller falls back to the USDA text mutator — preserving the
+/// type-strict RealityKit authoring fix. Other runtime errors propagate.
+private func authorThroughRuntime(_ edit: () throws -> Void) throws -> Bool {
+	do {
+		try edit()
+		return true
+	} catch let error as SwiftUsdShell.SwiftUsdShellError {
+		switch error {
+		case .attributeSetFailed, .primNotFound:
+			return false
+		default:
+			throw error
+		}
 	}
 }
 
@@ -1324,134 +1283,90 @@ private func setComponentParameterWithUSDMutation(
 	attributeName: String,
 	valueLiteral: String
 ) throws -> Bool {
-	let stagePtr = UsdStage.Open(std.string(url.path), UsdStage.InitialLoadSet.LoadAll)
-	guard stagePtr._isNonnull() else {
-		throw DeconstructedUSDInteropError.stageOpenFailed(url)
-	}
-	let stage = OpenUSD.Overlay.Dereference(stagePtr)
-	let prim = stage.GetPrimAtPath(SdfPath(std.string(componentPrimPath)))
-	guard prim.IsValid() else {
-		throw DeconstructedUSDInteropError.primNotFound(componentPrimPath)
-	}
-
 	let normalizedType = normalizeAttributeType(attributeType)
-	let token = TfToken(std.string(attributeName))
-	let variability = isUniformAttributeType(attributeType)
-		? SdfVariability.SdfVariabilityUniform
-		: SdfVariability.SdfVariabilityVarying
+	let uniform = isUniformAttributeType(attributeType)
+	let stageURL = SwiftUsdShell.USDStageURL(url)
+	let primPath = SwiftUsdShell.USDPath(componentPrimPath)
+	let propertyName = SwiftUsdShell.USDToken(attributeName)
 
-	let didAuthor: Bool
+	// Relationships route to the relationship-target atom.
+	if normalizedType == "rel" {
+		let targets = parseUSDRelationshipTargetsLiteral(valueLiteral)
+			.map { SwiftUsdShell.USDPath($0) }
+		return try authorThroughRuntime {
+			try DeconstructedUSDInterop.performEdit(.setRelationshipTargets(
+				stageURL: stageURL,
+				primPath: primPath,
+				relationshipName: propertyName,
+				targets: targets
+			))
+		}
+	}
+
+	// Map the parsed literal onto a neutral typed authoring value. A parse
+	// failure or unsupported type returns false so the caller falls back to the
+	// USDA text mutator.
+	let authoredValue: SwiftUsdShell.USDAuthoredValue
 	switch normalizedType {
 	case "bool":
 		guard let value = parseUSDBoolLiteral(valueLiteral) else { return false }
-		let attr = prim.CreateAttribute(token, SdfValueTypeName.Bool, false, variability)
-		didAuthor = attr.Set(VtValue(value), UsdTimeCode.Default())
+		authoredValue = .bool(value)
 	case "int":
 		guard
 			let parsed = parseUSDIntLiteral(valueLiteral),
 			let value = Int32(exactly: parsed)
 		else { return false }
-		let attr = prim.CreateAttribute(token, SdfValueTypeName.Int, false, variability)
-		didAuthor = attr.Set(VtValue(value), UsdTimeCode.Default())
+		authoredValue = .int(value)
 	case "uint":
 		guard
 			let parsed = parseUSDUIntLiteral(valueLiteral),
 			let value = UInt32(exactly: parsed)
 		else { return false }
-		let attr = prim.CreateAttribute(token, SdfValueTypeName.UInt, false, variability)
-		didAuthor = attr.Set(VtValue(value), UsdTimeCode.Default())
+		authoredValue = .uint(value)
 	case "float":
 		guard let value = parseUSDFloatLiteral(valueLiteral) else { return false }
-		let attr = prim.CreateAttribute(token, SdfValueTypeName.Float, false, variability)
-		didAuthor = attr.Set(VtValue(value), UsdTimeCode.Default())
+		authoredValue = .float(value)
 	case "double":
 		guard let value = parseUSDDoubleLiteral(valueLiteral) else { return false }
-		let attr = prim.CreateAttribute(token, SdfValueTypeName.Double, false, variability)
-		didAuthor = attr.Set(VtValue(value), UsdTimeCode.Default())
+		authoredValue = .double(value)
 	case "string":
-		let value = parseUSDQuotedStringLiteral(valueLiteral)
-		let attr = prim.CreateAttribute(token, SdfValueTypeName.String, false, variability)
-		didAuthor = attr.Set(VtValue(std.string(value)), UsdTimeCode.Default())
+		authoredValue = .string(parseUSDQuotedStringLiteral(valueLiteral))
 	case "token":
-		let value = parseUSDQuotedStringLiteral(valueLiteral)
-		let attr = prim.CreateAttribute(token, SdfValueTypeName.Token, false, variability)
-		didAuthor = attr.Set(VtValue(TfToken(std.string(value))), UsdTimeCode.Default())
+		authoredValue = .token(parseUSDQuotedStringLiteral(valueLiteral))
 	case "asset":
 		guard let value = parseUSDAssetLiteral(valueLiteral) else { return false }
-		let attr = prim.CreateAttribute(token, SdfValueTypeName.Asset, false, variability)
-		didAuthor = attr.Set(VtValue(SdfAssetPath(std.string(value))), UsdTimeCode.Default())
+		authoredValue = .asset(value)
 	case "string[]":
 		guard let values = parseUSDStringArrayLiteral(valueLiteral) else { return false }
-		let attr = prim.CreateAttribute(token, SdfValueTypeName.StringArray, false, variability)
-		var array = VtStringArray()
-		for value in values {
-			array.push_back(std.string(value))
-		}
-		didAuthor = attr.Set(array, UsdTimeCode.Default())
+		authoredValue = .stringArray(values)
 	case "token[]":
 		guard let values = parseUSDStringArrayLiteral(valueLiteral) else { return false }
-		let attr = prim.CreateAttribute(token, SdfValueTypeName.TokenArray, false, variability)
-		var array = VtTokenArray()
-		for value in values {
-			array.push_back(TfToken(std.string(value)))
-		}
-		didAuthor = attr.Set(array, UsdTimeCode.Default())
+		authoredValue = .tokenArray(values)
 	case "float2":
 		guard let value = parseUSDFloatTuple(valueLiteral, count: 2) else { return false }
-		let attr = prim.CreateAttribute(token, SdfValueTypeName.Float2, false, variability)
-		didAuthor = attr.Set(VtValue(GfVec2f(Float(value[0]), Float(value[1]))), UsdTimeCode.Default())
+		authoredValue = .float2(Float(value[0]), Float(value[1]))
 	case "float3":
 		guard let value = parseUSDFloatTuple(valueLiteral, count: 3) else { return false }
-		let attr = prim.CreateAttribute(token, SdfValueTypeName.Float3, false, variability)
-		didAuthor = attr.Set(
-			VtValue(GfVec3f(Float(value[0]), Float(value[1]), Float(value[2]))),
-			UsdTimeCode.Default()
-		)
+		authoredValue = .float3(Float(value[0]), Float(value[1]), Float(value[2]))
 	case "quatf":
 		guard let value = parseUSDFloatTuple(valueLiteral, count: 4) else { return false }
-		let attr = prim.CreateAttribute(token, SdfValueTypeName.Quatf, false, variability)
-		didAuthor = attr.Set(
-			VtValue(
-				GfQuatf(
-					Float(value[0]),
-					GfVec3f(Float(value[1]), Float(value[2]), Float(value[3]))
-				)
-			),
-			UsdTimeCode.Default()
+		authoredValue = .quatf(
+			real: Float(value[0]),
+			imaginary: SwiftUsdShell.USDVector3(x: value[1], y: value[2], z: value[3])
 		)
-	case "rel":
-		let relationship = prim.CreateRelationship(token, false)
-		var targets = SdfPathVector()
-		let parsedTargets = parseUSDRelationshipTargetsLiteral(valueLiteral)
-		for target in parsedTargets {
-			targets.push_back(SdfPath(std.string(target)))
-		}
-		didAuthor = relationship.SetTargets(targets)
 	default:
 		return false
 	}
 
-	guard didAuthor else {
-		// attr.Set returns false when the requested VtValue type doesn't match
-		// the attribute's authored type (e.g. trying to write Float to an
-		// existing Double opacity attribute, or vice versa). Returning false
-		// instead of throwing lets the caller fall back to the text mutator,
-		// which rewrites the attribute type prefix in the USDA layer so the
-		// caller's intended type wins. RealityKit's USD reader is type-strict
-		// on certain RealityKitComponent fields (HierarchicalFade.opacity is
-		// authored as `float` by RCP; a `double` value is silently skipped),
-		// so this fallback is what keeps the visual update working.
-		return false
+	return try authorThroughRuntime {
+		try DeconstructedUSDInterop.performEdit(.setAttribute(
+			stageURL: stageURL,
+			primPath: primPath,
+			attributeName: propertyName,
+			value: authoredValue,
+			uniform: uniform
+		))
 	}
-	let rootLayerHandle = stage.GetRootLayer()
-	guard Bool(rootLayerHandle) else {
-		throw DeconstructedUSDInteropError.rootLayerMissing(url)
-	}
-	let rootLayer = OpenUSD.Overlay.Dereference(rootLayerHandle)
-	guard rootLayer.Save(false) else {
-		throw DeconstructedUSDInteropError.saveFailed(url)
-	}
-	return true
 }
 
 private func deleteComponentParameterWithUSDMutation(
@@ -1459,37 +1374,13 @@ private func deleteComponentParameterWithUSDMutation(
 	componentPrimPath: String,
 	attributeName: String
 ) throws -> Bool {
-	let stagePtr = UsdStage.Open(std.string(url.path), UsdStage.InitialLoadSet.LoadAll)
-	guard stagePtr._isNonnull() else {
-		throw DeconstructedUSDInteropError.stageOpenFailed(url)
+	try authorThroughRuntime {
+		try DeconstructedUSDInterop.performEdit(.removeProperty(
+			stageURL: SwiftUsdShell.USDStageURL(url),
+			primPath: SwiftUsdShell.USDPath(componentPrimPath),
+			propertyName: SwiftUsdShell.USDToken(attributeName)
+		))
 	}
-	let stage = OpenUSD.Overlay.Dereference(stagePtr)
-	let prim = stage.GetPrimAtPath(SdfPath(std.string(componentPrimPath)))
-	guard prim.IsValid() else {
-		throw DeconstructedUSDInteropError.primNotFound(componentPrimPath)
-	}
-	let token = TfToken(std.string(attributeName))
-	let attribute = prim.GetAttribute(token)
-	if attribute.IsValid() {
-		_ = attribute.Clear()
-	} else {
-		let relationship = prim.GetRelationship(token)
-		guard relationship.IsValid() else {
-			return false
-		}
-		let emptyTargets = SdfPathVector()
-		_ = relationship.SetTargets(emptyTargets)
-	}
-
-	let rootLayerHandle = stage.GetRootLayer()
-	guard Bool(rootLayerHandle) else {
-		throw DeconstructedUSDInteropError.rootLayerMissing(url)
-	}
-	let rootLayer = OpenUSD.Overlay.Dereference(rootLayerHandle)
-	guard rootLayer.Save(false) else {
-		throw DeconstructedUSDInteropError.saveFailed(url)
-	}
-	return true
 }
 
 private func normalizeAttributeType(_ raw: String) -> String {

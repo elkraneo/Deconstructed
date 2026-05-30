@@ -42,8 +42,7 @@ let package = Package(
 		.package(url: "https://github.com/pointfreeco/swift-composable-architecture", from: "1.25.5"),
 		.package(url: "https://github.com/pointfreeco/swift-sharing", from: "2.8.0"),
 		.package(url: "https://github.com/reality2713/StageView.git", exact: "0.3.24"),
-		.package(url: "https://github.com/Reality2713/SwiftUsd-binaries.git", exact: "0.3.125-macos-arm64.3"),
-		.package(url: "https://github.com/Reality2713/SwiftUsdShell-binaries.git", exact: "0.3.125-macos-arm64.3"),
+			.package(url: "https://github.com/Reality2713/SwiftUsdShell-binaries.git", exact: "0.3.126-macos-arm64.2"),
 	],
 	targets: [
 		.target(
@@ -188,7 +187,6 @@ let package = Package(
 			name: "DeconstructedUSDInterop",
 			dependencies: [
 				"DeconstructedModels",
-				.product(name: "OpenUSD", package: "SwiftUsd-binaries"),
 				.product(name: "SwiftUsdShellOpenUSD", package: "SwiftUsdShell-binaries"),
 			],
 			path: "Packages/DeconstructedLibrary/Sources/DeconstructedUSDInterop",
