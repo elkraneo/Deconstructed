@@ -132,8 +132,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Reality2713/SwiftUsd-binaries.git",
       "state" : {
-        "revision" : "a587427b782a4378bb0f45579d98a46b4d9cdb41",
-        "version" : "0.3.125-macos-arm64.2"
+        "revision" : "662d40331f098da7bfbdfa0ba82f92694471c6f4",
+        "version" : "0.3.125-macos-arm64.3"
       }
     },
     {
@@ -141,8 +141,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Reality2713/SwiftUsdShell-binaries.git",
       "state" : {
-        "revision" : "e87fabf455aa8c62936e5aafc0d381e6011e99cb",
-        "version" : "0.3.125-macos-arm64.2"
+        "revision" : "a87e2b54f5095fc9d0544f32bc147498c414e3ee",
+        "version" : "0.3.125-macos-arm64.3"
       }
     },
     {
