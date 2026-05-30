@@ -34,7 +34,7 @@ extension SceneInspectorClient {
 			DeconstructedShellRuntime.materialProperties(url: url, materialPath: materialPath)
 		},
 		primCompositionArcs: { url, primPath in
-			DeconstructedShellRuntime.primCompositionArcs(url: url, primPath: primPath)
+			await DeconstructedShellRuntime.primCompositionArcs(url: url, primPath: primPath)
 		},
 		primComponents: { url, primPath in
 			DeconstructedShellRuntime.primComponents(url: url, primPath: primPath)

@@ -217,20 +217,36 @@ public enum DeconstructedShellRuntime {
 
 	// MARK: - Composition Arcs
 
-	/// Returns the composition arcs that contributed opinions to a prim,
-	/// derived from `USDOperationsClient.primProvenance` and mapped onto the
-	/// pure-Swift `SwiftUsdShell.USDCompositionArcSummary`. The shell DTO
-	/// only models reference vs payload; inherits/specializes/variant/local
-	/// arcs collapse onto `.reference` with `isInternal = true` (lossy by
-	/// design — refine when shell models the full enum).
-	public static func primCompositionArcs(url: URL, primPath: String) -> [SwiftUsdShell.USDCompositionArcSummary] {
-		// `OpenUSDStageRuntime` does not currently expose composition-arc
-		// provenance; the binary slice migration favours `primReferences`
-		// for the common case and otherwise returns no arcs. Refine when
-		// the runtime grows a `primProvenance`-style read.
-		_ = url
-		_ = primPath
-		return []
+	/// Returns the composition arcs that contributed opinions to a prim, read
+	/// from the binary runtime's `inspectPrim` surface and surfaced as
+	/// pure-Swift `SwiftUsdShell.USDCompositionArcSummary` values.
+	///
+	/// The runtime walks the prim stack and reports authored reference and
+	/// payload arcs (`USDCompositionArcKind.reference` / `.payload`). The shell
+	/// DTO does not (yet) model inherits/specializes/variant/local arcs, so
+	/// those are not reported; this is intentionally narrower than — but no
+	/// longer lossier than — the old `primProvenance`-to-`.reference` collapse.
+	public static func primCompositionArcs(
+		url: URL,
+		primPath: String
+	) async -> [SwiftUsdShell.USDCompositionArcSummary] {
+		let request = SwiftUsdShell.USDPrimInspectionRequest(
+			stageURL: SwiftUsdShell.USDStageURL(url),
+			primPath: SwiftUsdShell.USDPath(primPath),
+			options: SwiftUsdShell.USDPrimInspectionOptions(
+				includeAttributes: false,
+				includeRelationships: false,
+				includeCompositionArcs: true,
+				includeVariantSets: false,
+				includeTransform: false,
+				includeMaterialBinding: false,
+				includeMaterialSummary: false,
+				includeStatistics: false,
+				includeBounds: false
+			)
+		)
+		let inspection = try? await runtime.inspectPrim(request)
+		return inspection?.compositionArcs ?? []
 	}
 
 	// MARK: - Prim Components
