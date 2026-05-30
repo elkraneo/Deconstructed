@@ -1423,6 +1423,11 @@ private extension SwiftUsdShell.USDEditRequest {
 			return stageURL
 		case .save, .reload, .close:
 			return nil
+		@unknown default:
+			// SwiftUsdShell is a resilient binary module; future USDEditRequest
+			// cases are unknown here. Deconstructed only sends cases it builds,
+			// so treat anything unknown as non-persisting.
+			return nil
 		}
 	}
 }
