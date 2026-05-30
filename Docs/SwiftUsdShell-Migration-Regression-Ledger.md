@@ -62,8 +62,10 @@ Legend — Status: ✅ fixed · 🔴 confirmed regression (open) · 🟡 degrade
 These were already broken/unimplemented before the migration; listed so they
 aren't mis-attributed.
 
-- `executeMaterialEdit` — was all-`notImplemented`; removed. (But a test still
-  references it → `DeconstructedShellRuntimeTests` won't compile.)
+- `executeMaterialEdit` — was all-`notImplemented`; removed. ✅ The obsolete
+  `materialEditRuntimeReportsUnsupportedExecution` test that referenced it has
+  been removed, so `DeconstructedShellRuntimeTests` compiles again. The
+  material-edit DTO contracts remain covered by the Codable round-trip tests.
 - `editHierarchy` — always `notImplemented` (reparent/reorder).
 - Prim delete / rename / reparent — no UI wiring.
 - Visibility write — inspector shows it read-only; no setter.
@@ -86,5 +88,5 @@ aren't mis-attributed.
 3. High regressions (composition arcs, scene bounds) — require new
    `OpenUSDStageRuntime` read methods; track as SwiftUsdShell feature requests,
    not Deconstructed bugs.
-4. Fix `DeconstructedShellRuntimeTests` `executeMaterialEdit` reference so the
-   test target compiles.
+4. ✅ Fix `DeconstructedShellRuntimeTests` `executeMaterialEdit` reference so the
+   test target compiles (obsolete test removed).

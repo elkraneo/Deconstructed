@@ -234,19 +234,12 @@ func materialEditResultIsCodable() throws {
 	#expect(decoded.resultingMode == .usdPreviewSurface)
 }
 
-@Test
-func materialEditRuntimeReportsUnsupportedExecution() throws {
-	let request = USDMaterialEditRequest(
-		stageURL: USDStageURL(URL(fileURLWithPath: "/tmp/test.usda")),
-		materialPath: "/Root/Looks/Material1",
-		channel: .diffuseColor,
-		operation: .setValue(.scalar(1.0))
-	)
-
-	#expect(throws: ShellRuntimeError.self) {
-		try DeconstructedShellRuntime.executeMaterialEdit(request: request)
-	}
-}
+// NOTE: `materialEditRuntimeReportsUnsupportedExecution` was removed with the
+// `DeconstructedShellRuntime.executeMaterialEdit` entry point. That method was
+// an all-`notImplemented` stub inherited from the pre-SwiftUsdShell stack and
+// was deleted in the binary-slice migration (see
+// Docs/SwiftUsdShell-Migration-Regression-Ledger.md). The material-edit DTO
+// contracts above remain covered by the Codable round-trip tests.
 
 @Test
 func materialEditContractsSupportAllChannels() throws {
