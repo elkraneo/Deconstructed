@@ -1,7 +1,8 @@
 import DeconstructedUSDInterop
 import Foundation
 import InspectorFeature
-import SwiftUsdShell
+// SwiftUsdShellOpenUSD re-exports SwiftUsdShell, so the contract DTOs
+// (USDStageURL, USDPath, USDPrimSummary, …) arrive with this single import.
 import SwiftUsdShellOpenUSD
 
 /// Runtime boundary for SwiftUsdShell value types.

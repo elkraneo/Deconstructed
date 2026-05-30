@@ -2,7 +2,7 @@ import CxxStdlib
 import DeconstructedModels
 import Foundation
 @_implementationOnly import OpenUSD
-import SwiftUsdShell
+// SwiftUsdShellOpenUSD re-exports SwiftUsdShell; the contract DTOs come with it.
 import SwiftUsdShellOpenUSD
 
 // Local aliases for OpenUSD imported C++ symbols.
