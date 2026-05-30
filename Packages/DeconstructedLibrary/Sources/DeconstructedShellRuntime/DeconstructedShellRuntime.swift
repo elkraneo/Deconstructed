@@ -240,8 +240,6 @@ public enum DeconstructedShellRuntime {
 				includeCompositionArcs: true,
 				includeVariantSets: false,
 				includeTransform: false,
-				includeMaterialBinding: false,
-				includeMaterialSummary: false,
 				includeStatistics: false,
 				includeBounds: false
 			)

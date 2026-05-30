@@ -418,7 +418,9 @@ public enum DeconstructedUSDInterop {
 	/// stay sync without rippling `async` through every caller. Safe because
 	/// `OpenUSDStageRuntime` is `Sendable` and does not depend on the
 	/// MainActor for its internal work.
-	private static func performEdit(_ request: SwiftUsdShell.USDEditRequest) throws {
+	// fileprivate (not private) so the file-level authoring helpers below can
+	// route their edits through this runtime bridge.
+	fileprivate static func performEdit(_ request: SwiftUsdShell.USDEditRequest) throws {
 		let semaphore = DispatchSemaphore(value: 0)
 		nonisolated(unsafe) var resultError: Error?
 		Task.detached {
