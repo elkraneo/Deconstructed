@@ -424,7 +424,12 @@ public enum DeconstructedUSDInterop {
 		let semaphore = DispatchSemaphore(value: 0)
 		nonisolated(unsafe) var resultError: Error?
 		Task.detached {
-			do { _ = try await runtime.edit(request) }
+			do {
+				_ = try await runtime.edit(request)
+				if let stageURL = request.stageURLForPersistence {
+					_ = try await runtime.edit(.save(stageURL: stageURL))
+				}
+			}
 			catch { resultError = error }
 			semaphore.signal()
 		}
@@ -468,6 +473,7 @@ public enum DeconstructedUSDInterop {
 		)
 		do {
 			try updated.write(to: url, atomically: true, encoding: .utf8)
+			try reloadRuntimeStage(url)
 		} catch {
 			throw DeconstructedUSDInteropError.componentAuthoringFailed(
 				reason: "Unable to write USDA scene."
@@ -512,6 +518,7 @@ public enum DeconstructedUSDInterop {
 		)
 		do {
 			try updated.write(to: url, atomically: true, encoding: .utf8)
+			try reloadRuntimeStage(url)
 		} catch {
 			throw DeconstructedUSDInteropError.componentAuthoringFailed(
 				reason: "Unable to write USDA scene."
@@ -555,6 +562,7 @@ public enum DeconstructedUSDInterop {
 		)
 		do {
 			try updated.write(to: url, atomically: true, encoding: .utf8)
+			try reloadRuntimeStage(url)
 		} catch {
 			throw DeconstructedUSDInteropError.componentAuthoringFailed(
 				reason: "Unable to write USDA scene."
@@ -865,6 +873,7 @@ public enum DeconstructedUSDInterop {
 			)
 			do {
 				try updated.write(to: url, atomically: true, encoding: .utf8)
+				try reloadRuntimeStage(url)
 			} catch {
 				throw DeconstructedUSDInteropError.componentAuthoringFailed(
 					reason: "Unable to write USDA scene."
@@ -908,6 +917,7 @@ public enum DeconstructedUSDInterop {
 			)
 			do {
 				try updated.write(to: url, atomically: true, encoding: .utf8)
+				try reloadRuntimeStage(url)
 			} catch {
 				throw DeconstructedUSDInteropError.componentAuthoringFailed(
 					reason: "Unable to write USDA scene."
@@ -1230,7 +1240,6 @@ private func createPrimDirect(
 		primPath: SwiftUsdShell.USDPath(fullPath),
 		typeName: SwiftUsdShell.USDToken(typeName)
 	))
-	try DeconstructedUSDInterop.performEdit(.save(stageURL: SwiftUsdShell.USDStageURL(url)))
 	return fullPath
 }
 
@@ -1244,7 +1253,6 @@ private func setPrimActive(
 		primPath: SwiftUsdShell.USDPath(primPath),
 		active: isActive
 	))
-	try DeconstructedUSDInterop.performEdit(.save(stageURL: SwiftUsdShell.USDStageURL(url)))
 }
 
 private func deletePrim(
@@ -1255,7 +1263,6 @@ private func deletePrim(
 		stageURL: SwiftUsdShell.USDStageURL(url),
 		primPath: SwiftUsdShell.USDPath(primPath)
 	))
-	try DeconstructedUSDInterop.performEdit(.save(stageURL: SwiftUsdShell.USDStageURL(url)))
 }
 
 /// Runs a runtime edit that authors (or removes) a component property and
@@ -1382,6 +1389,41 @@ private func deleteComponentParameterWithUSDMutation(
 			primPath: SwiftUsdShell.USDPath(componentPrimPath),
 			propertyName: SwiftUsdShell.USDToken(attributeName)
 		))
+	}
+}
+
+private func reloadRuntimeStage(_ url: URL) throws {
+	try DeconstructedUSDInterop.performEdit(.reload(stageURL: SwiftUsdShell.USDStageURL(url)))
+}
+
+private extension SwiftUsdShell.USDEditRequest {
+	var stageURLForPersistence: SwiftUsdShell.USDStageURL? {
+		switch self {
+		case .definePrim(let stageURL, _, _),
+		     .removePrim(let stageURL, _),
+		     .setDefaultPrim(let stageURL, _),
+		     .setMetersPerUnit(let stageURL, _),
+		     .setUpAxis(let stageURL, _),
+		     .setPrimTransform(let stageURL, _, _, _),
+		     .setDoubleSided(let stageURL, _, _),
+		     .setSubdivisionScheme(let stageURL, _, _),
+		     .applySchema(let stageURL, _, _),
+		     .removeSchema(let stageURL, _, _),
+		     .setGeomSubsetFamilyName(let stageURL, _, _),
+		     .setGeomSubsetFamilyType(let stageURL, _, _, _),
+		     .bindMaterial(let stageURL, _, _, _),
+		     .setMaterialBindingStrength(let stageURL, _, _),
+		     .setVariantSelection(let stageURL, _, _, _),
+		     .blockAttribute(let stageURL, _, _),
+		     .setActive(let stageURL, _, _),
+		     .setAssetPaths(let stageURL, _),
+		     .setAttribute(let stageURL, _, _, _, _),
+		     .setRelationshipTargets(let stageURL, _, _, _),
+		     .removeProperty(let stageURL, _, _):
+			return stageURL
+		case .save, .reload, .close:
+			return nil
+		}
 	}
 }
 
@@ -1753,6 +1795,7 @@ private func setRealityKitComponentCustomDataAsset(
 		)
 		do {
 			try updated.write(to: url, atomically: true, encoding: .utf8)
+			try reloadRuntimeStage(url)
 		} catch {
 			throw DeconstructedUSDInteropError.componentAuthoringFailed(
 				reason: "Unable to write USDA scene."
